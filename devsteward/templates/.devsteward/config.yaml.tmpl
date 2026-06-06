@@ -1,0 +1,16 @@
+# DevSteward per-project configuration (lives in the consumer repo).
+# The engine is shared and pinned by tag; this file is yours to edit.
+
+profile: req
+
+# Where the requirements live, relative to the repo root.
+requirements_dir: docs/requirements
+index_file: docs/requirements/REQUIREMENTS_INDEX.md
+roadmap_file: docs/requirements/ROADMAP.md
+
+# Account / quota provider for headless runs.
+#   cswap  — route claude through claude-swap (two-account, --use N pinning, adaptive
+#            gate); degrades to single-account when cswap is absent.
+#   single — plain `claude`, no quota machinery.
+accounts:
+  provider: cswap

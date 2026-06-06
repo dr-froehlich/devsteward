@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "devsteward"
+version = "0.1.0"
+description = "DevSteward — a controlled baseline + automation engine for Claude Code projects"
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [{ name = "Peter Fröhlich" }]
+dependencies = [
+    "click>=8.1",
+    "ruamel.yaml>=0.18,<0.19",
+    "jsonschema>=4.18",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+steward = "devsteward.cli:main"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+include = ["devsteward*"]
+
+[tool.setuptools.package-data]
+devsteward = [
+    "templates/**/*",
+    "templates/**/.gitignore",
+    "templates/.claude/**/*",
+    "templates/.devsteward/**/*",
+    "handbook/**/*",
+    "schema/**/*",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

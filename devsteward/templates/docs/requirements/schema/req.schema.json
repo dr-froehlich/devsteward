@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://devsteward.dev/schema/req.schema.json",
+  "title": "DevSteward REQ frontmatter",
+  "description": "Schema for the YAML frontmatter of a requirement file. The Markdown body (Context, Decisions, Requirement, Notes prose + the `yaml acceptance` block) is validated structurally by the linter, not here.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "title", "status", "kind", "added", "depends_on"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^REQ-[0-9]{3}$",
+      "description": "Zero-padded requirement id, e.g. REQ-001."
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "status": {
+      "type": "string",
+      "enum": ["draft", "open", "in-progress", "blocked", "done", "dropped", "superseded"]
+    },
+    "kind": {
+      "type": "string",
+      "enum": ["feature", "fix", "chore", "refactor", "spec", "design", "docs"]
+    },
+    "added": {
+      "type": "string",
+      "format": "date",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+    },
+    "completed": {
+      "type": ["string", "null"],
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+    },
+    "verified_by": {
+      "type": ["string", "null"],
+      "description": "Free text: how this REQ was verified (e.g. a commit sha or test run)."
+    },
+    "depends_on": {
+      "type": "array",
+      "items": { "type": "string", "pattern": "^REQ-[0-9]{3}$" },
+      "uniqueItems": true
+    },
+    "concept_refs": {
+      "type": "array",
+      "items": { "type": "string" },
+      "uniqueItems": true
+    },
+    "scenario_refs": {
+      "type": "array",
+      "items": { "type": "string", "pattern": "^SCN-[0-9]{3}$" },
+      "uniqueItems": true
+    },
+    "supersedes": {
+      "type": ["string", "null"],
+      "pattern": "^REQ-[0-9]{3}$"
+    },
+    "tags": {
+      "type": "array",
+      "items": { "type": "string" },
+      "uniqueItems": true
+    }
+  }
+}

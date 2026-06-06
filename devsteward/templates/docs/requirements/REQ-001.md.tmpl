@@ -1,0 +1,44 @@
+---
+id: REQ-001
+title: "{{PROJECT_NAME}} — north star"
+status: open
+kind: spec
+added: {{TODAY}}
+completed: null
+verified_by: null
+depends_on: []
+concept_refs: []
+scenario_refs: []
+supersedes: null
+tags: [north-star]
+---
+
+## Context
+
+REQ-001 is the frozen north star: the one-paragraph statement of what {{PROJECT_NAME}}
+is for and who it serves. Every later REQ either advances this or is out of scope. It is
+deliberately hard to change — supersede it with a new REQ rather than weakening it.
+
+{{PROJECT_DESCRIPTION}}
+
+## Decisions
+
+| # | Decision | Rationale |
+|---|----------|-----------|
+| 1 | {{PROJECT_NAME}} exists to {{NORTH_STAR_GOAL}} | The single reason to build it |
+
+## Requirement
+
+{{PROJECT_NAME}} delivers {{NORTH_STAR_OUTCOME}} for {{NORTH_STAR_USER}}.
+
+```yaml acceptance
+- id: AC1
+  text: The project builds and its smoke test passes from a clean checkout.
+  test: "{{TEST_COMMAND}}"
+  status: pending
+```
+
+## Notes
+
+Fill the `{{…}}` placeholders during `/bootstrap`. Keep this REQ short — it is a compass,
+not a specification.

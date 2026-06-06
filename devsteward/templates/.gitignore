@@ -1,0 +1,17 @@
+# Claude Code local state (machine-specific, never shared)
+.claude/settings.local.json
+.claude/scheduled_tasks.lock
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.pytest_cache/
+
+# Logs / scratch
+*.log
+*.tmp
+
+# NOTE: .devsteward/ (config.yaml, state.yaml, events.jsonl) IS committed — the ledger
+# is part of the project's history. Do not ignore it.
