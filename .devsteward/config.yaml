@@ -1,0 +1,7 @@
+# DevSteward dogfoods itself: this is its own per-project config.
+profile: req
+requirements_dir: docs/requirements
+index_file: docs/requirements/REQUIREMENTS_INDEX.md
+roadmap_file: docs/requirements/ROADMAP.md
+accounts:
+  provider: cswap

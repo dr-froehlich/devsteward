@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+.pytest_cache/
+
+# Claude Code local state
+.claude/settings.local.json
+.claude/scheduled_tasks.lock
+
+# Runtime ledger scratch / logs (the *committed* ledger lives in consumer repos;
+# devsteward's own dogfood ledger under .devsteward/ IS tracked — see that dir)
+*.log
+*.tmp

@@ -1,0 +1,134 @@
+"""``steward lint`` — make the REQ format a contract, not a convention.
+
+Checks, per the plan:
+
+1. every REQ's frontmatter is **schema-valid** (``req.schema.json``);
+2. every ``depends_on`` / ``supersedes`` reference **resolves** to a real REQ;
+3. the dependency graph is **acyclic**;
+4. **index ↔ REQ in sync** — every REQ has a row in ``REQUIREMENTS_INDEX.md`` and vice
+   versa, with matching status;
+5. every acceptance criterion has a non-empty **test id**;
+6. the frozen north star ``REQ-001`` is not silently mutated away from its declared kind.
+
+Returns a list of human-readable problems; empty ⇒ green.
+"""
+
+from __future__ import annotations
+
+import json
+import re
+from importlib.resources import files
+from pathlib import Path
+
+import jsonschema
+
+from .config import Config
+from .profiles.req.reqfile import ReqFile, load_reqs
+
+_INDEX_ROW_RE = re.compile(
+    r"^\|\s*(REQ-\d{3})\s*\|\s*(.*?)\s*\|\s*([A-Za-z-]+)\s*\|", re.MULTILINE
+)
+
+
+def _schema() -> dict:
+    text = (files("devsteward") / "schema" / "req.schema.json").read_text(encoding="utf-8")
+    return json.loads(text)
+
+
+def _index_rows(index_path: Path) -> dict[str, str]:
+    """Map REQ id → status (uppercased) from the index table."""
+    if not index_path.exists():
+        return {}
+    text = index_path.read_text(encoding="utf-8")
+    return {m.group(1): m.group(3).strip().lower() for m in _INDEX_ROW_RE.finditer(text)}
+
+
+def _detect_cycle(reqs: list[ReqFile]) -> list[str]:
+    graph = {r.id: [d for d in r.depends_on] for r in reqs}
+    WHITE, GREY, BLACK = 0, 1, 2
+    color = {n: WHITE for n in graph}
+    problems: list[str] = []
+
+    def visit(node: str, stack: list[str]) -> None:
+        color[node] = GREY
+        for nxt in graph.get(node, []):
+            if nxt not in color:
+                continue  # missing dep reported elsewhere
+            if color[nxt] == GREY:
+                cycle = " → ".join(stack + [node, nxt])
+                problems.append(f"dependency cycle: {cycle}")
+            elif color[nxt] == WHITE:
+                visit(nxt, stack + [node])
+        color[node] = BLACK
+
+    for n in graph:
+        if color[n] == WHITE:
+            visit(n, [])
+    return problems
+
+
+def lint(cfg: Config) -> list[str]:
+    problems: list[str] = []
+    schema = _schema()
+    validator = jsonschema.Draft202012Validator(schema)
+
+    if not cfg.req_dir.exists():
+        return [f"requirements dir not found: {cfg.req_dir}"]
+
+    try:
+        reqs = load_reqs(cfg.req_dir)
+    except ValueError as exc:
+        return [str(exc)]
+
+    ids = {r.id for r in reqs}
+
+    # 1. schema validation
+    for r in reqs:
+        for err in sorted(validator.iter_errors(r.frontmatter), key=str):
+            loc = ".".join(str(p) for p in err.path) or "<root>"
+            problems.append(f"{r.path.name}: schema: {loc}: {err.message}")
+        if r.id and r.id != r.path.stem:
+            problems.append(f"{r.path.name}: id '{r.id}' does not match filename")
+
+    # 2 + 3. dependency references resolve; graph acyclic
+    for r in reqs:
+        for dep in r.depends_on:
+            if dep not in ids:
+                problems.append(f"{r.id}: depends_on '{dep}' does not resolve to a REQ")
+        sup = r.frontmatter.get("supersedes")
+        if sup and sup not in ids:
+            problems.append(f"{r.id}: supersedes '{sup}' does not resolve to a REQ")
+    problems.extend(_detect_cycle(reqs))
+
+    # 4. index ↔ REQ sync
+    index = _index_rows(cfg.index_path)
+    for r in reqs:
+        if r.id not in index:
+            problems.append(f"{r.id}: missing a row in {cfg.index_file}")
+        elif index[r.id] != r.status.lower():
+            problems.append(
+                f"{r.id}: status '{r.status}' != index status '{index[r.id]}'"
+            )
+    for rid in index:
+        if rid not in ids:
+            problems.append(f"{rid}: in index but no REQ file found")
+
+    # 5. every acceptance criterion has a test id (active/done REQs only — drafts may be
+    #    incomplete by definition)
+    for r in reqs:
+        if r.status == "draft":
+            continue
+        if not r.acceptance:
+            problems.append(f"{r.id}: no acceptance criteria block")
+        for ac in r.acceptance:
+            if not ac.test.strip():
+                problems.append(f"{r.id}: acceptance {ac.id or '?'} has no test id")
+            if not ac.id.strip():
+                problems.append(f"{r.id}: an acceptance criterion has no id")
+
+    # 6. north star
+    north = next((r for r in reqs if r.id == "REQ-001"), None)
+    if north is not None and north.status in ("dropped", "superseded"):
+        problems.append("REQ-001 (north star) must not be dropped or superseded")
+
+    return problems

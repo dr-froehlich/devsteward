@@ -1,0 +1,50 @@
+# CLAUDE.md — {{PROJECT_NAME}}
+
+> Stamped from DevSteward. Run `/bootstrap` to fill the placeholders below, or edit them
+> by hand. Keep this file the single source of truth for how work is done here.
+
+## What this project is
+
+{{PROJECT_DESCRIPTION}}
+
+The frozen north star is **REQ-001** (`docs/requirements/REQ-001.md`) — do not weaken it;
+supersede it with a new REQ if direction changes.
+
+## Stack & commands
+
+- **Stack:** {{STACK}}
+- **Build:** `{{BUILD_COMMAND}}`
+- **Test:** `{{TEST_COMMAND}}`
+
+Acceptance criteria in REQ files name runnable tests in this project's test command. The
+engine runs them and only marks a step done when they pass.
+
+## House conventions (first-class)
+
+- **English everywhere** in code and technical docs. User-facing strings in other
+  languages are allowed but isolated/translatable — never inline in logic.
+- **Same-commit discipline:** a REQ's frontmatter, its row in `REQUIREMENTS_INDEX.md`,
+  and the code that satisfies it move in the **same** commit.
+- **Branch before main:** never commit directly to `main`; branch, then open a PR.
+- **Co-author trailer** on commits:
+  `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`
+
+## Working the requirements
+
+```sh
+steward status            # where are we? what's eligible next?
+steward lint              # validate REQs before committing
+steward advance           # attended: one checkpoint (Design / Build / Land)
+steward run               # unattended: march eligible steps; park on forks
+steward decision list     # forks raised while unattended
+```
+
+REQ = spec, ledger = cursor. Checkpoint state lives in `.devsteward/` (never in REQ
+files). When unattended, skills **park-and-surface** at forks — record the question and
+stop — rather than guessing.
+
+## Skills
+
+- `/intake "<idea>"` — interview a raw idea into a schema-valid draft REQ.
+- `/advance` — orient from the ledger, do exactly one checkpoint, stop at forks.
+- `/bootstrap` — bring a fresh project to life (used once, at creation).
