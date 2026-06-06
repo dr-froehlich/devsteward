@@ -11,7 +11,12 @@ lives at `devsteward/templates/CLAUDE.md.tmpl` and uses placeholders only).
   must be isolated/translatable — never inline in logic.
 - **Same-commit discipline:** a REQ's frontmatter, its row in `REQUIREMENTS_INDEX.md`,
   and the code that satisfies it move in the *same* commit.
-- **Branch before main:** never commit directly to `main`; branch, then open a PR.
+- **Branching model:** `main` = production / released (release tags like `v0.1.0` cut
+  here; consumers pin them). `dev` = integration / beta — the default working and merge
+  target. REQ-sized work goes on a feature branch → PR into `dev` (never typed directly
+  onto `dev`; tiny fixes excepted). Never commit to `main`; release via `dev → main` PR.
+  Beta tags (`vX.Y.Z-beta.N`, PEP 440 pre-release) may be cut on `dev`; stable tags on
+  `main`. If `main` is ever hotfixed directly, merge it back into `dev`.
 - **Co-author trailer** on commits:
   `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`
 - **Sanitized public repo:** no real local paths (`/mnt/c/Users/...`), no emails, no
