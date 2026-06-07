@@ -1,9 +1,11 @@
 # 0002 — Reality harness and engine repair
 
 **Date:** 2026-06-07
-**Status:** assessment accepted; REQ-013 + REQ-014 + REQ-012 **done** (reality gate first
-green 2026-06-08 — the engine drove a real `claude -p` through design→build→land; re-run
-green under REQ-012's hardened `_classify`); **verify-teeth (defect 3) next**
+**Status:** assessment accepted; REQ-013 + REQ-014 + REQ-012 + REQ-015 (verify-teeth,
+defect 3) **done** (reality gate first green 2026-06-08 — the engine drove a real
+`claude -p` through design→build→land; re-run green under REQ-012's hardened `_classify`
+and again under REQ-015's `ReqVerifier`). **Last open item: resolve the batch-vs-interactive
+`advance` fork (step 5).**
 **Author:** Peter Fröhlich + Claude (assessment session)
 
 This plan records a review prompted by a simple observation: DevSteward's 9-REQ baseline
@@ -99,10 +101,15 @@ mocked, check.
    `test_use_pins_account` replaced by `test_use_switches_account`; `config.yaml` restored
    to `provider: cswap`. Not exercised by the reality gate (it pins `single`), so verified
    by hermetic ACs; the gate stays green under the new classify path.
-4. **Verify teeth** (new REQ or folded into REQ-006 follow-up). Forbid marker-trust on
-   `design`/`build`, or require every active REQ to declare at least one runnable
-   acceptance criterion the engine re-runs — enforced by `lint`. Closes the false-done
-   path.
+4. **Verify teeth — REQ-015 — DONE (2026-06-08).** New REQ (not folded into REQ-006).
+   Concentrated the guarantee at land via `ReqVerifier` (REQ profile): a `land` step with
+   no acceptance tests is *refused*, not marker-trusted; design/build keep marker-trust
+   (they only advance the cursor — a no-op build is caught at land when its acceptance
+   tests fail). A per-phase "working tree changed" gate was rejected because the advance
+   skill's design phase legitimately produces no file change for a trivial REQ (it would
+   fail honest designs and this very gate). `build_executor` wires `ReqVerifier` for the
+   req profile; the handbook/verify docstring were corrected to stop overclaiming. Closes
+   the false-done path. Reality gate re-ran green under `ReqVerifier` (4 passed ~212s).
 5. **Resolve the conceptual fork** (docs + skill). Declare `advance`/`run` a batch worker
    that never asks (forks always park); make interactive `/advance` an explicitly separate,
    human-driven mode that does **not** claim engine guarantees. Align `handbook/` and
