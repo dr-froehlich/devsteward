@@ -1,12 +1,16 @@
 """The verifier seam — owned by the engine, not by skills.
 
-A step is only marked ``DONE`` when its named acceptance tests run green. This is the
+A step with named acceptance tests is only marked ``DONE`` when they run green. This is the
 guarantee that keeps unattended automation honest: a model that *claims* success can't
 advance the ledger past a red test.
 
 The default :class:`CommandVerifier` runs each ``verify`` entry as a shell command (the
-acceptance ``test:`` strings, e.g. ``pytest path::name``) and requires exit code 0.
-``MarkerVerifier`` is the documented fallback (trust the run) for steps with no test.
+acceptance ``test:`` strings, e.g. ``pytest path::name``) and requires exit code 0. A step
+that declares **no** tests marker-trusts (returns green) — fine for intermediate steps that
+only advance the cursor, but a profile must not let the step that *delivers* the work pass
+on trust. The REQ profile enforces exactly that in :class:`devsteward.profiles.req.verify.ReqVerifier`,
+which refuses a ``land`` step with no tests. ``MarkerVerifier`` is the always-green fallback
+for steps where no test could exist.
 """
 
 from __future__ import annotations

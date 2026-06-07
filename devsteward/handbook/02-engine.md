@@ -13,7 +13,8 @@ Knows nothing about requirements. For each eligible step it:
 2. **prechecks** the account/quota gate;
 3. invokes `claude -p "<command>"` headless (stream-json, watchdog, limit detection);
 4. **park-and-surface:** if the skill raised a fork, leaves the step blocked and moves on;
-5. **verifies** — runs the step's named acceptance tests; green is mandatory;
+5. **verifies** — runs the step's named acceptance tests; green is mandatory (a step with
+   no tests marker-trusts, which a profile may forbid where it matters — see below);
 6. **commits** and **advances** the ledger to `done`.
 
 ### The four seams (`core/seams.py`)
@@ -28,9 +29,16 @@ Knows nothing about requirements. For each eligible step it:
 ### Why the engine owns verification and forks
 
 So unattended automation can't be **talked into a false "done"**. The model does the
-thinking; the engine holds the guarantees. A step only reaches `done` after the engine
-*itself* re-runs the acceptance tests and sees them pass. A fork the model can't resolve
-becomes a recorded, surfaced decision — never a guess committed to history.
+thinking; the engine holds the guarantees. A fork the model can't resolve becomes a
+recorded, surfaced decision — never a guess committed to history.
+
+Verification has teeth **where the work is delivered**. In the REQ profile, `design` and
+`build` advance the cursor (they carry no per-phase tests), but a REQ is not done until it
+**lands**, and a `land` step must run at least one named acceptance test the engine re-runs
+itself — a land step that declares none is *refused*, not trusted (`ReqVerifier`). So a
+no-op `build` is caught at land when its acceptance tests fail: the guarantee holds for the
+"done" that matters. (Earlier this was only true by accident — every phase marker-trusted,
+so a REQ with no tests at all could reach `done`. That false-done path is now closed.)
 
 ## The ledger (`.devsteward/`)
 
