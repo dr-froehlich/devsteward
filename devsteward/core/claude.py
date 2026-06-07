@@ -25,6 +25,10 @@ class Outcome(str, Enum):
     USAGE_LIMIT = "usage-limit"
     ERROR = "error"
     TIMEOUT = "timeout"
+    # The wrapper/launch never produced a real stream-json event and exited non-zero —
+    # a broken account wrapper, a bad argv, or no ``claude`` on PATH. Distinct from a
+    # mid-task ERROR so a launch that never happened is diagnosable, not a false "failed".
+    LAUNCH_FAILURE = "launch-failure"
 
 
 # Substrings that mark a usage/quota limit in Claude's headless output. Kept as a small
@@ -69,6 +73,16 @@ def _permission_argv(mode: str | None) -> list[str]:
     return ["--permission-mode", mode]
 
 
+def _has_stream_event(lines: list[dict]) -> bool:
+    """True if any captured line is a genuine parsed stream-json event.
+
+    Non-JSON lines (e.g. a broken wrapper's stderr noise, merged into stdout) are stored
+    as ``{"type": "raw", ...}`` by :func:`run_claude`; a run that produced only those, or
+    nothing at all, never actually streamed from ``claude``.
+    """
+    return any(ev.get("type") != "raw" for ev in lines)
+
+
 def _classify(lines: list[dict], returncode: int | None, timed_out: bool) -> Outcome:
     if timed_out:
         return Outcome.TIMEOUT
@@ -76,6 +90,12 @@ def _classify(lines: list[dict], returncode: int | None, timed_out: bool) -> Out
     if any(marker in blob for marker in _LIMIT_MARKERS):
         return Outcome.USAGE_LIMIT
     if returncode not in (0, None):
+        # A non-zero exit with no stream-json event means ``claude`` never really ran
+        # (broken wrapper / bad argv / missing binary) — a launch failure, not ``claude``
+        # erroring mid-task after it had begun streaming. This separates the
+        # fictional-cswap fingerprint (a launch that never happened) from a real ERROR.
+        if not _has_stream_event(lines):
+            return Outcome.LAUNCH_FAILURE
         return Outcome.ERROR
     return Outcome.OK
 

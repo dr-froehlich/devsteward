@@ -1,8 +1,9 @@
 # 0002 — Reality harness and engine repair
 
 **Date:** 2026-06-07
-**Status:** assessment accepted; REQ-013 + REQ-014 **done** (reality gate first green
-2026-06-08 — the engine drove a real `claude -p` through design→build→land); REQ-012 next
+**Status:** assessment accepted; REQ-013 + REQ-014 + REQ-012 **done** (reality gate first
+green 2026-06-08 — the engine drove a real `claude -p` through design→build→land; re-run
+green under REQ-012's hardened `_classify`); **verify-teeth (defect 3) next**
 **Author:** Peter Fröhlich + Claude (assessment session)
 
 This plan records a review prompted by a simple observation: DevSteward's 9-REQ baseline
@@ -90,10 +91,14 @@ mocked, check.
 2. **REQ-014 — Permission mode for headless `claude -p` — DONE.** Pass a permission mode so
    a real headless session can edit files. Acceptance: the reality gate's build/land steps
    actually produce and commit the file. Turns the first half of REQ-013's gate green.
-3. **REQ-012 — Real cswap CLI** (drafted). Rewrite the provider to the 0.11 switcher
-   contract; harden `claude._classify` so a launch failure (non-zero exit, zero
-   stream-json events) is distinct from a mid-task error. Replace the obsolete
-   `test_use_pins_account`.
+3. **REQ-012 — Real cswap CLI — DONE (2026-06-08).** Provider rewritten to the 0.11
+   switcher contract (`claude_argv()` is plain `["claude"]`; `precheck()` switches via
+   `cswap --switch-to N` and gates on `cswap --status`, all non-fatal). `claude._classify`
+   hardened: a non-zero exit with zero stream-json events is now `Outcome.LAUNCH_FAILURE`,
+   distinct from a mid-task error, recorded as a `launch_failed` event. Obsolete
+   `test_use_pins_account` replaced by `test_use_switches_account`; `config.yaml` restored
+   to `provider: cswap`. Not exercised by the reality gate (it pins `single`), so verified
+   by hermetic ACs; the gate stays green under the new classify path.
 4. **Verify teeth** (new REQ or folded into REQ-006 follow-up). Forbid marker-trust on
    `design`/`build`, or require every active REQ to declare at least one runnable
    acceptance criterion the engine re-runs — enforced by `lint`. Closes the false-done
