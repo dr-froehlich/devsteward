@@ -17,6 +17,7 @@ import subprocess
 import time
 from dataclasses import dataclass
 from enum import Enum
+from typing import Callable
 
 
 class Outcome(str, Enum):
@@ -79,11 +80,15 @@ def run_claude(
     env: dict | None = None,
     timeout: float = 1800.0,
     unattended: bool = True,
+    on_event: Callable[[dict], None] | None = None,
 ) -> Result:
     """Invoke ``claude -p <command>`` headless and classify the outcome.
 
     When ``unattended`` is set, ``DEVSTEWARD_UNATTENDED=1`` is exported so skills know to
     park-and-surface at forks instead of blocking on AskUserQuestion.
+
+    ``on_event`` is called with each parsed stream-json event as it arrives, so an
+    attended caller can render live progress instead of staring at a silent terminal.
     """
     argv = list(argv_prefix or ["claude"]) + [
         "-p",
@@ -119,9 +124,12 @@ def run_claude(
             if not line:
                 continue
             try:
-                lines.append(json.loads(line))
+                ev = json.loads(line)
             except json.JSONDecodeError:
-                lines.append({"type": "raw", "text": line})
+                ev = {"type": "raw", "text": line}
+            lines.append(ev)
+            if on_event is not None:
+                on_event(ev)
         returncode = proc.wait(timeout=30)
     except subprocess.TimeoutExpired:
         timed_out = True

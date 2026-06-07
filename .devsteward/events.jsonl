@@ -12,3 +12,7 @@
 {"ts": "2026-06-07T20:35:25+00:00", "event": "checkpoint", "step": "REQ-011:build", "commit": "d366d5452e9104228cfe54e2971301164f43cc5a"}
 {"ts": "2026-06-07T20:44:55+00:00", "event": "step_reset", "step": "REQ-011:design", "reason": "no-op checkpoint: /advance skill was unresolvable (no .claude/skills) so claude did nothing; only ledger bookkeeping was committed. Symlink fix landed (b01e8d6); reset to pending for a real run."}
 {"ts": "2026-06-07T20:44:55+00:00", "event": "step_reset", "step": "REQ-011:build", "reason": "no-op checkpoint: /advance skill was unresolvable (no .claude/skills) so claude did nothing; only ledger bookkeeping was committed. Symlink fix landed (b01e8d6); reset to pending for a real run."}
+{"ts": "2026-06-07T20:46:24+00:00", "event": "step_started", "step": "REQ-011:design", "command": "/advance REQ-011 design"}
+{"ts": "2026-06-07T20:50:51+00:00", "event": "step_reset", "step": "REQ-011:design", "reason": "aborted run left step stuck in running (Ctrl+C after ~3min; advance was working, not hung). Reset to pending for a real run."}
+{"ts": "2026-06-07T21:01:52+00:00", "event": "step_started", "step": "REQ-011:design", "command": "/advance REQ-011 design"}
+{"ts": "2026-06-07T21:05:53+00:00", "event": "usage_limit", "step": "REQ-011:design"}

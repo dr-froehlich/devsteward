@@ -118,7 +118,13 @@ class Executor:
 
     # -- execution -------------------------------------------------------------
 
-    def run_step(self, step: Step, *, unattended: bool = True) -> StepResult:
+    def run_step(
+        self,
+        step: Step,
+        *,
+        unattended: bool = True,
+        on_event: Callable[[dict], None] | None = None,
+    ) -> StepResult:
         led = self.ledger
         led.set_cursor(step.id)
         led.set_status(step.id, StepStatus.RUNNING)
@@ -137,6 +143,7 @@ class Executor:
             argv_prefix=self.accounts.claude_argv(),
             cwd=str(self.root),
             unattended=unattended,
+            on_event=on_event,
         )
 
         if result.outcome is claude_mod.Outcome.USAGE_LIMIT:
@@ -210,14 +217,24 @@ class Executor:
 
     # -- drivers ---------------------------------------------------------------
 
-    def advance_once(self, *, unattended: bool = False) -> StepResult | None:
+    def advance_once(
+        self,
+        *,
+        unattended: bool = False,
+        on_event: Callable[[dict], None] | None = None,
+    ) -> StepResult | None:
         """Attended: run exactly one eligible step (or None if nothing is eligible)."""
         step = self.next_eligible()
         if step is None:
             return None
-        return self.run_step(step, unattended=unattended)
+        return self.run_step(step, unattended=unattended, on_event=on_event)
 
-    def run(self, *, max_steps: int | None = None) -> list[StepResult]:
+    def run(
+        self,
+        *,
+        max_steps: int | None = None,
+        on_event: Callable[[dict], None] | None = None,
+    ) -> list[StepResult]:
         """Unattended: march eligible steps headless, parking on forks.
 
         A parked step is BLOCKED (not eligible), so the loop naturally advances to the
@@ -231,7 +248,7 @@ class Executor:
             step = self.next_eligible()
             if step is None:
                 break
-            res = self.run_step(step, unattended=True)
+            res = self.run_step(step, unattended=True, on_event=on_event)
             results.append(res)
             count += 1
             if res.outcome is RunOutcome.LIMIT:

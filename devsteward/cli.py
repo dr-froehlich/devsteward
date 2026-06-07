@@ -140,16 +140,70 @@ def status() -> None:
             click.echo(f"  {d.id} [{d.step}] {d.question}")
 
 
+# -- live progress ------------------------------------------------------------
+
+
+def _tool_summary(name: str, tool_input: dict) -> str:
+    """A short one-liner for a tool_use block, so progress lines stay scannable."""
+    for key in ("command", "file_path", "path", "pattern", "query", "url"):
+        val = tool_input.get(key)
+        if isinstance(val, str) and val:
+            val = " ".join(val.split())
+            return f" {val[:80]}{'…' if len(val) > 80 else ''}"
+    return ""
+
+
+def _stream_printer():
+    """An ``on_event`` callback that renders live ``claude`` stream-json to stderr.
+
+    stdout is reserved for the final report, so progress goes to stderr — the user sees
+    Claude working in real time instead of a silent terminal.
+    """
+
+    def emit(ev: dict) -> None:
+        etype = ev.get("type")
+        if etype == "system" and ev.get("subtype") == "init":
+            model = ev.get("model", "")
+            click.echo(click.style(f"⟳ claude session started  {model}", fg="cyan"), err=True)
+        elif etype == "assistant":
+            for block in ev.get("message", {}).get("content", []):
+                btype = block.get("type")
+                if btype == "text":
+                    text = (block.get("text") or "").strip()
+                    if text:
+                        click.echo(text, err=True)
+                elif btype == "tool_use":
+                    name = block.get("name", "tool")
+                    summary = _tool_summary(name, block.get("input") or {})
+                    click.echo(click.style(f"  ⚙ {name}", fg="blue") + summary, err=True)
+        elif etype == "raw":
+            click.echo(click.style(ev.get("text", ""), dim=True), err=True)
+        elif etype == "result":
+            cost = ev.get("total_cost_usd")
+            dur = ev.get("duration_ms")
+            bits = []
+            if isinstance(dur, (int, float)):
+                bits.append(f"{dur / 1000:.0f}s")
+            if isinstance(cost, (int, float)):
+                bits.append(f"${cost:.4f}")
+            tail = f"  ({', '.join(bits)})" if bits else ""
+            click.echo(click.style(f"✓ claude session ended{tail}", fg="cyan"), err=True)
+
+    return emit
+
+
 # -- advance (attended) -------------------------------------------------------
 
 
 @main.command()
 @click.option("--use", type=int, default=None, help="Pin a claude-swap account index.")
-def advance(use: int | None) -> None:
+@click.option("--quiet", is_flag=True, help="Suppress live claude output; show only the report.")
+def advance(use: int | None, quiet: bool) -> None:
     """Attended: do exactly one checkpoint, then print the fixed report."""
     cfg = _load_or_die()
     ex = build_executor(cfg, use=use)
-    res = ex.advance_once(unattended=False)
+    on_event = None if quiet else _stream_printer()
+    res = ex.advance_once(unattended=False, on_event=on_event)
     if res is None:
         click.echo("Nothing eligible — every step is done, blocked, or waiting on a dep.")
         return
@@ -162,11 +216,13 @@ def advance(use: int | None) -> None:
 @main.command()
 @click.option("--use", type=int, default=None, help="Pin a claude-swap account index.")
 @click.option("--max-steps", type=int, default=None, help="Stop after N steps.")
-def run(use: int | None, max_steps: int | None) -> None:
+@click.option("--quiet", is_flag=True, help="Suppress live claude output; show only results.")
+def run(use: int | None, max_steps: int | None, quiet: bool) -> None:
     """Unattended: march eligible steps headless; park on forks."""
     cfg = _load_or_die()
     ex = build_executor(cfg, use=use)
-    results = ex.run(max_steps=max_steps)
+    on_event = None if quiet else _stream_printer()
+    results = ex.run(max_steps=max_steps, on_event=on_event)
     if not results:
         click.echo("Nothing eligible to run.")
         return

@@ -31,7 +31,7 @@ class FakeRunner:
         self.calls: list[dict] = []
 
     def __call__(self, command, *, argv_prefix=None, cwd=None, env=None,
-                 timeout=1800.0, unattended=True):
+                 timeout=1800.0, unattended=True, on_event=None):
         self.calls.append(
             {"command": command, "argv_prefix": argv_prefix, "cwd": cwd,
              "unattended": unattended}
