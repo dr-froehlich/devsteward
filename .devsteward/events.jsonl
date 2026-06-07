@@ -1,1 +1,6 @@
 {"ts": "2026-06-06T17:36:29+00:00", "event": "ledger_init", "profile": "req"}
+{"ts": "2026-06-07T17:41:55+00:00", "event": "step_started", "step": "REQ-001:design", "command": "/advance REQ-001 design"}
+{"ts": "2026-06-07T17:41:55+00:00", "event": "step_failed", "step": "REQ-001:design", "outcome": "error"}
+{"ts": "2026-06-07T17:49:55+00:00", "event": "step_started", "step": "REQ-011:design", "command": "/advance REQ-011 design"}
+{"ts": "2026-06-07T17:49:55+00:00", "event": "step_failed", "step": "REQ-011:design", "outcome": "error"}
+{"ts": "2026-06-07T18:01:11+00:00", "event": "step_reset", "step": "REQ-011:design", "reason": "false failure: cswap provider built `cswap exec claude` (no such subcommand in cswap>=0.11); claude never launched. Reset to pending; provider pinned to single."}
