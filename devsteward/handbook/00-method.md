@@ -14,8 +14,10 @@ fail to propagate. DevSteward is the single controlled baseline.
    REQ, never by quietly weakening it.
 3. **A dependency DAG orders the work.** `depends_on` makes a REQ eligible only once its
    prerequisites are done. `ROADMAP.md` is the human view of that graph.
-4. **An engine walks the work.** Attended (one checkpoint at a time) or unattended
-   (march the eligible steps, park on forks). See [02 · The engine](02-engine.md).
+4. **An engine walks the work.** One checkpoint at a time (`steward advance`) or marching
+   every eligible step (`steward run`) — both headless, parking forks. A human can also
+   drive `/advance` interactively, trading the engine's guarantees for the loop. See
+   [02 · The engine](02-engine.md).
 5. **Verification is mechanical.** Acceptance criteria name runnable tests; a step is
    done only when they are green — checked by the engine, not asserted by a model.
 

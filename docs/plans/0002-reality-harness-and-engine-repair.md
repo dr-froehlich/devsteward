@@ -1,11 +1,13 @@
 # 0002 — Reality harness and engine repair
 
 **Date:** 2026-06-07
-**Status:** assessment accepted; REQ-013 + REQ-014 + REQ-012 + REQ-015 (verify-teeth,
-defect 3) **done** (reality gate first green 2026-06-08 — the engine drove a real
+**Status:** **COMPLETE.** Assessment accepted; REQ-013 + REQ-014 + REQ-012 + REQ-015
+(verify-teeth, defect 3) done (reality gate first green 2026-06-08 — the engine drove a real
 `claude -p` through design→build→land; re-run green under REQ-012's hardened `_classify`
-and again under REQ-015's `ReqVerifier`). **Last open item: resolve the batch-vs-interactive
-`advance` fork (step 5).**
+and again under REQ-015's `ReqVerifier`). Step 5 (resolve the batch-vs-interactive `advance`
+fork + double-commit) **done 2026-06-08** as a docs+skill change (no engine code change — the
+executor already implemented the batch contract; the incoherence was in the prose and the
+skill's commit instruction).
 **Author:** Peter Fröhlich + Claude (assessment session)
 
 This plan records a review prompted by a simple observation: DevSteward's 9-REQ baseline
@@ -53,16 +55,20 @@ skeleton and, without a process change, the same blind spot.
 
 ## Assessment by layer
 
-**Concept (sound, one unresolved fork).** REQs as the unit of work, a dependency DAG, the
-ledger as cursor separate from the spec, and "the model thinks, the engine guarantees" are
-the right ideas, faithfully derived from the reference systems. The unresolved fork: *is
-`advance` a headless batch worker or an interactive pair?* The engine path (`claude -p`)
-cannot ask questions and must park forks (correct, matches `run_batch.py`). The skill
-(`templates/.claude/skills/advance/SKILL.md:39`) says "ask via AskUserQuestion, then
-continue" — which only works in a live session where there is no executor in the loop, so
-the skill is told to self-attest success: the exact false-done the architecture claims to
-prevent. The guarantee holds only in the headless mode (currently non-functional); the
-functional mode (interactive) has no engine guarantees.
+**Concept (sound; the one fork is now resolved — step 5).** REQs as the unit of work, a
+dependency DAG, the ledger as cursor separate from the spec, and "the model thinks, the
+engine guarantees" are the right ideas, faithfully derived from the reference systems. The
+fork was: *is `advance` a headless batch worker or an interactive pair?* The engine path
+(`claude -p`) cannot ask questions and must park forks (correct, matches `run_batch.py`).
+The skill said "ask via AskUserQuestion, then continue" — which only works in a live session
+where there is no executor in the loop, so the skill was, in effect, told to self-attest
+success: the exact false-done the architecture claims to prevent. **Resolution:** the two
+are now declared as two distinct modes (step 5). The headless engine commands are the *batch
+worker* — engine-guaranteed, forks always park, engine owns the single commit. The bare
+skill in a live session is the *interactive pair* — explicitly carrying no engine guarantees,
+asking at forks, committing its own work, with the human as the guarantee. The skill keys its
+ask/park and commit/leave-dirty behaviour off `DEVSTEWARD_UNATTENDED`, which also closes the
+double-commit (only one owner commits per mode).
 
 **Architecture (clean skeleton, three boundary holes).** The four seams, the ledger split
 (`state.yaml` + `events.jsonl`), dependency-gated eligibility, and park-and-surface are
@@ -110,10 +116,18 @@ mocked, check.
    fail honest designs and this very gate). `build_executor` wires `ReqVerifier` for the
    req profile; the handbook/verify docstring were corrected to stop overclaiming. Closes
    the false-done path. Reality gate re-ran green under `ReqVerifier` (4 passed ~212s).
-5. **Resolve the conceptual fork** (docs + skill). Declare `advance`/`run` a batch worker
-   that never asks (forks always park); make interactive `/advance` an explicitly separate,
-   human-driven mode that does **not** claim engine guarantees. Align `handbook/` and
-   `SKILL.md`.
+5. **Resolve the conceptual fork — DONE (2026-06-08, docs + skill).** Settled the fork by
+   declaring two modes with different contracts. *Batch worker* (`steward advance` /
+   `steward run`, driving `claude -p` headless): the engine owns the guarantees — it re-runs
+   the tests, owns the **single commit**, advances the ledger, and forks always **park**
+   (never `AskUserQuestion`). *Interactive pair* (`/advance` in a live session): no executor
+   in the loop and so **no engine guarantees** — the skill verifies, the skill commits, and
+   it asks at forks; the human is the guarantee. The **double-commit** is closed by making
+   commit ownership exclusive per mode (engine commits in batch, skill commits interactively,
+   never both): the skill's close step now keys off `DEVSTEWARD_UNATTENDED` — under the engine
+   it leaves the working tree dirty for the engine's one commit. No engine code change was
+   needed (the executor already implemented the batch contract); the fix aligned
+   `advance/SKILL.md`, `handbook/00`–`04`, `CLAUDE.md.tmpl`, and the executor docstring.
 
 The sequencing matters: step 1 changes the *process* (no green without one real run),
 which is the actual root cause; steps 2–5 are then routine and each verifiable for real.

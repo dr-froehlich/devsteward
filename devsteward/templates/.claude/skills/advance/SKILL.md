@@ -6,8 +6,25 @@ description: Do exactly one checkpoint of the current requirement — Design, Bu
 # /advance — one checkpoint of the requirement workflow
 
 You do **exactly one** checkpoint and stop. The cycle per requirement is
-**A · Design → B · Build → C · Land**. The engine, not you, owns verification and the
-ledger cursor — your job is the cognitive work of the one checkpoint in focus.
+**A · Design → B · Build → C · Land**. Your job is the cognitive work of the one checkpoint
+in focus — but *who verifies it and who commits it* depends on **which mode you are in**.
+
+## 0. Which mode are you in? (decide first)
+
+`/advance` is one skill run two ways, with different contracts. The switch is the
+`DEVSTEWARD_UNATTENDED` environment variable.
+
+- **Batch (engine-driven)** — `DEVSTEWARD_UNATTENDED=1` is set. You were launched headless
+  by `steward advance` / `steward run` via `claude -p`; **there is no human in the loop.**
+  The engine owns the guarantees: it re-runs the acceptance tests itself, makes the single
+  commit, and advances the ledger. You do the thinking, leave the working tree dirty for the
+  engine, and **park** any fork (you cannot ask). Do **not** commit and do **not** branch.
+- **Interactive (human-driven)** — `DEVSTEWARD_UNATTENDED` is unset. A person ran `/advance`
+  in a live session. **There is no engine in the loop, and therefore no engine guarantees.**
+  You verify your own work, you commit it, and at a fork you **ask**. The human reviewing
+  the work is the guarantee.
+
+Everything tagged *(batch)* or *(interactive)* below applies to that mode only.
 
 ## 1. Orient (always)
 
@@ -29,22 +46,30 @@ surrounding code's style. English-only code; isolate any localized UI strings.
 
 **C · Land** — make every acceptance test green, update the REQ's `status: done`,
 `completed:` date, and `verified_by:`, sync its `REQUIREMENTS_INDEX.md` row, and ensure
-`steward lint` is green. The engine re-runs the named tests independently before it
-marks the step done — do not fake green.
+`steward lint` is green. Green must be **real** either way:
 
-## 3. Stop at forks (park-and-surface)
+- *(batch)* the engine re-runs the named tests independently before it marks the step done —
+  do not fake green.
+- *(interactive)* there is no engine recheck, so you are attesting green to the human — run
+  the tests for real before you claim it.
 
-If you hit a real decision you can't resolve from the REQ + repo:
+## 3. At a fork (a decision you can't resolve from the REQ + repo)
 
-- **Interactive:** ask via `AskUserQuestion`, then continue.
-- **Unattended (`DEVSTEWARD_UNATTENDED=1`):** append a record to `.devsteward/state.yaml`
-  under `decisions:` (`{id, step, question, status: open}`) and **stop**. Do not guess.
-  The engine surfaces it and advances to the next independent step.
+- *(interactive)* ask via `AskUserQuestion`, then continue. Nothing re-checks this for you —
+  you and the human own the answer.
+- *(batch, `DEVSTEWARD_UNATTENDED=1`)* append a record to `.devsteward/state.yaml` under
+  `decisions:` (`{id, step, question, status: open}`) and **stop**. Do not guess. The engine
+  surfaces it and advances to the next independent step; `steward decision answer` unblocks it.
 
 ## 4. Close
 
-Commit your work (same-commit discipline: frontmatter + index + code together), branch
-first, co-author trailer. End with the fixed report:
+End with the fixed report (below) **after** handling the commit per your mode:
+
+- *(interactive)* commit your work yourself: same-commit discipline — frontmatter + index +
+  code together — branch first, co-author trailer.
+- *(batch)* do **not** commit and do **not** branch. Leave the working tree dirty; the engine
+  verifies, makes the one authoritative commit, and advances the ledger. Committing here would
+  *double-commit* — the engine commits too.
 
 ```
 Did:       <what this checkpoint produced>

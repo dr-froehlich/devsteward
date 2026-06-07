@@ -11,10 +11,14 @@ For each eligible step (all dependencies ``DONE``, status ``PENDING``):
 5. **verify:** run the step's named acceptance tests — green is mandatory to proceed;
 6. **commit** the working tree and **advance** the ledger to ``DONE``.
 
-Both entry points drive headless `claude -p`, so forks always park-and-surface
-(there is no interactive channel for `AskUserQuestion`). `advance_once` does exactly
-one step; `run` marches every eligible step. A human-driven `/advance` inside an
-interactive Claude Code session is the only context where `AskUserQuestion` applies.
+Both entry points drive headless `claude -p` (the **batch** mode), so forks always
+park-and-surface (there is no interactive channel for `AskUserQuestion`) and the engine
+owns the single commit here: the skill does the work but leaves the tree dirty, and
+`_commit` below makes the one authoritative checkpoint commit — the skill must not also
+commit (that would double-commit). `advance_once` does exactly one step; `run` marches
+every eligible step. A human-driven `/advance` inside an interactive Claude Code session
+is the separate **interactive** mode — the only context where `AskUserQuestion` applies
+and where the skill (not the engine) verifies and commits, with no engine guarantees.
 """
 
 from __future__ import annotations

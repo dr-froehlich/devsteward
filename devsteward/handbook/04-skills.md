@@ -16,7 +16,10 @@ green. A sharp `/intake` is the highest-leverage moment in the method; never rus
 
 The generalized `/scaleup`. Orients from the ledger, does **exactly one** checkpoint
 (Design, Build, or Land), stops at forks, runs the acceptance tests at Land, and ends
-with the fixed report. The attended counterpart to `steward run`.
+with the fixed report. It runs two ways with different contracts — headless under `steward
+advance` / `steward run` (the engine verifies and commits; forks park) or directly in a
+live session (the human verifies and the skill commits; forks ask). See the two-mode
+contract in `03-workflow.md`.
 
 ## `/bootstrap` — bring a new project to life
 
@@ -27,11 +30,13 @@ initializes the ledger.
 
 ## The park-and-surface contract
 
-All three skills obey the same rule when `DEVSTEWARD_UNATTENDED=1` is set: do **not**
-block on `AskUserQuestion`. Instead append a decision request to `.devsteward/state.yaml`
-under `decisions:` (`{id, step, question, status: open}`) and stop. The engine surfaces
-it and advances to the next independent step. **The interview stays sacred** — a fork is
-recorded and handed back to a human, never guessed.
+All three skills obey the same rule when `DEVSTEWARD_UNATTENDED=1` is set (batch mode): do
+**not** block on `AskUserQuestion`. Instead append a decision request to
+`.devsteward/state.yaml` under `decisions:` (`{id, step, question, status: open}`) and stop.
+The engine surfaces it and advances to the next independent step. Without the env var
+(interactive mode) the skills *do* ask via `AskUserQuestion` and continue — but that run
+carries no engine guarantee; the human in the loop is the guarantee. Either way **the
+interview stays sacred** — a fork is recorded or asked, never guessed.
 
 ## Renaming
 

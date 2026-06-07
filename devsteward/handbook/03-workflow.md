@@ -26,16 +26,33 @@ requirements interleave freely**. A dependency that is already `done` is satisfi
 dropped; a dependency that is draft, dropped, or missing leaves the dependent correctly
 blocked (and `steward lint` flags it).
 
-## Attended vs unattended
+## Two modes: batch worker vs. interactive pair
 
-- **`steward advance`** (and the `/advance` skill): do exactly one checkpoint, stop at
-  forks, print the fixed report. This is the human-in-the-loop mode.
-- **`steward run`:** march every eligible step headless; park on forks; stop on usage
-  limits or a hard failure so a human can look.
+`/advance` is one skill run two ways, with **different contracts**. The fork that was once
+ambiguous is settled: *the engine commands are a batch worker; the bare skill is an
+interactive pair.* The switch is the `DEVSTEWARD_UNATTENDED` environment variable, which the
+engine sets when it shells out.
+
+- **Batch worker — `steward advance` / `steward run`.** Both drive `claude -p` headless
+  (`DEVSTEWARD_UNATTENDED=1`); there is no human channel. The **engine owns the guarantees**:
+  it re-runs the acceptance tests itself (teeth at land), it makes the single commit, and it
+  advances the ledger. A fork is never asked — it is **parked** and surfaced. `steward
+  advance` does one checkpoint; `steward run` marches every eligible step, parking on forks
+  and stopping on a usage limit or hard failure so a human can look.
+- **Interactive pair — `/advance` in a live session.** A person runs the skill directly in
+  Claude Code. There is no executor in the loop and therefore **no engine guarantees**: the
+  skill verifies, the skill commits (same-commit discipline), and at a fork it asks via
+  `AskUserQuestion`. The human reviewing the work is the guarantee — trust comes from the
+  person, not the engine.
+
+**One commit, one owner.** Commit ownership is exclusive by mode: the engine commits in
+batch, the skill commits interactively — *never both*. (Earlier the skill committed even
+under the engine, which then committed again — a double commit; resolved by keying the
+skill's close step off `DEVSTEWARD_UNATTENDED`.)
 
 ## The fixed report
 
-Every attended checkpoint ends the same way, so orientation is instant:
+Every checkpoint ends the same way, so orientation is instant:
 
 ```
 Did:       what this checkpoint produced

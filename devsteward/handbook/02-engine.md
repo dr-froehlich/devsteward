@@ -30,7 +30,14 @@ Knows nothing about requirements. For each eligible step it:
 
 So unattended automation can't be **talked into a false "done"**. The model does the
 thinking; the engine holds the guarantees. A fork the model can't resolve becomes a
-recorded, surfaced decision — never a guess committed to history.
+recorded, surfaced decision — never a guess committed to history. The engine also owns the
+**single commit** (the skill leaves the working tree dirty and does not commit), so each
+checkpoint lands as one authoritative commit rather than a skill commit plus an engine one.
+
+These guarantees exist only in the **batch** mode (`steward advance` / `steward run`, driving
+`claude -p` headless). A human running `/advance` directly in a live session has no executor
+in the loop and so gets none of them: they verify and commit themselves, and may ask at a
+fork. See the two-mode contract in `03-workflow.md`.
 
 Verification has teeth **where the work is delivered**. In the REQ profile, `design` and
 `build` advance the cursor (they carry no per-phase tests), but a REQ is not done until it
