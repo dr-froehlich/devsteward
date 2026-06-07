@@ -6,3 +6,6 @@
 {"ts": "2026-06-07T18:01:11+00:00", "event": "step_reset", "step": "REQ-011:design", "reason": "false failure: cswap provider built `cswap exec claude` (no such subcommand in cswap>=0.11); claude never launched. Reset to pending; provider pinned to single."}
 {"ts": "2026-06-07T20:35:10+00:00", "event": "step_started", "step": "REQ-011:design", "command": "/advance REQ-011 design"}
 {"ts": "2026-06-07T20:35:12+00:00", "event": "verify", "step": "REQ-011:design", "ok": true, "detail": "no acceptance tests declared (marker trust)"}
+{"ts": "2026-06-07T20:35:12+00:00", "event": "checkpoint", "step": "REQ-011:design", "commit": "14072cf965e00641b06ca9bea5cbe4ced10f32a6"}
+{"ts": "2026-06-07T20:35:24+00:00", "event": "step_started", "step": "REQ-011:build", "command": "/advance REQ-011 build"}
+{"ts": "2026-06-07T20:35:25+00:00", "event": "verify", "step": "REQ-011:build", "ok": true, "detail": "no acceptance tests declared (marker trust)"}
