@@ -1,7 +1,8 @@
 # 0002 — Reality harness and engine repair
 
 **Date:** 2026-06-07
-**Status:** assessment accepted; REQ-013 (reality harness) in progress
+**Status:** assessment accepted; REQ-013 + REQ-014 **done** (reality gate first green
+2026-06-08 — the engine drove a real `claude -p` through design→build→land); REQ-012 next
 **Author:** Peter Fröhlich + Claude (assessment session)
 
 This plan records a review prompted by a simple observation: DevSteward's 9-REQ baseline
@@ -81,12 +82,12 @@ walks straight back into it.
 Ordered so the missing reality check comes first; each fix lands with a *real*, not
 mocked, check.
 
-1. **REQ-013 — Reality harness (this change).** An opt-in end-to-end test that drives a
+1. **REQ-013 — Reality harness — DONE (gate first green 2026-06-08).** An opt-in end-to-end test that drives a
    real `claude -p` through the production executor and asserts a real edit + commit, plus
    hermetic meta-tests that keep the gate honest. Expected RED against today's engine —
    that red is the deliverable. Establishes the process rule: *no checkpoint of the
    engine's own loop is trusted until the real gate has been run green at least once.*
-2. **REQ-014 — Permission mode for headless `claude -p`** (new). Pass a permission mode so
+2. **REQ-014 — Permission mode for headless `claude -p` — DONE.** Pass a permission mode so
    a real headless session can edit files. Acceptance: the reality gate's build/land steps
    actually produce and commit the file. Turns the first half of REQ-013's gate green.
 3. **REQ-012 — Real cswap CLI** (drafted). Rewrite the provider to the 0.11 switcher

@@ -15,11 +15,13 @@ three bundled skills. Built and dogfooded in Phase 0/1.
 
 ## Repair (dogfooding surfaced these — the engine never drove a real claude)
 
-- REQ-013 — **reality harness**: opt-in end-to-end test that drives a real `claude -p`
-  (in-progress; the standing trust gate, expected red until the two fixes below land)
+- REQ-013 — **reality harness**: opt-in end-to-end gate that drives a real `claude -p`
+  (**done**; first green 2026-06-08 — the standing trust gate)
 - REQ-014 — headless `claude -p` runs with a permission mode so a real session can edit
-  files (in-progress; turns the first half of REQ-013's gate green)
-- REQ-012 — real cswap 0.11 switcher CLI (draft; the provider speaks a fictional CLI)
+  (**done**; the fix that turned the gate green on a single account)
+- REQ-012 — real cswap 0.11 switcher CLI (draft; restores multi-account rotation)
+- verify-teeth — forbid marker-trust on design/build, or require a runnable AC (planned)
+- conceptual fork — make `advance`/`run` batch-only; separate interactive `/advance` (planned)
 
 ## Next
 

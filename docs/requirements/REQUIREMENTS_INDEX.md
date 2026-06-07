@@ -18,7 +18,7 @@ commit** as its frontmatter and the code.
 | REQ-010 | Converter — back-port legacy prose REQs (backlog) | DRAFT | [REQ-010](REQ-010.md) | REQ-002 |
 | REQ-011 | Branch governance — engine enforces branch-before-main; config-driven branch names | OPEN | [REQ-011](REQ-011.md) | REQ-003, REQ-007 |
 | REQ-012 | Rework the cswap account provider for the claude-swap 0.11 switcher CLI | DRAFT | [REQ-012](REQ-012.md) | REQ-008 |
-| REQ-013 | Reality harness — an opt-in end-to-end test that drives a real claude -p | IN-PROGRESS | [REQ-013](REQ-013.md) | REQ-003 |
-| REQ-014 | Headless claude -p runs with a permission mode so it can edit autonomously | IN-PROGRESS | [REQ-014](REQ-014.md) | REQ-003 |
+| REQ-013 | Reality harness — an opt-in end-to-end test that drives a real claude -p | DONE | [REQ-013](REQ-013.md) | REQ-003 |
+| REQ-014 | Headless claude -p runs with a permission mode so it can edit autonomously | DONE | [REQ-014](REQ-014.md) | REQ-003 |
 
 New requirement template: [`_templates/req.md`](../../devsteward/templates/docs/requirements/_templates/req.md)

@@ -19,9 +19,10 @@ Run the real gate with::
 
     DEVSTEWARD_REALITY=1 python -m pytest tests/test_reality_harness.py -k real -s
 
-It is expected to be **RED** until the engine can actually edit files (the headless
-invocation must pass a permission mode) and rotate accounts (the cswap fix). That red is
-the point: it is the trust gate the repair work has to turn green.
+Since REQ-014 gave the headless run a permission mode, this passes on a single account
+(first green 2026-06-08, ~258s for design->build->land). It stays opt-in because it needs
+real claude, network, and quota — not because it is expected to fail. It is the standing
+trust gate: no checkpoint of the engine's own loop is trusted until it has run green.
 """
 
 from __future__ import annotations
@@ -183,8 +184,8 @@ def test_fixture_project_is_lintable_and_has_one_eligible_step(tmp_path):
 def test_real_claude_end_to_end(tmp_path):
     """Drive a real ``claude -p`` through the production executor and prove the chain.
 
-    Skipped unless ``DEVSTEWARD_REALITY=1`` and claude is on PATH. Expected to be RED
-    until the engine can edit files and rotate accounts; that red is the trust gate.
+    Skipped unless ``DEVSTEWARD_REALITY=1`` and claude is on PATH. Passes on a single
+    account since REQ-014 (first green 2026-06-08); the standing trust gate.
     """
     reason = reality_skip_reason()
     if reason:
