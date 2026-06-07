@@ -81,6 +81,7 @@ class Executor:
         runner: Callable[..., claude_mod.Result] = claude_mod.run_claude,
         committer: Callable[[Step], str | None] | None = None,
         autocommit: bool = True,
+        permission_mode: str | None = claude_mod.DEFAULT_PERMISSION_MODE,
     ):
         self.root = Path(root)
         self.source = source
@@ -89,6 +90,7 @@ class Executor:
         self.runner = runner
         self.committer = committer
         self.autocommit = autocommit
+        self.permission_mode = permission_mode
         self.ledger = Ledger(self.root)
 
     # -- planning --------------------------------------------------------------
@@ -145,6 +147,7 @@ class Executor:
             argv_prefix=self.accounts.claude_argv(),
             cwd=str(self.root),
             unattended=unattended,
+            permission_mode=self.permission_mode,
             on_event=on_event,
         )
 

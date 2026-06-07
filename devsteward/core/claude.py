@@ -47,6 +47,28 @@ class Result:
     returncode: int | None
 
 
+# Headless `claude -p` has no interactive approver, so without a permission mode every
+# Edit/Write/Bash stalls or is denied and the session does nothing (the silent no-op that
+# made dogfooding "succeed" while producing empty commits). The default mirrors the proven
+# reference runner (`run_batch.py`); a cautious consumer can soften it via config.
+DEFAULT_PERMISSION_MODE = "dangerously-skip"
+
+
+def _permission_argv(mode: str | None) -> list[str]:
+    """Map a permission-mode setting to claude CLI flags.
+
+    ``"dangerously-skip"``/``"skip"`` → ``--dangerously-skip-permissions``; any claude
+    ``--permission-mode`` value (``bypassPermissions``/``acceptEdits``/``plan``/``default``)
+    → ``--permission-mode <value>``; ``None``/``""``/``"ask"`` → no flag (interactive
+    default — used by tests and attended setups).
+    """
+    if not mode or mode == "ask":
+        return []
+    if mode in ("dangerously-skip", "skip"):
+        return ["--dangerously-skip-permissions"]
+    return ["--permission-mode", mode]
+
+
 def _classify(lines: list[dict], returncode: int | None, timed_out: bool) -> Outcome:
     if timed_out:
         return Outcome.TIMEOUT
@@ -80,12 +102,17 @@ def run_claude(
     env: dict | None = None,
     timeout: float = 1800.0,
     unattended: bool = True,
+    permission_mode: str | None = DEFAULT_PERMISSION_MODE,
     on_event: Callable[[dict], None] | None = None,
 ) -> Result:
     """Invoke ``claude -p <command>`` headless and classify the outcome.
 
     When ``unattended`` is set, ``DEVSTEWARD_UNATTENDED=1`` is exported so skills know to
     park-and-surface at forks instead of blocking on AskUserQuestion.
+
+    ``permission_mode`` controls how the non-interactive session is allowed to act on the
+    repo (see :func:`_permission_argv`); the default lets it edit files autonomously, which
+    a headless run cannot do otherwise.
 
     ``on_event`` is called with each parsed stream-json event as it arrives, so an
     attended caller can render live progress instead of staring at a silent terminal.
@@ -96,7 +123,7 @@ def run_claude(
         "--output-format",
         "stream-json",
         "--verbose",
-    ]
+    ] + _permission_argv(permission_mode)
     run_env = dict(os.environ if env is None else env)
     if unattended:
         run_env["DEVSTEWARD_UNATTENDED"] = "1"

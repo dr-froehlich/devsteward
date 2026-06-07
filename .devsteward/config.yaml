@@ -8,3 +8,8 @@ accounts:
   # cswap-rework REQ. Pinned to `single` until the provider is fixed; restore `cswap`
   # to re-enable account rotation.
   provider: single
+
+# Headless runs need a permission mode or every edit stalls (see REQ-014). Default
+# `dangerously-skip` = autonomous edits; this is a trusted repo.
+claude:
+  permission_mode: dangerously-skip

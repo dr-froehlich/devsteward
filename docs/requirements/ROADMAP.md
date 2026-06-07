@@ -17,9 +17,9 @@ three bundled skills. Built and dogfooded in Phase 0/1.
 
 - REQ-013 — **reality harness**: opt-in end-to-end test that drives a real `claude -p`
   (in-progress; the standing trust gate, expected red until the two fixes below land)
+- REQ-014 — headless `claude -p` runs with a permission mode so a real session can edit
+  files (in-progress; turns the first half of REQ-013's gate green)
 - REQ-012 — real cswap 0.11 switcher CLI (draft; the provider speaks a fictional CLI)
-- REQ-014 — pass a permission mode to headless `claude -p` so a real session can edit
-  files (planned; see `docs/plans/0002-reality-harness-and-engine-repair.md`)
 
 ## Next
 

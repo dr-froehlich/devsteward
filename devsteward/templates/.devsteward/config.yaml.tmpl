@@ -14,3 +14,12 @@ roadmap_file: docs/requirements/ROADMAP.md
 #   single — plain `claude`, no quota machinery.
 accounts:
   provider: cswap
+
+# How a headless `claude -p` run is allowed to act on the repo. Headless sessions have
+# no interactive approver, so without this every edit stalls and the run does nothing.
+#   dangerously-skip  — bypass all permission checks (autonomous edits; the default,
+#                       matches the proven batch runner). Use in a trusted repo.
+#   bypassPermissions / acceptEdits / plan / default — claude --permission-mode values.
+#   ask               — no flag (attended/interactive; a headless run can't edit).
+claude:
+  permission_mode: dangerously-skip

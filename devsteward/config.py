@@ -42,6 +42,7 @@ class Config:
     index_file: str = "docs/requirements/REQUIREMENTS_INDEX.md"
     roadmap_file: str = "docs/requirements/ROADMAP.md"
     accounts: dict = field(default_factory=lambda: {"provider": "cswap"})
+    claude: dict = field(default_factory=lambda: {"permission_mode": "dangerously-skip"})
     raw: dict = field(default_factory=dict)
 
     @property
@@ -71,5 +72,6 @@ def load_config(root: Path | None = None) -> Config:
         index_file=data.get("index_file", "docs/requirements/REQUIREMENTS_INDEX.md"),
         roadmap_file=data.get("roadmap_file", "docs/requirements/ROADMAP.md"),
         accounts=data.get("accounts", {"provider": "cswap"}),
+        claude=data.get("claude", {"permission_mode": "dangerously-skip"}),
         raw=data,
     )

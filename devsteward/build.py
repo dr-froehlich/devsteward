@@ -30,4 +30,5 @@ def build_executor(cfg: Config, *, use: int | None = None, autocommit: bool = Tr
         verifier=CommandVerifier(cwd=str(cfg.root)),
         accounts=build_accounts(cfg, use=use),
         autocommit=autocommit,
+        permission_mode=(cfg.claude or {}).get("permission_mode", "dangerously-skip"),
     )
