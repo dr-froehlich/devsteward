@@ -192,18 +192,23 @@ def _stream_printer():
     return emit
 
 
-# -- advance (attended) -------------------------------------------------------
+# -- advance (single step) ----------------------------------------------------
 
 
 @main.command()
 @click.option("--use", type=int, default=None, help="Pin a claude-swap account index.")
 @click.option("--quiet", is_flag=True, help="Suppress live claude output; show only the report.")
 def advance(use: int | None, quiet: bool) -> None:
-    """Attended: do exactly one checkpoint, then print the fixed report."""
+    """Do exactly one checkpoint headless, then print the fixed report.
+
+    Like ``run`` this drives ``claude -p`` (no interactive client), so forks
+    park-and-surface — there is no human channel for ``AskUserQuestion`` here.
+    Resolve any parked fork with ``steward decision answer`` and re-run.
+    """
     cfg = _load_or_die()
     ex = build_executor(cfg, use=use)
     on_event = None if quiet else _stream_printer()
-    res = ex.advance_once(unattended=False, on_event=on_event)
+    res = ex.advance_once(unattended=True, on_event=on_event)
     if res is None:
         click.echo("Nothing eligible — every step is done, blocked, or waiting on a dep.")
         return

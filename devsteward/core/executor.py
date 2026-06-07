@@ -11,8 +11,10 @@ For each eligible step (all dependencies ``DONE``, status ``PENDING``):
 5. **verify:** run the step's named acceptance tests — green is mandatory to proceed;
 6. **commit** the working tree and **advance** the ledger to ``DONE``.
 
-Attended (`advance_once`) does exactly one step interactively-friendly; unattended
-(`run`) marches every eligible step, parking on forks.
+Both entry points drive headless `claude -p`, so forks always park-and-surface
+(there is no interactive channel for `AskUserQuestion`). `advance_once` does exactly
+one step; `run` marches every eligible step. A human-driven `/advance` inside an
+interactive Claude Code session is the only context where `AskUserQuestion` applies.
 """
 
 from __future__ import annotations
@@ -220,10 +222,10 @@ class Executor:
     def advance_once(
         self,
         *,
-        unattended: bool = False,
+        unattended: bool = True,
         on_event: Callable[[dict], None] | None = None,
     ) -> StepResult | None:
-        """Attended: run exactly one eligible step (or None if nothing is eligible)."""
+        """Run exactly one eligible step headless (or None if nothing is eligible)."""
         step = self.next_eligible()
         if step is None:
             return None
