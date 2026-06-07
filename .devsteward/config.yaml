@@ -4,10 +4,10 @@ requirements_dir: docs/requirements
 index_file: docs/requirements/REQUIREMENTS_INDEX.md
 roadmap_file: docs/requirements/ROADMAP.md
 accounts:
-  # cswap provider is broken against cswap >= 0.11 (no `exec` subcommand) — see the
-  # cswap-rework REQ. Pinned to `single` until the provider is fixed; restore `cswap`
-  # to re-enable account rotation.
-  provider: single
+  # cswap provider speaks the claude-swap 0.11 switcher CLI (REQ-012): precheck switches
+  # the active account with `--switch-to`, then claude runs plain. Degrades to single
+  # when cswap is absent. `use: N` pins an account by index.
+  provider: cswap
 
 # Headless runs need a permission mode or every edit stalls (see REQ-014). Default
 # `dangerously-skip` = autonomous edits; this is a trusted repo.

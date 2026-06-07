@@ -17,7 +17,7 @@ commit** as its frontmatter and the code.
 | REQ-009 | Bundle the three skills with the park-and-surface contract | DONE | [REQ-009](REQ-009.md) | REQ-002, REQ-005 |
 | REQ-010 | Converter — back-port legacy prose REQs (backlog) | DRAFT | [REQ-010](REQ-010.md) | REQ-002 |
 | REQ-011 | Branch governance — engine enforces branch-before-main; config-driven branch names | OPEN | [REQ-011](REQ-011.md) | REQ-003, REQ-007 |
-| REQ-012 | Rework the cswap account provider for the claude-swap 0.11 switcher CLI | DRAFT | [REQ-012](REQ-012.md) | REQ-008 |
+| REQ-012 | Rework the cswap account provider for the claude-swap 0.11 switcher CLI | DONE | [REQ-012](REQ-012.md) | REQ-008 |
 | REQ-013 | Reality harness — an opt-in end-to-end test that drives a real claude -p | DONE | [REQ-013](REQ-013.md) | REQ-003 |
 | REQ-014 | Headless claude -p runs with a permission mode so it can edit autonomously | DONE | [REQ-014](REQ-014.md) | REQ-003 |
 

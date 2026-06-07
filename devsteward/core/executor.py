@@ -157,6 +157,23 @@ class Executor:
             led.append_event("usage_limit", step=step.id)
             return StepResult(step, RunOutcome.LIMIT, "claude usage limit")
 
+        if result.outcome is claude_mod.Outcome.LAUNCH_FAILURE:
+            # claude never started — a launch failure must name its cause, not record an
+            # opaque "failed" (the fictional-cswap fingerprint: started/failed same second).
+            led.set_status(step.id, StepStatus.FAILED)
+            led.save()
+            detail = (
+                "launch failure — claude did not start (non-zero exit, no stream-json "
+                "output). Check the account provider (cswap) and that `claude` is on PATH."
+            )
+            led.append_event(
+                "launch_failed",
+                step=step.id,
+                returncode=result.returncode,
+                reason=detail,
+            )
+            return StepResult(step, RunOutcome.FAILED, detail)
+
         if result.outcome in (claude_mod.Outcome.ERROR, claude_mod.Outcome.TIMEOUT):
             led.set_status(step.id, StepStatus.FAILED)
             led.save()
