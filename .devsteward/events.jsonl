@@ -16,3 +16,6 @@
 {"ts": "2026-06-07T20:50:51+00:00", "event": "step_reset", "step": "REQ-011:design", "reason": "aborted run left step stuck in running (Ctrl+C after ~3min; advance was working, not hung). Reset to pending for a real run."}
 {"ts": "2026-06-07T21:01:52+00:00", "event": "step_started", "step": "REQ-011:design", "command": "/advance REQ-011 design"}
 {"ts": "2026-06-07T21:05:53+00:00", "event": "usage_limit", "step": "REQ-011:design"}
+{"ts": "2026-06-07T23:03:25+00:00", "event": "step_started", "step": "REQ-011:design", "command": "/advance REQ-011 design"}
+{"ts": "2026-06-07T23:08:56+00:00", "event": "usage_limit", "step": "REQ-011:design"}
+{"ts": "2026-06-08T04:32:06+00:00", "event": "step_recovered", "step": "REQ-011:design", "reason": "false usage-limit: claude.py _classify dumped the whole stream-json and matched _LIMIT_MARKERS in tool-result content (the design read executor.py/claude.py, whose source literally contains 'usage limit'/'rate limit'/'quota'). claude actually completed the design; the engine reset the step to pending and broke the run, discarding a finished checkpoint. Work was complete and correct; marked done and committed manually. Classifier defect filed as REQ-016."}
