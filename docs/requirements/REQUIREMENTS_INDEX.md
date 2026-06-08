@@ -25,5 +25,6 @@ commit** as its frontmatter and the code.
 | REQ-017 | Converter (legacy prose) — back-port ExamEngineer's prose-header REQs (backlog) | DRAFT | [REQ-017](REQ-017.md) | REQ-002, REQ-010 |
 | REQ-018 | `steward checkpoint` — close the ledger after an interactive /advance, no claude re-run | DRAFT | [REQ-018](REQ-018.md) | REQ-003 |
 | REQ-019 | Branching regime — declaration on the integration branch; only implementation branches | DONE | [REQ-019](REQ-019.md) | REQ-011 |
+| REQ-020 | Branch lifecycle automation — the executor manages the implementation feature branch end-to-end | DRAFT | [REQ-020](REQ-020.md) | REQ-011, REQ-019 |
 
 New requirement template: [`_templates/req.md`](../../devsteward/templates/docs/requirements/_templates/req.md)

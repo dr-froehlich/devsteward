@@ -33,6 +33,10 @@ three bundled skills. Built and dogfooded in Phase 0/1.
   consumer to migrate; archivist conversion + active-only lint relaxation)
 - REQ-017 — legacy-**prose** converter for ExamEngineer (draft; promote when its upscale
   evolution concludes — reuses REQ-010's core)
+- REQ-020 — **branch lifecycle automation** (draft; eligible now): the executor auto-creates
+  the feature branch on the first guarded `build` and auto-merges (`--no-ff`) after a green
+  `land` — completes the create→merge dance REQ-019 left manual, replacing its refusal with
+  management while the REQ-011 production guard stands
 - Future REQs land here as `/intake` produces them.
 
 ## Dependency graph
@@ -48,5 +52,5 @@ REQ-001
               ├─ REQ-006
               ├─ REQ-008
               └─ REQ-018 (draft, interactive checkpoint)
- REQ-011 (done, production-branch guard) ── REQ-019 (open, integration-branch guard)
+ REQ-011 (done, production-branch guard) ── REQ-019 (done, integration-branch guard) ── REQ-020 (draft, branch lifecycle automation)
 ```
