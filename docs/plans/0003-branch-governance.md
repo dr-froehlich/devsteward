@@ -98,8 +98,9 @@ front" and avoids re-checking per step inside a `run` loop (the branch can't cha
 - `devsteward/templates/.devsteward/config.yaml.tmpl` — add a `git:` section with
   `production_branch: main` / `integration_branch: dev` + a one-line comment.
 - `devsteward/templates/CLAUDE.md.tmpl` — upgrade the "Branch before main" bullet to the
-  full two-line model (production `main` vs integration `dev`, feature-branch-per-REQ → PR
-  into integration), now engine-enforced & config-driven.
+  full two-line model (production `main` vs integration `dev`, feature-branch-per-REQ
+  merged into integration with a plain local merge, integration → production via PR), now
+  engine-enforced & config-driven.
 - `devsteward/handbook/00-method.md` — same upgrade to the "Branch before main" bullet; the
   existing "the linter and the engine enforce them" line is now *true* for branching.
 - `devsteward/handbook/03-workflow.md` — add a short **Branching model** subsection (it
