@@ -15,7 +15,7 @@ commit** as its frontmatter and the code.
 | REQ-007 | `steward new` — stamp scaffolding into a consumer project | DONE | [REQ-007](REQ-007.md) | REQ-002 |
 | REQ-008 | Account/quota provider — claude-swap with degradation | DONE | [REQ-008](REQ-008.md) | REQ-003 |
 | REQ-009 | Bundle the three skills with the park-and-surface contract | DONE | [REQ-009](REQ-009.md) | REQ-002, REQ-005 |
-| REQ-010 | Converter — normalize memzy's frontmatter REQ dialect into the hybrid schema | OPEN | [REQ-010](REQ-010.md) | REQ-002 |
+| REQ-010 | Converter — normalize memzy's frontmatter REQ dialect into the hybrid schema | IN-PROGRESS | [REQ-010](REQ-010.md) | REQ-002 |
 | REQ-011 | Branch governance — engine enforces branch-before-main; config-driven branch names | DONE | [REQ-011](REQ-011.md) | REQ-003, REQ-007 |
 | REQ-012 | Rework the cswap account provider for the claude-swap 0.11 switcher CLI | DONE | [REQ-012](REQ-012.md) | REQ-008 |
 | REQ-013 | Reality harness — an opt-in end-to-end test that drives a real claude -p | DONE | [REQ-013](REQ-013.md) | REQ-003 |
