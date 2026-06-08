@@ -13,6 +13,7 @@ so the dependent stays correctly blocked until the situation is fixed (the linte
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from ...core.model import Step
@@ -21,6 +22,20 @@ from .reqfile import PHASES, load_reqs
 # Headless prompt per phase. The skill orients from the ledger cursor; the explicit
 # args make a headless run unambiguous.
 _COMMAND = "/advance"
+
+_SLUG_MAX_WORDS = 5
+
+
+def _slugify(title: str) -> str:
+    """A short branch-name segment from a REQ title (REQ-020 feeds ``req-<num>-<slug>``).
+
+    Take the headline before the first ` — ` (em dash) separator, lowercase, map runs of
+    non-alphanumerics to a single hyphen, and cap at a few words. E.g.
+    "Branch lifecycle automation — the executor…" → ``branch-lifecycle-automation``.
+    """
+    headline = title.split(" — ", 1)[0]
+    words = [w for w in re.sub(r"[^a-z0-9]+", "-", headline.lower()).split("-") if w]
+    return "-".join(words[:_SLUG_MAX_WORDS])
 
 
 class ReqStepSource:
@@ -60,6 +75,7 @@ class ReqStepSource:
                         title=f"{r.title} — {phase}",
                         req=r.id,
                         phase=phase,
+                        slug=_slugify(r.title),
                     )
                 )
                 prev = sid

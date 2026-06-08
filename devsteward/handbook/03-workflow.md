@@ -45,12 +45,24 @@ configurable in `.devsteward/config.yaml`:
 
 ```yaml
 git:
-  production_branch: main      # repos using `master`/`release` set it here
+  production_branch: main          # repos using `master`/`release` set it here
   integration_branch: dev
+  feature_branch: req-{num}-{slug} # name for an auto-managed implementation branch
 ```
 
-The guard protects the production branch only and has no opt-out — strictness is the point.
-It does not create branches or open PRs; git topology stays the human's job.
+The production guard has no opt-out — strictness is the point — and it never opens PRs
+(`dev → main` stays a human PR).
+
+**The executor manages the implementation feature branch** (it no longer merely refuses to
+implement on the integration branch). When a `build` or `land` step is eligible on the
+integration branch it lazily **creates and switches** to `feature_branch` (`{num}` is the
+REQ id without the `REQ-` prefix; `{slug}` a short slug of the title) and runs the step
+there; a partial prior run's branch is **reused** (a *diverged* one is surfaced, not merged
+over). After a **green land** it commits the trailing ledger write, switches back, and
+merges `--no-ff` with the co-author trailer — leaving the integration branch clean at rest.
+A failed or parked land does **not** merge: the feature branch stays checked out for
+inspection. A `design` step (declaration) still runs on the integration branch with no
+branch created — the automation is gated strictly on implementation phases.
 
 ## Two modes: batch worker vs. interactive pair
 
