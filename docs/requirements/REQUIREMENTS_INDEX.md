@@ -24,5 +24,6 @@ commit** as its frontmatter and the code.
 | REQ-016 | Usage-limit detection trusts the runtime signal, not echoed content | DONE | [REQ-016](REQ-016.md) | REQ-003, REQ-012 |
 | REQ-017 | Converter (legacy prose) — back-port ExamEngineer's prose-header REQs (backlog) | DRAFT | [REQ-017](REQ-017.md) | REQ-002, REQ-010 |
 | REQ-018 | `steward checkpoint` — close the ledger after an interactive /advance, no claude re-run | DRAFT | [REQ-018](REQ-018.md) | REQ-003 |
+| REQ-019 | Branching regime — declaration on the integration branch; only implementation branches | OPEN | [REQ-019](REQ-019.md) | REQ-011 |
 
 New requirement template: [`_templates/req.md`](../../devsteward/templates/docs/requirements/_templates/req.md)

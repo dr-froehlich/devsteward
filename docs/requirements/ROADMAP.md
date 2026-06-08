@@ -23,6 +23,9 @@ three bundled skills. Built and dogfooded in Phase 0/1.
 - verify-teeth — forbid marker-trust on design/build, or require a runnable AC (planned)
 - conceptual fork — make `advance`/`run` batch-only; separate interactive `/advance`
   (**REQ-018**: `steward checkpoint` closes the ledger after an interactive checkpoint)
+- branching regime — declaration (intake/roadmap/plans/ledger) lives on `dev`; only
+  implementation branches (**REQ-019**: extends the REQ-011 guard to refuse `build`/`land`
+  on the integration branch — REQ-011's missing half)
 
 ## Next
 
@@ -45,4 +48,5 @@ REQ-001
               ├─ REQ-006
               ├─ REQ-008
               └─ REQ-018 (draft, interactive checkpoint)
+ REQ-011 (done, production-branch guard) ── REQ-019 (open, integration-branch guard)
 ```
