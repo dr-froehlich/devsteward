@@ -22,5 +22,6 @@ commit** as its frontmatter and the code.
 | REQ-014 | Headless claude -p runs with a permission mode so it can edit autonomously | DONE | [REQ-014](REQ-014.md) | REQ-003 |
 | REQ-015 | Verify teeth — a REQ cannot land on marker-trust | DONE | [REQ-015](REQ-015.md) | REQ-004, REQ-006 |
 | REQ-016 | Usage-limit detection trusts the runtime signal, not echoed content | DONE | [REQ-016](REQ-016.md) | REQ-003, REQ-012 |
+| REQ-018 | `steward checkpoint` — close the ledger after an interactive /advance, no claude re-run | DRAFT | [REQ-018](REQ-018.md) | REQ-003 |
 
 New requirement template: [`_templates/req.md`](../../devsteward/templates/docs/requirements/_templates/req.md)
