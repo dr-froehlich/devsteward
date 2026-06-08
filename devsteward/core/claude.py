@@ -31,8 +31,11 @@ class Outcome(str, Enum):
     LAUNCH_FAILURE = "launch-failure"
 
 
-# Substrings that mark a usage/quota limit in Claude's headless output. Kept as a small
-# table (ported from run_batch) so the adaptive gate can react instead of erroring.
+# Substrings that mark a usage/quota limit. Matched only against Claude's *runtime signal*
+# (out-of-band/raw lines and an error terminal result) — never against assistant text or
+# tool_result content, which can legitimately quote these words (e.g. a session that reads
+# DevSteward's own quota code, or a plan about rate limiting). See _limit_signal_text /
+# REQ-016. Kept as a small table (ported from run_batch) so the gate can react, not error.
 _LIMIT_MARKERS = (
     "usage limit",
     "rate limit",
@@ -83,11 +86,38 @@ def _has_stream_event(lines: list[dict]) -> bool:
     return any(ev.get("type") != "raw" for ev in lines)
 
 
+def _is_error_result(ev: dict) -> bool:
+    """True for an *abnormal* terminal ``result`` event — ``is_error`` set, or a ``subtype``
+    other than ``"success"``. A successful result carries the assistant's answer (which may
+    mention 'usage limit'/'quota' for an honest reason) and must not be read as a limit."""
+    if ev.get("type") != "result":
+        return False
+    if ev.get("is_error"):
+        return True
+    subtype = ev.get("subtype")
+    return subtype is not None and subtype != "success"
+
+
+def _limit_signal_text(lines: list[dict]) -> str:
+    """The runtime's own out-of-band output, where a usage/rate limit actually surfaces:
+    non-JSON ``raw`` lines (stderr/wrapper messages) and the text of an *error* terminal
+    result. Deliberately excludes ``assistant`` text and ``tool_result`` content — a session
+    that merely reads or writes files mentioning 'usage limit'/'quota' (e.g. DevSteward's own
+    source) is not rate-limited. This is the REQ-016 content-vs-signal boundary."""
+    parts: list[str] = []
+    for ev in lines:
+        if ev.get("type") == "raw":
+            parts.append(str(ev.get("text", "")))
+        elif _is_error_result(ev):
+            parts.append(json.dumps(ev))
+    return " ".join(parts).lower()
+
+
 def _classify(lines: list[dict], returncode: int | None, timed_out: bool) -> Outcome:
     if timed_out:
         return Outcome.TIMEOUT
-    blob = json.dumps(lines).lower()
-    if any(marker in blob for marker in _LIMIT_MARKERS):
+    signal = _limit_signal_text(lines)
+    if any(marker in signal for marker in _LIMIT_MARKERS):
         return Outcome.USAGE_LIMIT
     if returncode not in (0, None):
         # A non-zero exit with no stream-json event means ``claude`` never really ran
