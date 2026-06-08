@@ -25,7 +25,10 @@ three bundled skills. Built and dogfooded in Phase 0/1.
 
 ## Next
 
-- REQ-010 — legacy-format converter (draft; promote when a consumer needs it)
+- REQ-010 — **memzy frontmatter-dialect converter** (open; promoted — memzy is the first
+  consumer to migrate; archivist conversion + active-only lint relaxation)
+- REQ-017 — legacy-**prose** converter for ExamEngineer (draft; promote when its upscale
+  evolution concludes — reuses REQ-010's core)
 - Future REQs land here as `/intake` produces them.
 
 ## Dependency graph
@@ -35,7 +38,7 @@ REQ-001
  ├─ REQ-002 ──┬─ REQ-004 ── (with REQ-003)
  │            ├─ REQ-007
  │            ├─ REQ-009 ── (with REQ-005)
- │            └─ REQ-010 (draft)
+ │            └─ REQ-010 (open) ── REQ-017 (draft, legacy prose)
  └─ REQ-003 ──┬─ REQ-004
               ├─ REQ-005 ── REQ-009
               ├─ REQ-006
