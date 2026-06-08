@@ -243,6 +243,9 @@ def run(use: int | None, max_steps: int | None, quiet: bool) -> None:
 
 
 def _echo_result(res: StepResult) -> None:
+    if res.outcome is RunOutcome.REFUSED:
+        click.echo(click.style(f"  REFUSED: {res.detail}", fg="red"))
+        return
     color = {
         RunOutcome.DONE: "green",
         RunOutcome.PARKED: "yellow",
@@ -251,11 +254,15 @@ def _echo_result(res: StepResult) -> None:
         RunOutcome.LIMIT: "yellow",
     }.get(res.outcome, "white")
     sha = f" @ {res.commit[:8]}" if res.commit else ""
-    click.echo(click.style(f"  {res.step.id}: {res.outcome.value}{sha}", fg=color))
+    step_id = res.step.id if res.step else "—"
+    click.echo(click.style(f"  {step_id}: {res.outcome.value}{sha}", fg=color))
 
 
 def _print_report(ex, res: StepResult) -> None:
     """The fixed report: Did / Cursor / Review / Decisions / Next."""
+    if res.outcome is RunOutcome.REFUSED:
+        click.echo(click.style(f"\n✗ {res.detail}", fg="red"))
+        return
     click.echo(click.style("\n── checkpoint report ──", bold=True))
     click.echo(f"Did:       {res.step.id} — {res.outcome.value}")
     if res.commit:

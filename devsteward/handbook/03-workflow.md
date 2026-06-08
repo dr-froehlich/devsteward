@@ -26,6 +26,28 @@ requirements interleave freely**. A dependency that is already `done` is satisfi
 dropped; a dependency that is draft, dropped, or missing leaves the dependent correctly
 blocked (and `steward lint` flags it).
 
+## Branching model
+
+DevSteward uses a two-line model. `main` is **production** — release tags are cut here and
+consumers pin them. `dev` is the **integration** branch: the default working and merge
+target. REQ-sized work goes on a feature branch and merges into `dev` by a plain local
+merge (no PR); `dev` is promoted to `main` via a PR.
+
+This is **engine-enforced**, not just convention: before any step runs, the executor checks
+the current branch, and if it is the production branch it **refuses** — it invokes no
+`claude`, commits nothing, leaves the step pending, and prints a guard message naming the
+branch and the fix. Off the production branch it proceeds normally. The branch names are
+configurable in `.devsteward/config.yaml`:
+
+```yaml
+git:
+  production_branch: main      # repos using `master`/`release` set it here
+  integration_branch: dev
+```
+
+The guard protects the production branch only and has no opt-out — strictness is the point.
+It does not create branches or open PRs; git topology stays the human's job.
+
 ## Two modes: batch worker vs. interactive pair
 
 `/advance` is one skill run two ways, with **different contracts**. The fork that was once

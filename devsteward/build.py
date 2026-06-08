@@ -40,4 +40,5 @@ def build_executor(cfg: Config, *, use: int | None = None, autocommit: bool = Tr
         accounts=build_accounts(cfg, use=use),
         autocommit=autocommit,
         permission_mode=(cfg.claude or {}).get("permission_mode", "dangerously-skip"),
+        production_branch=cfg.production_branch,
     )

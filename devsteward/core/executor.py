@@ -45,14 +45,26 @@ class RunOutcome(str, Enum):
     FAILED = "failed"
     LIMIT = "limit"
     BLOCKED_DEP = "blocked-dep"
+    REFUSED = "refused"
 
 
 @dataclass
 class StepResult:
-    step: Step
+    step: Step | None
     outcome: RunOutcome
     detail: str = ""
     commit: str | None = None
+
+
+def _git_current_branch(root: Path) -> str:
+    """The checked-out branch name, or ``"HEAD"`` when detached (never a real branch)."""
+    res = subprocess.run(
+        ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+    )
+    return res.stdout.strip()
 
 
 def _git_commit(root: Path, message: str) -> str | None:
@@ -86,6 +98,8 @@ class Executor:
         committer: Callable[[Step], str | None] | None = None,
         autocommit: bool = True,
         permission_mode: str | None = claude_mod.DEFAULT_PERMISSION_MODE,
+        production_branch: str = "main",
+        branch_resolver: Callable[[Path], str] | None = None,
     ):
         self.root = Path(root)
         self.source = source
@@ -95,7 +109,28 @@ class Executor:
         self.committer = committer
         self.autocommit = autocommit
         self.permission_mode = permission_mode
+        self.production_branch = production_branch
+        self._branch_resolver = branch_resolver or _git_current_branch
         self.ledger = Ledger(self.root)
+
+    # -- branch guard ----------------------------------------------------------
+
+    def current_branch(self) -> str:
+        return self._branch_resolver(self.root)
+
+    def branch_guard(self) -> str | None:
+        """Refusal message if HEAD is the production branch, else ``None``.
+
+        A whole-run precondition (the engine never switches branches), so the drivers
+        consult it once up front — before any ``claude`` invocation.
+        """
+        if self.current_branch() == self.production_branch:
+            return (
+                f"refusing to autocommit on the production branch "
+                f"'{self.production_branch}' — DevSteward never commits to production; "
+                f"switch to the integration branch or a feature branch and re-run."
+            )
+        return None
 
     # -- planning --------------------------------------------------------------
 
@@ -250,6 +285,10 @@ class Executor:
         on_event: Callable[[dict], None] | None = None,
     ) -> StepResult | None:
         """Run exactly one eligible step headless (or None if nothing is eligible)."""
+        refusal = self.branch_guard()
+        if refusal is not None:
+            self.ledger.append_event("branch_refused", branch=self.current_branch())
+            return StepResult(self.next_eligible(), RunOutcome.REFUSED, refusal)
         step = self.next_eligible()
         if step is None:
             return None
@@ -266,6 +305,10 @@ class Executor:
         A parked step is BLOCKED (not eligible), so the loop naturally advances to the
         next independent step and stops when nothing is eligible.
         """
+        refusal = self.branch_guard()
+        if refusal is not None:
+            self.ledger.append_event("branch_refused", branch=self.current_branch())
+            return [StepResult(self.next_eligible(), RunOutcome.REFUSED, refusal)]
         results: list[StepResult] = []
         count = 0
         while True:

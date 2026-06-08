@@ -43,11 +43,22 @@ class Config:
     roadmap_file: str = "docs/requirements/ROADMAP.md"
     accounts: dict = field(default_factory=lambda: {"provider": "cswap"})
     claude: dict = field(default_factory=lambda: {"permission_mode": "dangerously-skip"})
+    git: dict = field(
+        default_factory=lambda: {"production_branch": "main", "integration_branch": "dev"}
+    )
     raw: dict = field(default_factory=dict)
 
     @property
     def req_dir(self) -> Path:
         return self.root / self.requirements_dir
+
+    @property
+    def production_branch(self) -> str:
+        return (self.git or {}).get("production_branch", "main")
+
+    @property
+    def integration_branch(self) -> str:
+        return (self.git or {}).get("integration_branch", "dev")
 
     @property
     def index_path(self) -> Path:
@@ -73,5 +84,6 @@ def load_config(root: Path | None = None) -> Config:
         roadmap_file=data.get("roadmap_file", "docs/requirements/ROADMAP.md"),
         accounts=data.get("accounts", {"provider": "cswap"}),
         claude=data.get("claude", {"permission_mode": "dangerously-skip"}),
+        git=data.get("git", {}),
         raw=data,
     )

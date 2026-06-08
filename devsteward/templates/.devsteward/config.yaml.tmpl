@@ -23,3 +23,11 @@ accounts:
 #   ask               — no flag (attended/interactive; a headless run can't edit).
 claude:
   permission_mode: dangerously-skip
+
+# Branching model. `main` is production (release tags are cut here); the integration
+# branch is the default working and merge target, with REQ-sized work on feature branches
+# merged into it by a plain local merge. The engine refuses to autocommit on
+# `production_branch` — switch to the integration branch or a feature branch to run.
+git:
+  production_branch: main
+  integration_branch: dev

@@ -31,8 +31,10 @@ Interrogate like `/intake` does — a vague north star poisons everything downst
 
 ## 3. Bring it to life
 
-- `git init` if needed; make the **first commit** on a branch (not `main` directly),
-  co-author trailer.
+- `git init` if needed. `main` is production and `dev` is the integration branch (the
+  default working/merge target) — create `dev` and make the **first commit** there (not on
+  `main`, which the engine refuses to autocommit onto), co-author trailer. REQ-sized work
+  then branches off `dev` and merges back with a plain local merge.
 - Ensure the ledger exists (`steward init` if `.devsteward/state.yaml` is absent).
 - Run `steward lint` — leave it green.
 - Tell the user the next move: `/intake "<first real idea>"`, then `steward run`.

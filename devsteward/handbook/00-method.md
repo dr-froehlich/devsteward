@@ -29,7 +29,12 @@ These are not style preferences; the linter and the engine enforce them.
   isolated and translatable — never inline in logic.
 - **Same-commit discipline.** A REQ's frontmatter, its `REQUIREMENTS_INDEX.md` row, and
   the code that satisfies it move together, in one commit.
-- **Branch before main.** Never commit directly to `main`.
+- **Branching model.** `main` is production (release tags are cut here); `dev` is the
+  integration branch — the default working and merge target. REQ-sized work goes on a
+  feature branch merged into `dev` by a plain local merge; `dev` is promoted to `main` via
+  a PR. The engine enforces this: it refuses to autocommit on the production branch
+  (config-driven via `git.production_branch`, default `main`). Never commit directly to
+  `main`.
 - **Co-author trailer** on every commit.
 - **Sanitized public artifacts.** No real local paths, emails, or credentials in shared
   files; templates use placeholders.
