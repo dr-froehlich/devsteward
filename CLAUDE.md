@@ -13,9 +13,13 @@ lives at `devsteward/templates/CLAUDE.md.tmpl` and uses placeholders only).
   and the code that satisfies it move in the *same* commit.
 - **Branching model:** `main` = production / released (release tags like `v0.1.0` cut
   here; consumers pin them). `dev` = integration / beta — the default working and merge
-  target. REQ-sized work goes on a feature branch → plain local merge into `dev` (no PR;
-  never typed directly onto `dev`; tiny fixes excepted). Never commit to `main`; release
-  via `dev → main` PR.
+  target. **Declaration lives on `dev`; only implementation branches.** Intake (REQ
+  frontmatter, index row, roadmap), plans, and the ledger are committed directly on `dev` —
+  a requirement is a registry entry, not behavior, and forking the shared registry races id
+  allocation and conflicts the index/roadmap. **Implementation** of a REQ (code + acceptance
+  tests + the status-flip to `done` + index `DONE`-sync) goes on a feature branch → plain
+  local merge into `dev` (no PR; tiny fixes excepted). Never commit to `main`; release via
+  `dev → main` PR.
   Beta tags (`vX.Y.Z-beta.N`, PEP 440 pre-release) may be cut on `dev`; stable tags on
   `main`. If `main` is ever hotfixed directly, merge it back into `dev`.
 - **Co-author trailer** on commits:

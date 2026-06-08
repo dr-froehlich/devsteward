@@ -26,9 +26,12 @@ engine runs them and only marks a step done when they pass.
 - **Same-commit discipline:** a REQ's frontmatter, its row in `REQUIREMENTS_INDEX.md`,
   and the code that satisfies it move in the **same** commit.
 - **Branching model:** `main` is production (release tags are cut here; consumers pin
-  them); `dev` is the integration branch — the default working and merge target. REQ-sized
-  work goes on a feature branch and merges into `dev` by a plain local merge; `dev` is
-  promoted to `main` via a PR. This is engine-enforced and config-driven: the engine
+  them); `dev` is the integration branch — the default working and merge target.
+  **Declaration lives on `dev`; only implementation branches:** intake (REQ frontmatter,
+  index row, roadmap), plans, and the ledger are committed directly on `dev`, while
+  **implementation** of a REQ (code + tests + the status-flip to `done`) goes on a feature
+  branch and merges into `dev` by a plain local merge; `dev` is promoted to `main` via a PR.
+  This is engine-enforced and config-driven: the engine
   refuses to autocommit on the production branch (`git.production_branch` in
   `.devsteward/config.yaml`, default `main`); never commit directly to `main`.
 - **Co-author trailer** on commits:

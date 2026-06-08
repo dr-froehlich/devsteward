@@ -42,8 +42,11 @@ Instead write a decision request to the ledger and stop (see §4).
 - If scenarios help, add `SCN-NNN` files and reference them in `scenario_refs`.
 - Run `steward lint` and fix anything it reports. Leave it green.
 
-Do all of this in the **same commit** (frontmatter + index + roadmap together), branch
-first, co-author trailer.
+Do all of this in **one commit** (frontmatter + index + roadmap together), co-author
+trailer, **on the integration branch — not a feature branch.** A requirement is a *registry
+declaration*, not implementation: committing intake on the integration branch serializes id
+allocation and keeps the shared index/roadmap from forking. You branch only to *implement* a
+REQ.
 
 ## 4. Unattended fork handling
 

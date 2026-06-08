@@ -30,8 +30,12 @@ blocked (and `steward lint` flags it).
 
 DevSteward uses a two-line model. `main` is **production** — release tags are cut here and
 consumers pin them. `dev` is the **integration** branch: the default working and merge
-target. REQ-sized work goes on a feature branch and merges into `dev` by a plain local
-merge (no PR); `dev` is promoted to `main` via a PR.
+target. **Declaration lives on `dev`; only implementation branches** — intake (REQ
+frontmatter, index row, roadmap), plans, and the ledger are committed directly on `dev` (a
+requirement is a registry entry, not behavior; forking the shared registry races id
+allocation and conflicts the index/roadmap), while **implementation** (code + acceptance
+tests + the status-flip to `done`) goes on a feature branch and merges into `dev` by a plain
+local merge (no PR). `dev` is promoted to `main` via a PR.
 
 This is **engine-enforced**, not just convention: before any step runs, the executor checks
 the current branch, and if it is the production branch it **refuses** — it invokes no
