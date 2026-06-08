@@ -6,12 +6,19 @@ without committing to git, so the tests are fast and deterministic.
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import pytest
 
 from devsteward.core import claude as claude_mod
 from devsteward.core.model import Step
+
+# REQ-010: the memzy converter lives in scripts/ (a run-once migration tool), not in the
+# installable package. Put scripts/ on sys.path so the acceptance tests can import it.
+_SCRIPTS_DIR = Path(__file__).resolve().parent.parent / "scripts"
+if str(_SCRIPTS_DIR) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS_DIR))
 
 
 class FakeRunner:

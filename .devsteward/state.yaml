@@ -1,7 +1,7 @@
 version: 1
 profile: req
 cursor:
-  step: REQ-010:design
+  step: REQ-010:build
 steps:
   REQ-011:design:
     status: done
@@ -13,6 +13,9 @@ steps:
     status: done
     updated: '2026-06-08T05:19:32+00:00'
   REQ-010:design:
+    status: done
+    updated: '2026-06-08T07:57:29+00:00'
+  REQ-010:build:
     status: running
-    updated: '2026-06-08T07:54:22+00:00'
+    updated: '2026-06-08T08:11:32+00:00'
 decisions: []

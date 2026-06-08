@@ -28,3 +28,7 @@
 {"ts": "2026-06-08T05:19:32+00:00", "event": "checkpoint", "step": "REQ-011:land", "commit": "c8a5efbdb6990010af363c622ba7188a91447b6e"}
 {"ts": "2026-06-08T07:54:22+00:00", "event": "step_started", "step": "REQ-010:design", "command": "/advance REQ-010 design"}
 {"ts": "2026-06-08T07:57:29+00:00", "event": "verify", "step": "REQ-010:design", "ok": true, "detail": "no acceptance tests declared (marker trust)"}
+{"ts": "2026-06-08T07:57:29+00:00", "event": "checkpoint", "step": "REQ-010:design", "commit": "34dfb7c448548add519e92a9c9d47458daf40ce3"}
+{"ts": "2026-06-08T08:04:09+00:00", "event": "branch_refused", "branch": "dev", "step": "REQ-010:build"}
+{"ts": "2026-06-08T08:11:32+00:00", "event": "step_started", "step": "REQ-010:build", "command": "/advance REQ-010 build"}
+{"ts": "2026-06-08T08:23:30+00:00", "event": "verify", "step": "REQ-010:build", "ok": true, "detail": "no acceptance tests declared (marker trust)"}

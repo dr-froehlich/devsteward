@@ -54,6 +54,51 @@ def test_acceptance_without_test_flagged(tmp_path):
     assert any("no acceptance" in p for p in problems)
 
 
+def _write_testless_req(req_dir, rid, status):
+    """A schema-valid REQ whose single acceptance criterion has an empty ``test:``."""
+    req_dir.mkdir(parents=True, exist_ok=True)
+    text = (
+        "---\n"
+        f"id: {rid}\n"
+        f'title: "{rid}"\n'
+        f"status: {status}\n"
+        "kind: feature\n"
+        "added: 2026-06-06\n"
+        "completed: null\n"
+        "verified_by: null\n"
+        "depends_on: []\n"
+        "concept_refs: []\n"
+        "scenario_refs: []\n"
+        "supersedes: null\n"
+        "tags: []\n"
+        "---\n\n"
+        "## Requirement\n\nDo it.\n\n"
+        "```yaml acceptance\n"
+        "- id: AC1\n"
+        '  text: "works"\n'
+        '  test: ""\n'
+        "  status: passed\n"
+        "```\n"
+    )
+    (req_dir / f"{rid}.md").write_text(text, encoding="utf-8")
+
+
+def test_test_id_required_only_for_active(tmp_path):
+    # REQ-010: a terminal imported REQ with test-less criteria lints clean...
+    done_dir = tmp_path / "done"
+    _write_testless_req(done_dir, "REQ-001", "done")
+    write_index(done_dir, [("REQ-001", "REQ-001", "DONE", "–")])
+    cfg = Config(root=done_dir, requirements_dir="", index_file="REQUIREMENTS_INDEX.md")
+    assert not any("test id" in p for p in lint(cfg))
+
+    # ...while an active REQ with a test-less criterion still fails.
+    open_dir = tmp_path / "open"
+    _write_testless_req(open_dir, "REQ-001", "open")
+    write_index(open_dir, [("REQ-001", "REQ-001", "OPEN", "–")])
+    cfg = Config(root=open_dir, requirements_dir="", index_file="REQUIREMENTS_INDEX.md")
+    assert any("test id" in p for p in lint(cfg))
+
+
 def test_cycle_detected(tmp_path):
     req_dir = tmp_path / "reqs"
     write_req(req_dir, "REQ-001", status="open", depends_on=["REQ-002"])

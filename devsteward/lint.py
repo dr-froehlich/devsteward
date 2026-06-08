@@ -113,10 +113,15 @@ def lint(cfg: Config) -> list[str]:
         if rid not in ids:
             problems.append(f"{rid}: in index but no REQ file found")
 
-    # 5. every acceptance criterion has a test id (active/done REQs only — drafts may be
-    #    incomplete by definition)
+    # 5. every acceptance criterion has a test id — but only on **active** REQs
+    #    (open/in-progress/blocked), the ones the engine is on the hook to land. Drafts may
+    #    be incomplete by definition, and terminal REQs (done/dropped/superseded) have
+    #    nothing left to land — including records imported from another project's own
+    #    governance (REQ-010), where demanding a DevSteward-shaped test id is meaningless.
+    #    Reopen such a REQ and it becomes active, and the rule fires again — exactly when a
+    #    runnable test is needed.
     for r in reqs:
-        if r.status == "draft":
+        if not r.is_active:
             continue
         if not r.acceptance:
             problems.append(f"{r.id}: no acceptance criteria block")
