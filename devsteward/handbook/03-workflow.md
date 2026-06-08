@@ -63,9 +63,12 @@ engine sets when it shells out.
   and stopping on a usage limit or hard failure so a human can look.
 - **Interactive pair — `/advance` in a live session.** A person runs the skill directly in
   Claude Code. There is no executor in the loop and therefore **no engine guarantees**: the
-  skill verifies, the skill commits (same-commit discipline), and at a fork it asks via
-  `AskUserQuestion`. The human reviewing the work is the guarantee — trust comes from the
-  person, not the engine.
+  skill verifies, the skill commits (same-commit discipline), **the human advances the ledger
+  by hand** (mark the step done + record the checkpoint, or the next `/advance` redoes it),
+  and at a fork it asks via `AskUserQuestion`. The human reviewing the work is the guarantee —
+  trust comes from the person, not the engine. *(That hand-advance of the ledger is the gap
+  REQ-018's `steward checkpoint` closes — until it lands, it is a hand-edit of
+  `.devsteward/`.)*
 
 **One commit, one owner.** Commit ownership is exclusive by mode: the engine commits in
 batch, the skill commits interactively — *never both*. (Earlier the skill committed even
