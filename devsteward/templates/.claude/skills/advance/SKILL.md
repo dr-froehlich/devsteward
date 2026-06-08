@@ -65,8 +65,12 @@ surrounding code's style. English-only code; isolate any localized UI strings.
 
 End with the fixed report (below) **after** handling the commit per your mode:
 
-- *(interactive)* commit your work yourself: same-commit discipline — frontmatter + index +
-  code together — branch first, co-author trailer.
+- *(interactive)* **you are the engine — supply its bookkeeping yourself:** branch first (no
+  engine branch-guard runs here); commit your work (same-commit discipline — frontmatter +
+  index + code together, co-author trailer); **and advance the ledger** — mark this step
+  `done` and record the checkpoint so the cursor moves to the next step, else the next
+  `/advance` redoes this one. Today that last step is a hand-edit of `.devsteward/state.yaml`
+  + `events.jsonl` (a `steward checkpoint` command is planned to automate it).
 - *(batch)* do **not** commit and do **not** branch. Leave the working tree dirty; the engine
   verifies, makes the one authoritative commit, and advances the ledger. Committing here would
   *double-commit* — the engine commits too.

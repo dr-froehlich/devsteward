@@ -21,7 +21,8 @@ three bundled skills. Built and dogfooded in Phase 0/1.
   (**done**; the fix that turned the gate green on a single account)
 - REQ-012 — real cswap 0.11 switcher CLI (draft; restores multi-account rotation)
 - verify-teeth — forbid marker-trust on design/build, or require a runnable AC (planned)
-- conceptual fork — make `advance`/`run` batch-only; separate interactive `/advance` (planned)
+- conceptual fork — make `advance`/`run` batch-only; separate interactive `/advance`
+  (**REQ-018**: `steward checkpoint` closes the ledger after an interactive checkpoint)
 
 ## Next
 
@@ -42,5 +43,6 @@ REQ-001
  └─ REQ-003 ──┬─ REQ-004
               ├─ REQ-005 ── REQ-009
               ├─ REQ-006
-              └─ REQ-008
+              ├─ REQ-008
+              └─ REQ-018 (draft, interactive checkpoint)
 ```

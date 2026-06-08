@@ -36,8 +36,9 @@ checkpoint lands as one authoritative commit rather than a skill commit plus an 
 
 These guarantees exist only in the **batch** mode (`steward advance` / `steward run`, driving
 `claude -p` headless). A human running `/advance` directly in a live session has no executor
-in the loop and so gets none of them: they verify and commit themselves, and may ask at a
-fork. See the two-mode contract in `03-workflow.md`.
+in the loop and so gets none of them: they verify, commit, **and advance the ledger**
+themselves (the last is a hand-edit today — REQ-018's `steward checkpoint` will do it), and
+may ask at a fork. See the two-mode contract in `03-workflow.md`.
 
 Verification has teeth **where the work is delivered**. In the REQ profile, `design` and
 `build` advance the cursor (they carry no per-phase tests), but a REQ is not done until it
