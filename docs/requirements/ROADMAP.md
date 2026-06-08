@@ -40,6 +40,15 @@ three bundled skills. Built and dogfooded in Phase 0/1.
 - REQ-021 — **lettered REQ ids** (draft; eligible now): relax the id format to
   `^REQ-[0-9]{3}[a-z]?$` so split-umbrella REQs like memzy's `REQ-028p`/`-028s` validate.
   Purely lexical; unblocks plan 0005 (memzy onboarding) Piece 1.
+- REQ-022 — **`steward seed-ledger`** (draft): a dialect-independent command that seeds a
+  ledger for an already-built corpus so historic REQs read as `done` and the work queue starts
+  empty. Plan 0005 Piece 3; reusable across onboardings (operates on converted output only).
+- REQ-023 — **converter index splice** (draft): make [[REQ-010]] conversion non-destructive in
+  place — replace only the REQ table, preserve a project's Planned/Scenarios prose. Plan 0005
+  Piece 2 mitigation; unblocks running the converter on memzy in place.
+- REQ-024 — **`onboard` skill** (draft): orchestrate the full migration of an existing project
+  (convert → seed → stamp → reconcile) with verification gates and merge-not-overwrite. Plan
+  0005 pieces 2–5; memzy is the reality test before heavier projects.
 - Future REQs land here as `/intake` produces them.
 
 ## Dependency graph
@@ -49,12 +58,14 @@ REQ-001
  ├─ REQ-002 ──┬─ REQ-004 ── (with REQ-003)
  │            ├─ REQ-007
  │            ├─ REQ-009 ── (with REQ-005)
- │            ├─ REQ-010 (open) ── REQ-017 (draft, legacy prose)
+ │            ├─ REQ-010 (open) ──┬─ REQ-017 (draft, legacy prose)
+ │            │                   └─ REQ-023 (draft, index splice — non-destructive in place)
  │            └─ REQ-021 (draft, lettered ids — unblocks memzy onboarding)
- └─ REQ-003 ──┬─ REQ-004
+ └─ REQ-003 ──┬─ REQ-004 ── REQ-022 (draft, seed-ledger; with REQ-021)
               ├─ REQ-005 ── REQ-009
               ├─ REQ-006
               ├─ REQ-008
               └─ REQ-018 (draft, interactive checkpoint)
  REQ-011 (done, production-branch guard) ── REQ-019 (done, integration-branch guard) ── REQ-020 (draft, branch lifecycle automation)
+ REQ-024 (draft, onboard skill) ── orchestrates REQ-007 + REQ-009 + REQ-010/023 + REQ-021 + REQ-022 (memzy onboarding)
 ```
