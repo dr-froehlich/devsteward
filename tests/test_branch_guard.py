@@ -1,8 +1,13 @@
-"""REQ-011 — the engine refuses to autocommit on the production branch.
+"""Branch guards.
 
-The branch is resolved through an injectable seam (``branch_resolver``), so AC2/AC3 drive
-the guard without a real git checkout — consistent with conftest's goal of exercising the
-full loop without committing to git.
+REQ-011 — the engine refuses to autocommit on the production branch.
+REQ-019 — it also refuses *implementation* steps (``build``/``land``) on the integration
+branch, while allowing declaration (a ``design`` plan) there; implementation belongs on a
+feature branch.
+
+The branch is resolved through an injectable seam (``branch_resolver``), so the guards
+drive without a real git checkout — consistent with conftest's goal of exercising the full
+loop without committing to git.
 """
 
 from __future__ import annotations
@@ -30,6 +35,7 @@ def _executor(root, steps, *, branch, runner=None, committer=None):
         runner=runner or FakeRunner(default=ok_result()),
         committer=committer or RecordingCommitter(),
         production_branch="main",
+        integration_branch="dev",
         branch_resolver=lambda _root: branch,
     )
 
@@ -96,3 +102,95 @@ def test_scaffolding_documents_model():
     ):
         text = (_PKG / rel).read_text(encoding="utf-8")
         assert "main" in text and "dev" in text and "integration" in text.lower(), rel
+
+
+# -- REQ-019: implementation off the integration branch -----------------------
+
+
+def test_refuses_implementation_on_integration_branch(project):
+    """AC1 — a build step and a land step on the integration branch are refused:
+    no claude, no commit, step stays PENDING, message names the branch and phase."""
+    for phase in ("build", "land"):
+        step = Step(
+            id=f"REQ-019:{phase}",
+            command=f"/advance REQ-019 {phase}",
+            verify=("true",),
+            phase=phase,
+        )
+        runner = FakeRunner(default=ok_result())
+        committer = RecordingCommitter()
+        ex = _executor(project, [step], branch="dev", runner=runner, committer=committer)
+
+        res = ex.advance_once()
+        assert res.outcome is RunOutcome.REFUSED, phase
+        assert runner.calls == []
+        assert committer.committed == []
+        assert Ledger(project).status_of(f"REQ-019:{phase}") is StepStatus.PENDING
+        assert "dev" in res.detail and phase in res.detail
+
+
+def test_design_allowed_on_integration_branch(project):
+    """AC2 — a design step proceeds on the integration branch (plans may live on dev),
+    while the REQ-011 production guard still refuses everything (design included)."""
+    step = Step(
+        id="REQ-019:design",
+        command="/advance REQ-019 design",
+        verify=("true",),
+        phase="design",
+    )
+    runner = FakeRunner(default=ok_result())
+    ex = _executor(project, [step], branch="dev", runner=runner)
+    res = ex.advance_once()
+    assert res.outcome is RunOutcome.DONE
+    assert len(runner.calls) == 1
+    assert Ledger(project).status_of("REQ-019:design") is StepStatus.DONE
+
+    # Production guard is unchanged: on `main` even a design step is refused, before
+    # any claude runs.
+    runner_main = FakeRunner(default=ok_result())
+    ex_main = _executor(project, [step], branch="main", runner=runner_main)
+    res_main = ex_main.advance_once()
+    assert res_main.outcome is RunOutcome.REFUSED
+    assert runner_main.calls == []
+    assert "main" in res_main.detail
+
+
+def test_implementation_proceeds_on_feature_branch(project):
+    """AC3 — on a feature branch (neither production nor integration) build and land run,
+    commit, and advance normally."""
+    for phase in ("build", "land"):
+        step = Step(
+            id=f"REQ-019:{phase}",
+            command=f"/advance REQ-019 {phase}",
+            verify=("true",),
+            phase=phase,
+        )
+        runner = FakeRunner(default=ok_result())
+        committer = RecordingCommitter()
+        ex = _executor(
+            project, [step], branch="feature/req-019", runner=runner, committer=committer
+        )
+        res = ex.advance_once()
+        assert res.outcome is RunOutcome.DONE, phase
+        assert len(runner.calls) == 1
+        assert committer.committed == [f"REQ-019:{phase}"]
+        assert Ledger(project).status_of(f"REQ-019:{phase}") is StepStatus.DONE
+
+
+def test_docs_state_declaration_implementation_regime():
+    """AC4 — the canonical docs state the declaration-on-dev / implement-on-branch regime,
+    and the intake skill no longer instructs "branch first"."""
+    root = _PKG.parent  # repo root
+    for path in (
+        root / "CLAUDE.md",
+        _PKG / "templates" / "CLAUDE.md.tmpl",
+        _PKG / "handbook" / "03-workflow.md",
+    ):
+        text = path.read_text(encoding="utf-8").lower()
+        assert "only implementation branches" in text, path
+
+    intake = (
+        _PKG / "templates" / ".claude" / "skills" / "intake" / "SKILL.md"
+    ).read_text(encoding="utf-8").lower()
+    assert "branch first" not in intake
+    assert "not a feature branch" in intake

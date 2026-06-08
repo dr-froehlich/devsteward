@@ -99,6 +99,8 @@ class Executor:
         autocommit: bool = True,
         permission_mode: str | None = claude_mod.DEFAULT_PERMISSION_MODE,
         production_branch: str = "main",
+        integration_branch: str = "dev",
+        implementation_phases: tuple[str, ...] = ("build", "land"),
         branch_resolver: Callable[[Path], str] | None = None,
     ):
         self.root = Path(root)
@@ -110,6 +112,8 @@ class Executor:
         self.autocommit = autocommit
         self.permission_mode = permission_mode
         self.production_branch = production_branch
+        self.integration_branch = integration_branch
+        self.implementation_phases = implementation_phases
         self._branch_resolver = branch_resolver or _git_current_branch
         self.ledger = Ledger(self.root)
 
@@ -129,6 +133,27 @@ class Executor:
                 f"refusing to autocommit on the production branch "
                 f"'{self.production_branch}' — DevSteward never commits to production; "
                 f"switch to the integration branch or a feature branch and re-run."
+            )
+        return None
+
+    def step_branch_guard(self, step: Step) -> str | None:
+        """Refusal if an *implementation* step is attempted on the integration branch.
+
+        Declaration stays on the integration branch — a REQ's ``design`` step (a plan) is
+        allowed there, as is any phase-less step (the generic profile). Implementation
+        (``build``/``land``) changes behavior and belongs on a feature branch. This is the
+        symmetric partner to :meth:`branch_guard` (which protects production): the cursor
+        never switches branches, so it is a precondition checked per step before ``claude``.
+        """
+        if (
+            step.phase in self.implementation_phases
+            and self.current_branch() == self.integration_branch
+        ):
+            return (
+                f"refusing to run the '{step.phase}' step on the integration branch "
+                f"'{self.integration_branch}' — implementation belongs on a feature branch; "
+                f"create one (e.g. `git checkout -b <feature>`) and re-run. Declaration "
+                f"(intake, roadmap, a design plan) stays on the integration branch."
             )
         return None
 
@@ -292,6 +317,12 @@ class Executor:
         step = self.next_eligible()
         if step is None:
             return None
+        step_refusal = self.step_branch_guard(step)
+        if step_refusal is not None:
+            self.ledger.append_event(
+                "branch_refused", branch=self.current_branch(), step=step.id
+            )
+            return StepResult(step, RunOutcome.REFUSED, step_refusal)
         return self.run_step(step, unattended=unattended, on_event=on_event)
 
     def run(
@@ -316,6 +347,15 @@ class Executor:
                 break
             step = self.next_eligible()
             if step is None:
+                break
+            step_refusal = self.step_branch_guard(step)
+            if step_refusal is not None:
+                # Declaration (design) may have run on the integration branch; the first
+                # implementation step stops the run so a human branches and resumes.
+                self.ledger.append_event(
+                    "branch_refused", branch=self.current_branch(), step=step.id
+                )
+                results.append(StepResult(step, RunOutcome.REFUSED, step_refusal))
                 break
             res = self.run_step(step, unattended=True, on_event=on_event)
             results.append(res)
