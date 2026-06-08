@@ -37,6 +37,9 @@ three bundled skills. Built and dogfooded in Phase 0/1.
   the feature branch on the first guarded `build` and auto-merges (`--no-ff`) after a green
   `land` — completes the create→merge dance REQ-019 left manual, replacing its refusal with
   management while the REQ-011 production guard stands
+- REQ-021 — **lettered REQ ids** (draft; eligible now): relax the id format to
+  `^REQ-[0-9]{3}[a-z]?$` so split-umbrella REQs like memzy's `REQ-028p`/`-028s` validate.
+  Purely lexical; unblocks plan 0005 (memzy onboarding) Piece 1.
 - Future REQs land here as `/intake` produces them.
 
 ## Dependency graph
@@ -46,7 +49,8 @@ REQ-001
  ├─ REQ-002 ──┬─ REQ-004 ── (with REQ-003)
  │            ├─ REQ-007
  │            ├─ REQ-009 ── (with REQ-005)
- │            └─ REQ-010 (open) ── REQ-017 (draft, legacy prose)
+ │            ├─ REQ-010 (open) ── REQ-017 (draft, legacy prose)
+ │            └─ REQ-021 (draft, lettered ids — unblocks memzy onboarding)
  └─ REQ-003 ──┬─ REQ-004
               ├─ REQ-005 ── REQ-009
               ├─ REQ-006
