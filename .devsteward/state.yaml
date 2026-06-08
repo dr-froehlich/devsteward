@@ -19,6 +19,6 @@ steps:
     status: done
     updated: '2026-06-08T08:23:30+00:00'
   REQ-010:land:
-    status: running
-    updated: '2026-06-08T10:07:17+00:00'
+    status: done
+    updated: '2026-06-08T10:08:40+00:00'
 decisions: []
