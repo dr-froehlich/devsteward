@@ -50,3 +50,12 @@
 {"ts": "2026-06-09T04:04:31+00:00", "event": "verify", "step": "REQ-020:land", "ok": false, "detail": "[127] python -m pytest tests/test_branch_lifecycle.py::test_creates_and_switches_branch_on_first_build\n    /bin/sh: 1: python: not found"}
 {"ts": "2026-06-09T04:14:29+00:00", "event": "step_started", "step": "REQ-021:design", "command": "/advance REQ-021 design"}
 {"ts": "2026-06-09T04:17:10+00:00", "event": "verify", "step": "REQ-021:design", "ok": true, "detail": "no acceptance tests declared (marker trust)"}
+{"ts": "2026-06-09T04:17:10+00:00", "event": "checkpoint", "step": "REQ-021:design", "commit": "1a229243332245ea24cd16264906a0e2b5e3aa3b"}
+{"ts": "2026-06-09T04:17:10+00:00", "event": "branch_created", "step": "REQ-021:build", "branch": "req-021-lettered-req-ids"}
+{"ts": "2026-06-09T04:17:10+00:00", "event": "step_started", "step": "REQ-021:build", "command": "/advance REQ-021 build"}
+{"ts": "2026-06-09T04:22:32+00:00", "event": "verify", "step": "REQ-021:build", "ok": true, "detail": "no acceptance tests declared (marker trust)"}
+{"ts": "2026-06-09T04:22:32+00:00", "event": "checkpoint", "step": "REQ-021:build", "commit": "39cfd0cb5a9c34ebe04706f4a21f836b6f4ef6ad"}
+{"ts": "2026-06-09T04:22:33+00:00", "event": "step_started", "step": "REQ-021:land", "command": "/advance REQ-021 land"}
+{"ts": "2026-06-09T06:09:50+00:00", "event": "reconcile", "step": "REQ-020:land", "ok": true, "detail": "ledger flip failed→done: land verify hit exit 127 (python not found in engine env, only python3/.venv); tests pass under the venv and the REQ was merged into dev manually (6297636, merge 03c3089). engine fix: verifier now rebinds python token to sys.executable"}
+{"ts": "2026-06-09T09:00:00+00:00", "event": "verify", "step": "REQ-021:land", "ok": true, "detail": "6 acceptance tests green under .venv interpreter (manual land; interrupted run reconciled)"}
+{"ts": "2026-06-09T09:00:01+00:00", "event": "checkpoint", "step": "REQ-021:land", "commit": "b06b7c8e5c15f7a7930c1397fc7b02b9a2d9c940"}

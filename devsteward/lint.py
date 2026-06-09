@@ -26,7 +26,7 @@ from .config import Config
 from .profiles.req.reqfile import ReqFile, load_reqs
 
 _INDEX_ROW_RE = re.compile(
-    r"^\|\s*(REQ-\d{3})\s*\|\s*(.*?)\s*\|\s*([A-Za-z-]+)\s*\|", re.MULTILINE
+    r"^\|\s*(REQ-\d{3}[a-z]?)\s*\|\s*(.*?)\s*\|\s*([A-Za-z-]+)\s*\|", re.MULTILINE
 )
 
 

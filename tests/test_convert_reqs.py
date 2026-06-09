@@ -129,7 +129,10 @@ def test_idempotent_and_preserves_prose(tmp_path):
 
 
 def test_memzy_fixture_corpus_lints_clean(tmp_path):
-    cv.convert_corpus(FIXTURES, tmp_path)
+    reqs = cv.convert_corpus(FIXTURES, tmp_path)
+    # REQ-021: the corpus carries a lettered-id fixture (REQ-028p) — the umbrella-split id
+    # converts and round-trips through the schema like any other.
+    assert "REQ-028p" in {r.id for r in reqs}
     cfg = Config(root=tmp_path, requirements_dir=".",
                  index_file="REQUIREMENTS_INDEX.md")
     assert lint(cfg) == []

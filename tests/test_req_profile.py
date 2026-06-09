@@ -49,6 +49,22 @@ def test_done_dependency_is_dropped(tmp_path):
     assert by_id["REQ-002:design"].depends_on == ()
 
 
+def test_lettered_id_step_derivation(tmp_path):
+    """REQ-021 AC4 — a reopened (active) lettered REQ yields its three phase steps, and a
+    dependent's depends_on edge resolves to the lettered land step. Pins that source.py's
+    opaque id handling (build ``f"{r.id}:{phase}"``, split on ``:``) tolerates the suffix."""
+    write_req(tmp_path, "REQ-028p", status="open")  # reopened — lettered REQ is now active
+    write_req(tmp_path, "REQ-027", status="open", depends_on=["REQ-028p"])
+    steps = ReqStepSource(tmp_path).steps()
+    by_id = {s.id: s for s in steps}
+    # the lettered REQ derives all three phases, suffix carried verbatim.
+    assert [s.id for s in steps if s.req == "REQ-028p"] == [
+        "REQ-028p:design", "REQ-028p:build", "REQ-028p:land"
+    ]
+    # the dependent's design edge resolves to the lettered land step.
+    assert by_id["REQ-027:design"].depends_on == ("REQ-028p:land",)
+
+
 def test_eligibility_respects_cross_req_dependency(tmp_path, monkeypatch):
     from devsteward.core.executor import Executor
     from devsteward.core.accounts import SingleAccountProvider
