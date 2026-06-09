@@ -41,8 +41,14 @@ class Config:
     requirements_dir: str = "docs/requirements"
     index_file: str = "docs/requirements/REQUIREMENTS_INDEX.md"
     roadmap_file: str = "docs/requirements/ROADMAP.md"
-    accounts: dict = field(default_factory=lambda: {"provider": "cswap"})
-    claude: dict = field(default_factory=lambda: {"permission_mode": "dangerously-skip"})
+    accounts: dict = field(default_factory=lambda: {"provider": "cswap", "threshold": 70})
+    claude: dict = field(
+        default_factory=lambda: {
+            "permission_mode": "dangerously-skip",
+            "model": "claude-opus-4-8",
+            "effort": "high",
+        }
+    )
     git: dict = field(
         default_factory=lambda: {
             "production_branch": "main",
@@ -72,6 +78,19 @@ class Config:
         suffix) and ``slug``; default ``req-{num}-{slug}`` (e.g. ``req-020-...``).
         """
         return (self.git or {}).get("feature_branch", "req-{num}-{slug}")
+
+    @property
+    def threshold(self) -> float:
+        """Fixed quota gate (REQ-025): a fraction (``0.70``) or percent (``70``), default 70."""
+        return (self.accounts or {}).get("threshold", 70)
+
+    @property
+    def model(self) -> str:
+        return (self.claude or {}).get("model", "claude-opus-4-8")
+
+    @property
+    def effort(self) -> str:
+        return (self.claude or {}).get("effort", "high")
 
     @property
     def index_path(self) -> Path:

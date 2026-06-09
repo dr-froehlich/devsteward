@@ -60,6 +60,12 @@ class Result:
 # reference runner (`run_batch.py`); a cautious consumer can soften it via config.
 DEFAULT_PERMISSION_MODE = "dangerously-skip"
 
+# Headless runs default to Opus at high effort (REQ-025 D8); a consumer overrides via
+# `claude.model`/`claude.effort` config or the `--model`/`--effort` CLI flags. A falsy value
+# (``None``/``""``) omits the flag, so attended callers and tests keep claude's own default.
+DEFAULT_MODEL = "claude-opus-4-8"
+DEFAULT_EFFORT = "high"
+
 
 def _permission_argv(mode: str | None) -> list[str]:
     """Map a permission-mode setting to claude CLI flags.
@@ -153,7 +159,10 @@ def run_claude(
     timeout: float = 1800.0,
     unattended: bool = True,
     permission_mode: str | None = DEFAULT_PERMISSION_MODE,
+    model: str | None = DEFAULT_MODEL,
+    effort: str | None = DEFAULT_EFFORT,
     on_event: Callable[[dict], None] | None = None,
+    on_spawn: Callable[["subprocess.Popen"], None] | None = None,
 ) -> Result:
     """Invoke ``claude -p <command>`` headless and classify the outcome.
 
@@ -166,6 +175,12 @@ def run_claude(
 
     ``on_event`` is called with each parsed stream-json event as it arrives, so an
     attended caller can render live progress instead of staring at a silent terminal.
+
+    ``model``/``effort`` append ``--model``/``--effort`` flags (defaults Opus / high); a
+    falsy value omits the flag. ``on_spawn`` is called with the live ``Popen`` right after
+    launch so a driver can register the child with its :class:`~devsteward.core.stop.
+    StopController` for two-level graceful stop — ``start_new_session=True`` puts ``claude``
+    in its own process group so the engine's SIGINT is not forwarded to the child (REQ-025).
     """
     argv = list(argv_prefix or ["claude"]) + [
         "-p",
@@ -174,6 +189,10 @@ def run_claude(
         "stream-json",
         "--verbose",
     ] + _permission_argv(permission_mode)
+    if model:
+        argv += ["--model", model]
+    if effort:
+        argv += ["--effort", effort]
     run_env = dict(os.environ if env is None else env)
     if unattended:
         run_env["DEVSTEWARD_UNATTENDED"] = "1"
@@ -186,7 +205,10 @@ def run_claude(
         stderr=subprocess.STDOUT,
         text=True,
         bufsize=1,
+        start_new_session=True,
     )
+    if on_spawn is not None:
+        on_spawn(proc)
     lines: list[dict] = []
     deadline = time.monotonic() + timeout
     timed_out = False

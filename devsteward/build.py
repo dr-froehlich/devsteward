@@ -26,21 +26,52 @@ def build_verifier(cfg: Config):
     return ReqVerifier(cwd=str(cfg.root))
 
 
-def build_accounts(cfg: Config, use: int | None = None):
+def build_accounts(
+    cfg: Config,
+    use: int | None = None,
+    *,
+    threshold: float | None = None,
+    announce=None,
+    should_stop=None,
+):
     provider = (cfg.accounts or {}).get("provider", "cswap")
     if provider == "single":
         return SingleAccountProvider()
-    return CswapAccountProvider(use=use)
+    return CswapAccountProvider(
+        use=use,
+        threshold=cfg.threshold if threshold is None else threshold,
+        announce=announce,
+        should_stop=should_stop,
+    )
 
 
-def build_executor(cfg: Config, *, use: int | None = None, autocommit: bool = True) -> Executor:
+def build_executor(
+    cfg: Config,
+    *,
+    use: int | None = None,
+    threshold: float | None = None,
+    model: str | None = None,
+    effort: str | None = None,
+    announce=None,
+    stop=None,
+    autocommit: bool = True,
+) -> Executor:
     return Executor(
         root=cfg.root,
         source=build_step_source(cfg),
         verifier=build_verifier(cfg),
-        accounts=build_accounts(cfg, use=use),
+        accounts=build_accounts(
+            cfg,
+            use=use,
+            threshold=threshold,
+            announce=announce,
+            should_stop=(stop.should_stop if stop is not None else None),
+        ),
         autocommit=autocommit,
         permission_mode=(cfg.claude or {}).get("permission_mode", "dangerously-skip"),
+        model=cfg.model if model is None else model,
+        effort=cfg.effort if effort is None else effort,
+        stop=stop,
         production_branch=cfg.production_branch,
         integration_branch=cfg.integration_branch,
         feature_branch_template=cfg.feature_branch_template,

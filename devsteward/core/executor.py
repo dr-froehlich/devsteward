@@ -85,6 +85,9 @@ class Executor:
         committer: Callable[[Step], str | None] | None = None,
         autocommit: bool = True,
         permission_mode: str | None = claude_mod.DEFAULT_PERMISSION_MODE,
+        model: str | None = None,
+        effort: str | None = None,
+        stop=None,
         production_branch: str = "main",
         integration_branch: str = "dev",
         implementation_phases: tuple[str, ...] = ("build", "land"),
@@ -100,6 +103,9 @@ class Executor:
         self.committer = committer
         self.autocommit = autocommit
         self.permission_mode = permission_mode
+        self.model = model
+        self.effort = effort
+        self.stop = stop
         self.production_branch = production_branch
         self.integration_branch = integration_branch
         self.implementation_phases = implementation_phases
@@ -227,8 +233,13 @@ class Executor:
             cwd=str(self.root),
             unattended=unattended,
             permission_mode=self.permission_mode,
+            model=self.model,
+            effort=self.effort,
             on_event=on_event,
+            on_spawn=(self.stop.register_child if self.stop is not None else None),
         )
+        if self.stop is not None:
+            self.stop.clear_child()
 
         if result.outcome is claude_mod.Outcome.USAGE_LIMIT:
             led.set_status(step.id, StepStatus.PENDING)
@@ -392,6 +403,10 @@ class Executor:
         results: list[StepResult] = []
         count = 0
         while True:
+            if self.stop is not None and self.stop.should_stop():
+                # Graceful stop (REQ-025 D7/AC9): a Ctrl-C during the previous step set the
+                # flag — finish nothing new, exit so the just-completed step stays the last.
+                break
             if max_steps is not None and count >= max_steps:
                 break
             step = self.next_eligible()

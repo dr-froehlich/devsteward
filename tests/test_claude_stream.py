@@ -54,3 +54,80 @@ def test_stream_printer_renders_text_and_tools(capsys):
     assert "hello" in err
     assert "Read" in err and "/x/y.py" in err
     assert "claude session ended" in err
+
+
+def test_new_session_and_model_effort(monkeypatch):
+    """REQ-025 AC8: run_claude spawns claude in its own session (so a parent SIGINT is not
+    forwarded to the child) and passes --model/--effort defaulting to opus / high."""
+    import json as _json
+
+    from devsteward.core import claude as claude_mod
+
+    captured = {}
+
+    class _FakePopen:
+        def __init__(self, argv, **kwargs):
+            captured["argv"] = argv
+            captured["kwargs"] = kwargs
+            self.stdout = iter(
+                [_json.dumps({"type": "result", "subtype": "success", "result": "x"}) + "\n"]
+            )
+            self._done = False
+
+        def wait(self, timeout=None):
+            self._done = True
+            return 0
+
+        def poll(self):
+            return 0 if self._done else None
+
+        def kill(self):
+            self._done = True
+
+        def terminate(self):
+            self._done = True
+
+    monkeypatch.setattr(claude_mod.subprocess, "Popen", _FakePopen)
+    spawned = []
+    res = run_claude("/advance REQ-X build", on_spawn=spawned.append)
+
+    assert res.outcome is Outcome.OK
+    assert captured["kwargs"].get("start_new_session") is True
+    argv = captured["argv"]
+    assert argv[argv.index("--model") + 1] == "claude-opus-4-8"
+    assert argv[argv.index("--effort") + 1] == "high"
+    assert len(spawned) == 1  # the driver got the live child to register for graceful stop
+
+
+def test_model_effort_omitted_when_falsy(monkeypatch):
+    """A falsy model/effort omits the flag (attended callers / tests keep claude's default)."""
+    import json as _json
+
+    from devsteward.core import claude as claude_mod
+
+    captured = {}
+
+    class _FakePopen:
+        def __init__(self, argv, **kwargs):
+            captured["argv"] = argv
+            self.stdout = iter(
+                [_json.dumps({"type": "result", "subtype": "success", "result": "x"}) + "\n"]
+            )
+            self._done = False
+
+        def wait(self, timeout=None):
+            self._done = True
+            return 0
+
+        def poll(self):
+            return 0 if self._done else None
+
+        def kill(self):
+            self._done = True
+
+        def terminate(self):
+            self._done = True
+
+    monkeypatch.setattr(claude_mod.subprocess, "Popen", _FakePopen)
+    run_claude("cmd", model=None, effort="")
+    assert "--model" not in captured["argv"] and "--effort" not in captured["argv"]

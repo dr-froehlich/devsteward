@@ -15,6 +15,7 @@ from .build import build_executor
 from .config import Config, ProjectNotFound, load_config
 from .core.executor import RunOutcome, StepResult
 from .core.ledger import Ledger
+from .core.stop import StopController
 from .core.model import StepStatus
 from .lint import lint as run_lint
 
@@ -153,6 +154,12 @@ def _tool_summary(name: str, tool_input: dict) -> str:
     return ""
 
 
+def _stderr_announcer(msg: str) -> None:
+    """The account provider's visibility sink (REQ-025 D5): utilization, switches, and quota
+    waits go to stderr — the same channel as live progress — so account activity is visible."""
+    click.echo(click.style(f"⊟ {msg}", fg="magenta"), err=True)
+
+
 def _stream_printer():
     """An ``on_event`` callback that renders live ``claude`` stream-json to stderr.
 
@@ -197,8 +204,13 @@ def _stream_printer():
 
 @main.command()
 @click.option("--use", type=int, default=None, help="Pin a claude-swap account index.")
+@click.option("--threshold", type=float, default=None, help="Quota gate (fraction or percent; default 70).")
+@click.option("--model", default=None, help="Claude model (default claude-opus-4-8).")
+@click.option("--effort", default=None, help="Reasoning effort (default high).")
 @click.option("--quiet", is_flag=True, help="Suppress live claude output; show only the report.")
-def advance(use: int | None, quiet: bool) -> None:
+def advance(
+    use: int | None, threshold: float | None, model: str | None, effort: str | None, quiet: bool
+) -> None:
     """Do exactly one checkpoint headless, then print the fixed report.
 
     Like ``run`` this drives ``claude -p`` (no interactive client), so forks
@@ -206,7 +218,12 @@ def advance(use: int | None, quiet: bool) -> None:
     Resolve any parked fork with ``steward decision answer`` and re-run.
     """
     cfg = _load_or_die()
-    ex = build_executor(cfg, use=use)
+    ctrl = StopController()
+    ctrl.install()
+    ex = build_executor(
+        cfg, use=use, threshold=threshold, model=model, effort=effort,
+        announce=_stderr_announcer, stop=ctrl,
+    )
     on_event = None if quiet else _stream_printer()
     res = ex.advance_once(unattended=True, on_event=on_event)
     if res is None:
@@ -220,12 +237,27 @@ def advance(use: int | None, quiet: bool) -> None:
 
 @main.command()
 @click.option("--use", type=int, default=None, help="Pin a claude-swap account index.")
+@click.option("--threshold", type=float, default=None, help="Quota gate (fraction or percent; default 70).")
+@click.option("--model", default=None, help="Claude model (default claude-opus-4-8).")
+@click.option("--effort", default=None, help="Reasoning effort (default high).")
 @click.option("--max-steps", type=int, default=None, help="Stop after N steps.")
 @click.option("--quiet", is_flag=True, help="Suppress live claude output; show only results.")
-def run(use: int | None, max_steps: int | None, quiet: bool) -> None:
-    """Unattended: march eligible steps headless; park on forks."""
+def run(
+    use: int | None, threshold: float | None, model: str | None, effort: str | None,
+    max_steps: int | None, quiet: bool,
+) -> None:
+    """Unattended: march eligible steps headless; park on forks.
+
+    A single Ctrl-C finishes the running step and then exits; a Ctrl-C during a quota wait
+    ends it at once; a second Ctrl-C kills the running ``claude`` child (REQ-025).
+    """
     cfg = _load_or_die()
-    ex = build_executor(cfg, use=use)
+    ctrl = StopController()
+    ctrl.install()
+    ex = build_executor(
+        cfg, use=use, threshold=threshold, model=model, effort=effort,
+        announce=_stderr_announcer, stop=ctrl,
+    )
     on_event = None if quiet else _stream_printer()
     results = ex.run(max_steps=max_steps, on_event=on_event)
     if not results:

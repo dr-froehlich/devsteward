@@ -38,10 +38,12 @@ class FakeRunner:
         self.calls: list[dict] = []
 
     def __call__(self, command, *, argv_prefix=None, cwd=None, env=None,
-                 timeout=1800.0, unattended=True, permission_mode=None, on_event=None):
+                 timeout=1800.0, unattended=True, permission_mode=None,
+                 model=None, effort=None, on_event=None, on_spawn=None):
         self.calls.append(
             {"command": command, "argv_prefix": argv_prefix, "cwd": cwd,
-             "unattended": unattended, "permission_mode": permission_mode}
+             "unattended": unattended, "permission_mode": permission_mode,
+             "model": model, "effort": effort, "on_spawn": on_spawn}
         )
         for key, result in self.script.items():
             if key in command:
