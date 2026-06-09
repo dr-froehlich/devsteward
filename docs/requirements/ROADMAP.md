@@ -72,6 +72,17 @@ three bundled skills. Built and dogfooded in Phase 0/1.
   independent **System Tester skill**, and the first **lab harness (IMAP)** are named
   follow-ons. (Dropped from the original draft: the over-broad "externally-facing" gate, its
   waiver, and the lint granularity gate — lint can't judge test quality.)
+- REQ-028 — **gating integrity** (draft): the runtime/lint floor under REQ-027, from two
+  FlowSteward post-mortems where one IMAP behaviour landed green three times without ever
+  being gated. Sharpens "green" at land so it means *ran and passed*, not merely exit-0:
+  a **skipped** named test fails the gate (a skip and a pass stop being the same signal); a
+  **zero-collection** test id fails (no certifying yourself by naming a non-existent or
+  delegated test); the **full suite** runs at land so any red anywhere turns the step red;
+  the verifier runs in the **project venv** so `127 pytest: not found` can't reach a green
+  land; and `steward lint` hard-errors when frontmatter `done` **contradicts the ledger**
+  (the false `done` was a hand-edit lint never checked). Complements REQ-027 (which shapes
+  *which* ACs exist); neither blocks the other. Enforcement only — no System-Test phase,
+  taxonomy, or intake shaping here.
 - Future REQs land here as `/intake` produces them.
 
 ## Dependency graph
@@ -86,7 +97,7 @@ REQ-001
  │            └─ REQ-021 (draft, lettered ids — unblocks memzy onboarding)
  └─ REQ-003 ──┬─ REQ-004 ── REQ-022 (draft, seed-ledger; with REQ-021)
               ├─ REQ-005 ── REQ-009
-              ├─ REQ-006
+              ├─ REQ-006 ── REQ-015 ── REQ-028 (draft, gating integrity: skip≠green, full-suite+venv gate, marker↔ledger lint; with REQ-002)
               ├─ REQ-008 ── REQ-012 ── REQ-025 (draft, account rotation + quota gate + graceful stop; with REQ-003)
               ├─ REQ-018 (draft, interactive checkpoint)
               ├─ REQ-026 (draft, lifecycle CLI: activate / recover / --only; with REQ-002)
