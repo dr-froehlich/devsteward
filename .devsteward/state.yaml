@@ -55,6 +55,6 @@ steps:
     status: done
     updated: '2026-06-09T08:13:20+00:00'
   REQ-026:land:
-    status: recover
-    updated: '2026-06-09T11:59:58+00:00'
+    status: done
+    updated: '2026-06-09T20:19:34+00:00'
 decisions: []
