@@ -16,31 +16,19 @@ Returns a list of human-readable problems; empty ⇒ green.
 from __future__ import annotations
 
 import json
-import re
 from importlib.resources import files
 from pathlib import Path
 
 import jsonschema
 
 from .config import Config
+from .profiles.req.index import read_statuses
 from .profiles.req.reqfile import ReqFile, load_reqs
-
-_INDEX_ROW_RE = re.compile(
-    r"^\|\s*(REQ-\d{3}[a-z]?)\s*\|\s*(.*?)\s*\|\s*([A-Za-z-]+)\s*\|", re.MULTILINE
-)
 
 
 def _schema() -> dict:
     text = (files("devsteward") / "schema" / "req.schema.json").read_text(encoding="utf-8")
     return json.loads(text)
-
-
-def _index_rows(index_path: Path) -> dict[str, str]:
-    """Map REQ id → status (uppercased) from the index table."""
-    if not index_path.exists():
-        return {}
-    text = index_path.read_text(encoding="utf-8")
-    return {m.group(1): m.group(3).strip().lower() for m in _INDEX_ROW_RE.finditer(text)}
 
 
 def _detect_cycle(reqs: list[ReqFile]) -> list[str]:
@@ -101,7 +89,7 @@ def lint(cfg: Config) -> list[str]:
     problems.extend(_detect_cycle(reqs))
 
     # 4. index ↔ REQ sync
-    index = _index_rows(cfg.index_path)
+    index = read_statuses(cfg.index_path)
     for r in reqs:
         if r.id not in index:
             problems.append(f"{r.id}: missing a row in {cfg.index_file}")

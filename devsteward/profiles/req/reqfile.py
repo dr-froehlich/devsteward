@@ -138,6 +138,36 @@ def load_reqs(req_dir: Path) -> list[ReqFile]:
     return reqs
 
 
+_STATUS_LINE_RE = re.compile(r"^(status:[ \t]*)(['\"]?)([A-Za-z-]+)(['\"]?)[ \t]*$", re.MULTILINE)
+
+
+def set_frontmatter_status(path: Path, new_status: str) -> str:
+    """Rewrite the ``status:`` line inside the ``--- … ---`` frontmatter (REQ-026 D1).
+
+    Edits only that line so surrounding frontmatter and prose are preserved (mirrors the
+    surgical :func:`update_acceptance_status`). Returns the old status. Raises ValueError
+    if there is no frontmatter or no ``status:`` line within it.
+    """
+    p = Path(path)
+    text = p.read_text(encoding="utf-8")
+    fm = _FRONTMATTER_RE.match(text)
+    if not fm:
+        raise ValueError(f"{path}: missing YAML frontmatter")
+    span_start, span_end = fm.start(1), fm.end(1)
+    block = text[span_start:span_end]
+    old: list[str] = []
+
+    def repl(m: re.Match) -> str:
+        old.append(m.group(3))
+        return f"{m.group(1)}{m.group(2)}{new_status}{m.group(4)}"
+
+    new_block, n = _STATUS_LINE_RE.subn(repl, block, count=1)
+    if n == 0:
+        raise ValueError(f"{path}: no 'status:' line in frontmatter")
+    p.write_text(text[:span_start] + new_block + text[span_end:], encoding="utf-8")
+    return old[0]
+
+
 def update_acceptance_status(path: Path, statuses: dict[str, str]) -> None:
     """Write back engine-owned ``status:`` values into a REQ's acceptance block.
 

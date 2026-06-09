@@ -72,3 +72,6 @@
 {"ts": "2026-06-09T08:02:32+00:00", "event": "verify", "step": "REQ-025:land", "ok": false, "detail": "[1] python -m pytest tests/test_accounts.py::test_usage_snapshot_parses_and_degrades\n    /home/peter/.local/share/pipx/venvs/devsteward/bin/python: No module named pytest"}
 {"ts": "2026-06-09T08:02:32+00:00", "event": "step_started", "step": "REQ-026:design", "command": "/advance REQ-026 design"}
 {"ts": "2026-06-09T08:05:48+00:00", "event": "verify", "step": "REQ-026:design", "ok": true, "detail": "no acceptance tests declared (marker trust)"}
+{"ts": "2026-06-09T08:05:48+00:00", "event": "checkpoint", "step": "REQ-026:design", "commit": "da3b5eb021df5ed793443a33bd431aa30b65ce58"}
+{"ts": "2026-06-09T08:05:48+00:00", "event": "step_started", "step": "REQ-026:build", "command": "/advance REQ-026 build"}
+{"ts": "2026-06-09T08:13:20+00:00", "event": "verify", "step": "REQ-026:build", "ok": true, "detail": "no acceptance tests declared (marker trust)"}

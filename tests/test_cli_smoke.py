@@ -17,7 +17,7 @@ def test_version_string():
 def test_cli_exposes_documented_commands():
     result = CliRunner().invoke(main, ["--help"])
     assert result.exit_code == 0
-    for cmd in ("new", "advance", "run", "lint", "status", "decision"):
+    for cmd in ("new", "advance", "run", "lint", "status", "decision", "activate", "recover"):
         assert cmd in result.output
 
 
@@ -33,14 +33,29 @@ class _FakeExecutor:
 
     ledger = SimpleNamespace(cursor_step=None, open_decisions=lambda: [])
 
-    def run(self, *, max_steps=None, on_event=None):
+    def run(self, *, only=None, max_steps=None, on_event=None):
         return []
 
-    def advance_once(self, *, unattended=True, on_event=None):
+    def advance_once(self, *, only=None, unattended=True, on_event=None):
         return None
 
-    def next_eligible(self):
+    def next_eligible(self, only=None):
         return None
+
+    def only_ineligibility_reason(self, req_id):
+        return f"{req_id} has no eligible step — it is not active."
+
+
+def test_only_not_eligible_errors(monkeypatch):
+    """REQ-026 AC7: `run`/`advance --only REQ-X` where X has no eligible step exits non-zero
+    with a reason (not a benign "nothing eligible")."""
+    monkeypatch.setattr(cli, "_load_or_die", lambda: SimpleNamespace())
+    monkeypatch.setattr(cli, "build_executor", lambda cfg, **kw: _FakeExecutor())
+
+    for command in ("run", "advance"):
+        result = CliRunner().invoke(main, [command, "--only", "REQ-X", "--quiet"])
+        assert result.exit_code != 0, result.output
+        assert "REQ-X" in result.output and "no eligible step" in result.output
 
 
 def test_run_account_and_model_options(monkeypatch):

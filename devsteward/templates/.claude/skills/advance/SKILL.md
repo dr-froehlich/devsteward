@@ -32,6 +32,11 @@ Everything tagged *(batch)* or *(interactive)* below applies to that mode only.
   step statuses. If invoked as `/advance REQ-NNN <phase>`, that is your target.
 - Read the target REQ, `CLAUDE.md`, and anything the REQ's `depends_on` produced.
 - Identify which phase you are in from the step id suffix.
+- **Recovery (`--recover` in your command):** if the step command includes `--recover`,
+  you are *resuming* a step that previously failed — its partial edits are already in the
+  working tree (the failed attempt left them; the engine only commits on success). Read and
+  assess what is there first: reconcile or fix the prior work, don't start clean or blindly
+  redo it.
 
 ## 2. Do the one checkpoint
 

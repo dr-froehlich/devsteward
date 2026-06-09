@@ -110,6 +110,53 @@ def test_dependencies_gate_eligibility(project):
     assert [s.id for s in ex.eligible_steps()] == ["R:build"]
 
 
+def test_recover_status_eligible_and_signalled(project):
+    """REQ-026 AC4: a RECOVER step is eligible; the executor drives it with `--recover` in the
+    command (so the skill knows it is resuming); a clean run advances it to DONE."""
+    step = Step(id="REQ-9:land", command="/advance REQ-9 land", verify=("true",), req="REQ-9")
+    runner = FakeRunner(default=ok_result())
+    ex = _executor(project, [step], runner)
+    ex.ledger.set_status("REQ-9:land", StepStatus.RECOVER)
+    ex.ledger.save()
+
+    assert [s.id for s in ex.eligible_steps()] == ["REQ-9:land"]  # RECOVER is runnable
+
+    res = ex.run_step(step)
+    assert res.outcome is RunOutcome.DONE
+    assert "--recover" in runner.calls[-1]["command"]  # recovery signalled to the skill
+    assert Ledger(project).status_of("REQ-9:land") is StepStatus.DONE
+
+
+def test_run_only_isolates_req(project):
+    """REQ-026 AC5: `run(only=REQ-X)` drives only REQ-X's steps to completion and never runs a
+    step belonging to another eligible REQ."""
+    xd = Step(id="REQ-X:design", command="/advance REQ-X design", verify=(), req="REQ-X")
+    xb = Step(id="REQ-X:build", command="/advance REQ-X build",
+              depends_on=("REQ-X:design",), verify=(), req="REQ-X")
+    y = Step(id="REQ-Y:design", command="/advance REQ-Y design", verify=(), req="REQ-Y")
+    ex = _executor(project, [xd, xb, y], FakeRunner(default=ok_result()))
+
+    results = ex.run(only="REQ-X")
+    assert [r.step.id for r in results] == ["REQ-X:design", "REQ-X:build"]
+    led = Ledger(project)
+    assert led.status_of("REQ-X:build") is StepStatus.DONE
+    assert led.status_of("REQ-Y:design") is StepStatus.PENDING  # the other REQ never ran
+
+
+def test_advance_only_targets_named_req(project):
+    """REQ-026 AC6: `advance_once(only=REQ-X)` runs REQ-X's next step even when a lower-id REQ
+    is also eligible."""
+    low = Step(id="REQ-001:design", command="/advance REQ-001 design", verify=(), req="REQ-001")
+    high = Step(id="REQ-009:design", command="/advance REQ-009 design", verify=(), req="REQ-009")
+    ex = _executor(project, [low, high], FakeRunner(default=ok_result()))
+
+    res = ex.advance_once(only="REQ-009")
+    assert res.step.id == "REQ-009:design"
+    led = Ledger(project)
+    assert led.status_of("REQ-009:design") is StepStatus.DONE
+    assert led.status_of("REQ-001:design") is StepStatus.PENDING  # lower-id REQ skipped
+
+
 class _CountingStop:
     """A StopController stand-in: ``should_stop`` returns False for the first ``stop_after``
     calls, then True — so the run loop completes one step before the flag trips."""

@@ -183,16 +183,23 @@ class Executor:
     def steps(self) -> list[Step]:
         return self.source.steps(self.ledger)
 
-    def eligible_steps(self) -> list[Step]:
-        """Steps whose status is PENDING and whose every dependency is DONE.
+    #: Step statuses that make a step a candidate for running. ``RECOVER`` joins
+    #: ``PENDING`` so a re-armed failed step (REQ-026) is picked up by the next run.
+    _RUNNABLE = (StepStatus.PENDING, StepStatus.RECOVER)
 
-        Returned in deterministic id order so runs are reproducible.
+    def eligible_steps(self, only: str | None = None) -> list[Step]:
+        """Steps that are runnable (PENDING or RECOVER) and whose every dependency is DONE.
+
+        ``only`` restricts the set to one REQ's steps (REQ-026 ``--only``). Returned in
+        deterministic id order so runs are reproducible.
         """
         steps = self.steps()
         by_id = {s.id: s for s in steps}
         eligible = []
         for s in steps:
-            if self.ledger.status_of(s.id) is not StepStatus.PENDING:
+            if only is not None and s.req != only:
+                continue
+            if self.ledger.status_of(s.id) not in self._RUNNABLE:
                 continue
             if all(
                 d in by_id and self.ledger.status_of(d) is StepStatus.DONE
@@ -201,9 +208,25 @@ class Executor:
                 eligible.append(s)
         return sorted(eligible, key=lambda s: s.id)
 
-    def next_eligible(self) -> Step | None:
-        elig = self.eligible_steps()
+    def next_eligible(self, only: str | None = None) -> Step | None:
+        elig = self.eligible_steps(only=only)
         return elig[0] if elig else None
+
+    def only_ineligibility_reason(self, req_id: str) -> str:
+        """Name *why* ``--only req_id`` selected nothing (REQ-026 D8): not active, already
+        done, or blocked on an unfinished dependency."""
+        steps = [s for s in self.steps() if s.req == req_id]
+        if not steps:
+            return (
+                f"{req_id} has no eligible step — it is not active "
+                f"(activate it first with `steward activate {req_id}`, or it does not exist)."
+            )
+        statuses = [self.ledger.status_of(s.id) for s in steps]
+        if all(st is StepStatus.DONE for st in statuses):
+            return f"{req_id} has no eligible step — it is already done."
+        return (
+            f"{req_id} has no eligible step — it is blocked on an unfinished dependency."
+        )
 
     # -- execution -------------------------------------------------------------
 
@@ -215,20 +238,29 @@ class Executor:
         on_event: Callable[[dict], None] | None = None,
     ) -> StepResult:
         led = self.ledger
+        # Capture the recovery signal *before* flipping to RUNNING (REQ-026 D5/AC4): if the
+        # step was re-armed via `steward recover`, tell the resuming skill so it assesses
+        # the failed attempt's partial edits (already in the tree) instead of starting clean.
+        recovering = led.status_of(step.id) is StepStatus.RECOVER
+        command = step.command + (" --recover" if recovering else "")
         led.set_cursor(step.id)
         led.set_status(step.id, StepStatus.RUNNING)
         led.save()
-        led.append_event("step_started", step=step.id, command=step.command)
+        led.append_event("step_started", step=step.id, command=command, recover=recovering)
+
+        # When a run is interrupted (quota gate / usage limit) the step is re-queued. Keep
+        # a recovering step as RECOVER so its recovery signal survives the interruption.
+        requeue = StepStatus.RECOVER if recovering else StepStatus.PENDING
 
         ok, reason = self.accounts.precheck()
         if not ok:
-            led.set_status(step.id, StepStatus.PENDING)
+            led.set_status(step.id, requeue)
             led.save()
             led.append_event("quota_block", step=step.id, reason=reason)
             return StepResult(step, RunOutcome.LIMIT, reason)
 
         result = self.runner(
-            step.command,
+            command,
             argv_prefix=self.accounts.claude_argv(),
             cwd=str(self.root),
             unattended=unattended,
@@ -242,7 +274,7 @@ class Executor:
             self.stop.clear_child()
 
         if result.outcome is claude_mod.Outcome.USAGE_LIMIT:
-            led.set_status(step.id, StepStatus.PENDING)
+            led.set_status(step.id, requeue)
             led.save()
             led.append_event("usage_limit", step=step.id)
             return StepResult(step, RunOutcome.LIMIT, "claude usage limit")
@@ -372,15 +404,20 @@ class Executor:
     def advance_once(
         self,
         *,
+        only: str | None = None,
         unattended: bool = True,
         on_event: Callable[[dict], None] | None = None,
     ) -> StepResult | None:
-        """Run exactly one eligible step headless (or None if nothing is eligible)."""
+        """Run exactly one eligible step headless (or None if nothing is eligible).
+
+        ``only`` restricts selection to one REQ's steps (REQ-026): the next eligible step
+        of ``REQ-NNN`` even when a lower-id REQ is also eligible.
+        """
         refusal = self.branch_guard()
         if refusal is not None:
             self.ledger.append_event("branch_refused", branch=self.current_branch())
-            return StepResult(self.next_eligible(), RunOutcome.REFUSED, refusal)
-        step = self.next_eligible()
+            return StepResult(self.next_eligible(only=only), RunOutcome.REFUSED, refusal)
+        step = self.next_eligible(only=only)
         if step is None:
             return None
         return self._drive_step(step, unattended=unattended, on_event=on_event)
@@ -388,18 +425,20 @@ class Executor:
     def run(
         self,
         *,
+        only: str | None = None,
         max_steps: int | None = None,
         on_event: Callable[[dict], None] | None = None,
     ) -> list[StepResult]:
         """Unattended: march eligible steps headless, parking on forks.
 
         A parked step is BLOCKED (not eligible), so the loop naturally advances to the
-        next independent step and stops when nothing is eligible.
+        next independent step and stops when nothing is eligible. ``only`` restricts the
+        whole run to one REQ's steps (REQ-026).
         """
         refusal = self.branch_guard()
         if refusal is not None:
             self.ledger.append_event("branch_refused", branch=self.current_branch())
-            return [StepResult(self.next_eligible(), RunOutcome.REFUSED, refusal)]
+            return [StepResult(self.next_eligible(only=only), RunOutcome.REFUSED, refusal)]
         results: list[StepResult] = []
         count = 0
         while True:
@@ -409,7 +448,7 @@ class Executor:
                 break
             if max_steps is not None and count >= max_steps:
                 break
-            step = self.next_eligible()
+            step = self.next_eligible(only=only)
             if step is None:
                 break
             res = self._drive_step(step, unattended=True, on_event=on_event)

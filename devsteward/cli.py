@@ -17,6 +17,7 @@ from .core.executor import RunOutcome, StepResult
 from .core.ledger import Ledger
 from .core.stop import StopController
 from .core.model import StepStatus
+from .lifecycle import LifecycleError, activate as lifecycle_activate, recover as lifecycle_recover
 from .lint import lint as run_lint
 
 
@@ -106,6 +107,51 @@ def lint() -> None:
     raise click.ClickException(f"{len(problems)} problem(s)")
 
 
+# -- lifecycle (activate / recover) -------------------------------------------
+
+
+@main.command()
+@click.argument("req_id")
+def activate(req_id: str) -> None:
+    """Flip REQ_ID from draft (or dropped) to open, syncing its index row; uncommitted.
+
+    One verb for one logical action — it edits the REQ frontmatter and the
+    ``REQUIREMENTS_INDEX.md`` row in lockstep so ``steward lint`` stays green, leaving both
+    files for you to commit deliberately. Refuses done/superseded REQs (supersede instead).
+    """
+    cfg = _load_or_die()
+    try:
+        res = lifecycle_activate(cfg, req_id)
+    except LifecycleError as exc:
+        raise click.ClickException(str(exc)) from exc
+    color = "green" if res.changed else "yellow"
+    click.echo(click.style(res.message, fg=color))
+
+
+@main.command()
+@click.argument("req_id")
+def recover(req_id: str) -> None:
+    """Re-arm REQ_ID's failed step so the next run re-attempts it (its partial work intact).
+
+    Flips the REQ's FAILED ledger step(s) to RECOVER and records an event; the working tree
+    is left exactly as the failed attempt left it, for the resuming skill to assess. Fails
+    (non-zero) when the REQ has no failed step.
+    """
+    cfg = _load_or_die()
+    led = Ledger(cfg.root)
+    try:
+        res = lifecycle_recover(led, req_id)
+    except LifecycleError as exc:
+        raise click.ClickException(str(exc)) from exc
+    flipped = ", ".join(res.steps)
+    click.echo(
+        click.style(
+            f"recovered {req_id}: {flipped} -> recover. Re-run `steward run` to re-attempt.",
+            fg="green",
+        )
+    )
+
+
 # -- status -------------------------------------------------------------------
 
 
@@ -129,6 +175,7 @@ def status() -> None:
                 StepStatus.DONE: click.style("✓", fg="green"),
                 StepStatus.BLOCKED: click.style("⏸", fg="yellow"),
                 StepStatus.FAILED: click.style("✗", fg="red"),
+                StepStatus.RECOVER: click.style("↻", fg="magenta"),
                 StepStatus.RUNNING: click.style("…", fg="cyan"),
             }.get(st, "•")
             tag = click.style(" (eligible)", fg="cyan") if s.id in eligible else ""
@@ -207,9 +254,11 @@ def _stream_printer():
 @click.option("--threshold", type=float, default=None, help="Quota gate (fraction or percent; default 70).")
 @click.option("--model", default=None, help="Claude model (default claude-opus-4-8).")
 @click.option("--effort", default=None, help="Reasoning effort (default high).")
+@click.option("--only", default=None, help="Restrict to one REQ's steps (fails if none eligible).")
 @click.option("--quiet", is_flag=True, help="Suppress live claude output; show only the report.")
 def advance(
-    use: int | None, threshold: float | None, model: str | None, effort: str | None, quiet: bool
+    use: int | None, threshold: float | None, model: str | None, effort: str | None,
+    only: str | None, quiet: bool,
 ) -> None:
     """Do exactly one checkpoint headless, then print the fixed report.
 
@@ -225,8 +274,10 @@ def advance(
         announce=_stderr_announcer, stop=ctrl,
     )
     on_event = None if quiet else _stream_printer()
-    res = ex.advance_once(unattended=True, on_event=on_event)
+    res = ex.advance_once(only=only, unattended=True, on_event=on_event)
     if res is None:
+        if only is not None:
+            raise click.ClickException(ex.only_ineligibility_reason(only))
         click.echo("Nothing eligible — every step is done, blocked, or waiting on a dep.")
         return
     _print_report(ex, res)
@@ -240,11 +291,12 @@ def advance(
 @click.option("--threshold", type=float, default=None, help="Quota gate (fraction or percent; default 70).")
 @click.option("--model", default=None, help="Claude model (default claude-opus-4-8).")
 @click.option("--effort", default=None, help="Reasoning effort (default high).")
+@click.option("--only", default=None, help="Restrict to one REQ's steps (fails if none eligible).")
 @click.option("--max-steps", type=int, default=None, help="Stop after N steps.")
 @click.option("--quiet", is_flag=True, help="Suppress live claude output; show only results.")
 def run(
     use: int | None, threshold: float | None, model: str | None, effort: str | None,
-    max_steps: int | None, quiet: bool,
+    only: str | None, max_steps: int | None, quiet: bool,
 ) -> None:
     """Unattended: march eligible steps headless; park on forks.
 
@@ -259,8 +311,10 @@ def run(
         announce=_stderr_announcer, stop=ctrl,
     )
     on_event = None if quiet else _stream_printer()
-    results = ex.run(max_steps=max_steps, on_event=on_event)
+    results = ex.run(only=only, max_steps=max_steps, on_event=on_event)
     if not results:
+        if only is not None:
+            raise click.ClickException(ex.only_ineligibility_reason(only))
         click.echo("Nothing eligible to run.")
         return
     for res in results:

@@ -19,6 +19,7 @@ class StepStatus(str, Enum):
     DONE = "done"
     BLOCKED = "blocked-on-decision"
     FAILED = "failed"
+    RECOVER = "recover"  # an operator re-armed a FAILED step (REQ-026) — eligible again
 
 
 class DecisionStatus(str, Enum):

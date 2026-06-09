@@ -11,7 +11,8 @@ from pathlib import Path
 
 import convert_reqs as cv
 from devsteward.config import Config
-from devsteward.lint import _index_rows, lint
+from devsteward.lint import lint
+from devsteward.profiles.req.index import read_statuses as _index_rows
 from devsteward.profiles.req.reqfile import parse_req
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "memzy_reqs"
