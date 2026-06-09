@@ -55,6 +55,11 @@ three bundled skills. Built and dogfooded in Phase 0/1.
   adaptive), prefer-current rotation with `--use` pin, interruptible wait through resets,
   visible utilization/switch lines, two-level Ctrl-C, `start_new_session=True` (no Ctrl-C
   to claude), and `--model`/`--effort` defaulting to Opus/high.
+- REQ-026 — **lifecycle CLI** (draft; eligible now): three operator verbs the engine lacks —
+  `steward activate REQ-NNN` (draft/dropped → open, syncing frontmatter + index), `steward
+  recover REQ-NNN` (flip a FAILED step to a new ledger-level `RECOVER` status the existing
+  `/advance` skill picks up and assesses; no repair skill), and `--only REQ-NNN` on
+  `run`/`advance` to drive a single REQ full-circle, failing if it has no eligible step.
 - Future REQs land here as `/intake` produces them.
 
 ## Dependency graph
@@ -71,7 +76,8 @@ REQ-001
               ├─ REQ-005 ── REQ-009
               ├─ REQ-006
               ├─ REQ-008 ── REQ-012 ── REQ-025 (draft, account rotation + quota gate + graceful stop; with REQ-003)
-              └─ REQ-018 (draft, interactive checkpoint)
+              ├─ REQ-018 (draft, interactive checkpoint)
+              └─ REQ-026 (draft, lifecycle CLI: activate / recover / --only; with REQ-002)
  REQ-011 (done, production-branch guard) ── REQ-019 (done, integration-branch guard) ── REQ-020 (draft, branch lifecycle automation)
  REQ-024 (draft, onboard skill) ── orchestrates REQ-007 + REQ-009 + REQ-010/023 + REQ-021 + REQ-022 (memzy onboarding)
 ```

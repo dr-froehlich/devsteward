@@ -27,9 +27,10 @@ commit** as its frontmatter and the code.
 | REQ-019 | Branching regime — declaration on the integration branch; only implementation branches | DONE | [REQ-019](REQ-019.md) | REQ-011 |
 | REQ-020 | Branch lifecycle automation — the executor manages the implementation feature branch end-to-end | DONE | [REQ-020](REQ-020.md) | REQ-011, REQ-019 |
 | REQ-021 | Lettered REQ ids — accept a single-letter suffix for split-umbrella requirements | DONE | [REQ-021](REQ-021.md) | REQ-002 |
-| REQ-022 | steward seed-ledger — seed a ledger for an already-built corpus so historic REQs read as done | OPEN | [REQ-022](REQ-022.md) | REQ-003, REQ-004, REQ-021 |
-| REQ-023 | Converter index splice — preserve a project's surrounding index prose | OPEN | [REQ-023](REQ-023.md) | REQ-010 |
-| REQ-024 | onboard skill — orchestrate migrating an existing project under the steward engine | OPEN | [REQ-024](REQ-024.md) | REQ-007, REQ-009, REQ-010, REQ-021, REQ-022, REQ-023 |
+| REQ-022 | steward seed-ledger — seed a ledger for an already-built corpus so historic REQs read as done | DRAFT | [REQ-022](REQ-022.md) | REQ-003, REQ-004, REQ-021 |
+| REQ-023 | Converter index splice — preserve a project's surrounding index prose | DRAFT | [REQ-023](REQ-023.md) | REQ-010 |
+| REQ-024 | onboard skill — orchestrate migrating an existing project under the steward engine | DRAFT | [REQ-024](REQ-024.md) | REQ-007, REQ-009, REQ-010, REQ-021, REQ-022, REQ-023 |
 | REQ-025 | Visible account rotation, fixed-quota gating, and graceful stop for unattended runs | DRAFT | [REQ-025](REQ-025.md) | REQ-003, REQ-012 |
+| REQ-026 | Lifecycle CLI — activate a REQ, recover a failed step, and target one REQ with --only | DRAFT | [REQ-026](REQ-026.md) | REQ-002, REQ-003 |
 
 New requirement template: [`_templates/req.md`](../../devsteward/templates/docs/requirements/_templates/req.md)
