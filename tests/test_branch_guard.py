@@ -5,9 +5,9 @@ REQ-019 — it also refuses *implementation* steps (``build``/``land``) on the i
 branch, while allowing declaration (a ``design`` plan) there; implementation belongs on a
 feature branch.
 
-The branch is resolved through an injectable seam (``branch_resolver``), so the guards
-drive without a real git checkout — consistent with conftest's goal of exercising the full
-loop without committing to git.
+The branch state is supplied by an injectable :class:`FakeGitTopology` seam (REQ-020), so
+the guards drive without a real git checkout — consistent with conftest's goal of exercising
+the full loop without committing to git.
 """
 
 from __future__ import annotations
@@ -21,12 +21,18 @@ from devsteward.core.ledger import Ledger
 from devsteward.core.model import Step, StepStatus
 from devsteward.core.verify import CommandVerifier
 
-from conftest import FakeRunner, ListStepSource, RecordingCommitter, ok_result
+from conftest import (
+    FakeGitTopology,
+    FakeRunner,
+    ListStepSource,
+    RecordingCommitter,
+    ok_result,
+)
 
 _PKG = Path(__file__).resolve().parents[1] / "devsteward"
 
 
-def _executor(root, steps, *, branch, runner=None, committer=None):
+def _executor(root, steps, *, branch, runner=None, committer=None, git=None):
     return Executor(
         root=root,
         source=ListStepSource(steps),
@@ -36,7 +42,7 @@ def _executor(root, steps, *, branch, runner=None, committer=None):
         committer=committer or RecordingCommitter(),
         production_branch="main",
         integration_branch="dev",
-        branch_resolver=lambda _root: branch,
+        git=git or FakeGitTopology(current=branch),
     )
 
 
@@ -105,28 +111,12 @@ def test_scaffolding_documents_model():
 
 
 # -- REQ-019: implementation off the integration branch -----------------------
-
-
-def test_refuses_implementation_on_integration_branch(project):
-    """AC1 — a build step and a land step on the integration branch are refused:
-    no claude, no commit, step stays PENDING, message names the branch and phase."""
-    for phase in ("build", "land"):
-        step = Step(
-            id=f"REQ-019:{phase}",
-            command=f"/advance REQ-019 {phase}",
-            verify=("true",),
-            phase=phase,
-        )
-        runner = FakeRunner(default=ok_result())
-        committer = RecordingCommitter()
-        ex = _executor(project, [step], branch="dev", runner=runner, committer=committer)
-
-        res = ex.advance_once()
-        assert res.outcome is RunOutcome.REFUSED, phase
-        assert runner.calls == []
-        assert committer.committed == []
-        assert Ledger(project).status_of(f"REQ-019:{phase}") is StepStatus.PENDING
-        assert "dev" in res.detail and phase in res.detail
+#
+# REQ-019's *refusal* of build/land on the integration branch is deliberately superseded by
+# REQ-020 (the executor now manages the feature branch instead of refusing); that
+# create+switch behavior is covered by tests/test_branch_lifecycle.py AC1. The remaining
+# REQ-019 tests below — design stays on the integration branch, implementation proceeds off
+# it — are still true under REQ-020 and stay here.
 
 
 def test_design_allowed_on_integration_branch(project):

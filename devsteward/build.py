@@ -5,6 +5,7 @@ from __future__ import annotations
 from .config import Config
 from .core.accounts import CswapAccountProvider, SingleAccountProvider
 from .core.executor import Executor
+from .core.git import GitCli
 from .core.verify import CommandVerifier
 from .profiles.generic import GenericStepSource
 from .profiles.req import ReqStepSource
@@ -42,4 +43,6 @@ def build_executor(cfg: Config, *, use: int | None = None, autocommit: bool = Tr
         permission_mode=(cfg.claude or {}).get("permission_mode", "dangerously-skip"),
         production_branch=cfg.production_branch,
         integration_branch=cfg.integration_branch,
+        feature_branch_template=cfg.feature_branch_template,
+        git=GitCli(cfg.root),
     )

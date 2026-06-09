@@ -53,7 +53,7 @@ def test_eligibility_respects_cross_req_dependency(tmp_path, monkeypatch):
     from devsteward.core.executor import Executor
     from devsteward.core.accounts import SingleAccountProvider
     from devsteward.core.verify import CommandVerifier
-    from conftest import RecordingCommitter, ok_result
+    from conftest import FakeGitTopology, RecordingCommitter, ok_result
 
     write_req(tmp_path, "REQ-001", status="open")
     write_req(tmp_path, "REQ-002", status="open", depends_on=["REQ-001"])
@@ -64,6 +64,7 @@ def test_eligibility_respects_cross_req_dependency(tmp_path, monkeypatch):
         accounts=SingleAccountProvider(),
         runner=FakeRunner(default=ok_result()),
         committer=RecordingCommitter(),
+        git=FakeGitTopology(current="dev"),  # REQ-020: in-memory topology (no real checkout)
     )
     # Initially only REQ-001:design is eligible (REQ-002 blocked on REQ-001:land).
     assert [s.id for s in ex.eligible_steps()] == ["REQ-001:design"]

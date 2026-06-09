@@ -31,9 +31,12 @@ engine runs them and only marks a step done when they pass.
   index row, roadmap), plans, and the ledger are committed directly on `dev`, while
   **implementation** of a REQ (code + tests + the status-flip to `done`) goes on a feature
   branch and merges into `dev` by a plain local merge; `dev` is promoted to `main` via a PR.
-  This is engine-enforced and config-driven: the engine
-  refuses to autocommit on the production branch (`git.production_branch` in
-  `.devsteward/config.yaml`, default `main`); never commit directly to `main`.
+  This is engine-enforced and config-driven: the engine refuses to autocommit on the
+  production branch (`git.production_branch` in `.devsteward/config.yaml`, default `main`) —
+  never commit directly to `main` — and on the integration branch it **manages the feature
+  branch** for implementation steps: it creates+switches to `git.feature_branch` for a
+  `build`/`land` step and merges it back `--no-ff` after a green land, while a `design` step
+  (declaration) stays on `dev`.
 - **Co-author trailer** on commits:
   `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`
 

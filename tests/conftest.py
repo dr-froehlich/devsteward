@@ -86,6 +86,52 @@ class RecordingCommitter:
         return "deadbeef" + step.id.replace(":", "")
 
 
+class FakeGitTopology:
+    """In-memory :class:`devsteward.core.seams.GitTopology` (REQ-020).
+
+    Models the checked-out branch, the set of existing branches, and a minimal divergence
+    relation, so create→run→merge is exercised and assertable without a real checkout
+    (``conftest``'s no-git goal). Records the op sequence: ``created``, ``switched``,
+    ``commits`` (``(branch, message)``), ``merged`` (``(feature, into, message)``).
+    """
+
+    def __init__(self, current: str = "dev", branches=None, diverged=()):
+        self.current = current
+        self.branches = set(branches or [current])
+        self._diverged = set(diverged)
+        self.created: list[str] = []
+        self.switched: list[str] = []
+        self.commits: list[tuple[str, str]] = []
+        self.merged: list[tuple[str, str, str]] = []
+
+    def current_branch(self) -> str:
+        return self.current
+
+    def branch_exists(self, name: str) -> bool:
+        return name in self.branches
+
+    def create_and_switch(self, name: str) -> None:
+        self.branches.add(name)
+        self.current = name
+        self.created.append(name)
+        self.switched.append(name)
+
+    def switch(self, name: str) -> None:
+        self.branches.add(name)
+        self.current = name
+        self.switched.append(name)
+
+    def integration_is_ancestor(self, integration: str, feature: str) -> bool:
+        return feature not in self._diverged
+
+    def commit_all(self, message: str) -> str | None:
+        self.commits.append((self.current, message))
+        return f"sha{len(self.commits):04d}"
+
+    def merge_no_ff(self, feature: str, message: str) -> None:
+        self.merged.append((feature, self.current, message))
+
+
 @pytest.fixture
 def project(tmp_path: Path) -> Path:
     """An empty project dir with an initialized ledger."""

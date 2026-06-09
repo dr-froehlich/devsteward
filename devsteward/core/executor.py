@@ -31,11 +31,14 @@ from pathlib import Path
 from typing import Callable
 
 from . import claude as claude_mod
+from .git import GitCli
 from .ledger import Ledger
 from .model import Decision, Step, StepStatus
-from .seams import AccountProvider, StepSource, Verifier
+from .seams import AccountProvider, GitTopology, StepSource, Verifier
 
 PARK_SENTINEL = "[[DEVSTEWARD_PARK]]"
+
+_TRAILER = "Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 
 
 class RunOutcome(str, Enum):
@@ -56,32 +59,16 @@ class StepResult:
     commit: str | None = None
 
 
-def _git_current_branch(root: Path) -> str:
-    """The checked-out branch name, or ``"HEAD"`` when detached (never a real branch)."""
-    res = subprocess.run(
-        ["git", "rev-parse", "--abbrev-ref", "HEAD"],
-        cwd=root,
-        capture_output=True,
-        text=True,
-    )
-    return res.stdout.strip()
+class _ResolverShim(GitCli):
+    """Back-compat: an old caller passing a ``branch_resolver`` callable gets its reads of
+    the current branch from that callable, while mutating ops still hit real ``git``."""
 
+    def __init__(self, root: Path, resolver: Callable[[Path], str]):
+        super().__init__(root)
+        self._resolver = resolver
 
-def _git_commit(root: Path, message: str) -> str | None:
-    """Stage everything and commit. Returns the new sha, or None if nothing to commit."""
-    subprocess.run(["git", "add", "-A"], cwd=root, check=True, capture_output=True)
-    status = subprocess.run(
-        ["git", "status", "--porcelain"], cwd=root, capture_output=True, text=True
-    )
-    if not status.stdout.strip():
-        return None
-    subprocess.run(
-        ["git", "commit", "-m", message], cwd=root, check=True, capture_output=True
-    )
-    sha = subprocess.run(
-        ["git", "rev-parse", "HEAD"], cwd=root, capture_output=True, text=True
-    )
-    return sha.stdout.strip()
+    def current_branch(self) -> str:
+        return self._resolver(self.root)
 
 
 class Executor:
@@ -101,6 +88,8 @@ class Executor:
         production_branch: str = "main",
         integration_branch: str = "dev",
         implementation_phases: tuple[str, ...] = ("build", "land"),
+        feature_branch_template: str = "req-{num}-{slug}",
+        git: GitTopology | None = None,
         branch_resolver: Callable[[Path], str] | None = None,
     ):
         self.root = Path(root)
@@ -114,13 +103,19 @@ class Executor:
         self.production_branch = production_branch
         self.integration_branch = integration_branch
         self.implementation_phases = implementation_phases
-        self._branch_resolver = branch_resolver or _git_current_branch
+        self.feature_branch_template = feature_branch_template
+        if git is not None:
+            self.git: GitTopology = git
+        elif branch_resolver is not None:
+            self.git = _ResolverShim(self.root, branch_resolver)
+        else:
+            self.git = GitCli(self.root)
         self.ledger = Ledger(self.root)
 
     # -- branch guard ----------------------------------------------------------
 
     def current_branch(self) -> str:
-        return self._branch_resolver(self.root)
+        return self.git.current_branch()
 
     def branch_guard(self) -> str | None:
         """Refusal message if HEAD is the production branch, else ``None``.
@@ -136,25 +131,45 @@ class Executor:
             )
         return None
 
-    def step_branch_guard(self, step: Step) -> str | None:
-        """Refusal if an *implementation* step is attempted on the integration branch.
+    def feature_branch_name(self, step: Step) -> str:
+        """The managed feature-branch name for ``step`` (config-driven, REQ-020 D8)."""
+        num = (step.req or "").removeprefix("REQ-")
+        return self.feature_branch_template.format(num=num, slug=step.slug, req=step.req)
 
-        Declaration stays on the integration branch — a REQ's ``design`` step (a plan) is
-        allowed there, as is any phase-less step (the generic profile). Implementation
-        (``build``/``land``) changes behavior and belongs on a feature branch. This is the
-        symmetric partner to :meth:`branch_guard` (which protects production): the cursor
-        never switches branches, so it is a precondition checked per step before ``claude``.
+    def prepare_branch(self, step: Step) -> str | None:
+        """Manage the implementation feature branch (REQ-020), replacing REQ-019's refusal.
+
+        Returns a *surface* message to abort the step (a diverged branch — a real
+        conflict), else ``None`` to proceed. The over-eager auto-branching REQ-019 stopped
+        branched on *declaration*; this is gated strictly on ``phase ∈ {build, land}``,
+        never on a ``design`` step, which is what makes the automation safe.
+
+        - ``design`` / generic (phase-less) steps run where they are (declaration stays on
+          the integration branch);
+        - already off the integration branch (a feature branch — production is caught
+          earlier by :meth:`branch_guard`): resume the step here, no branch created;
+        - on the integration branch: lazily create+switch to the REQ's feature branch, or
+          reuse it if a partial prior run left it — unless it has *diverged*, which is
+          surfaced, not silently merged over (D7).
         """
-        if (
-            step.phase in self.implementation_phases
-            and self.current_branch() == self.integration_branch
-        ):
-            return (
-                f"refusing to run the '{step.phase}' step on the integration branch "
-                f"'{self.integration_branch}' — implementation belongs on a feature branch; "
-                f"create one (e.g. `git checkout -b <feature>`) and re-run. Declaration "
-                f"(intake, roadmap, a design plan) stays on the integration branch."
-            )
+        if step.phase not in self.implementation_phases:
+            return None
+        if self.current_branch() != self.integration_branch:
+            return None
+        name = self.feature_branch_name(step)
+        if self.git.branch_exists(name):
+            if not self.git.integration_is_ancestor(self.integration_branch, name):
+                self.ledger.append_event("branch_diverged", step=step.id, branch=name)
+                return (
+                    f"refusing to reuse feature branch '{name}' — it has diverged from "
+                    f"'{self.integration_branch}' (the integration branch advanced since "
+                    f"the branch was cut). Reconcile it by hand, then re-run."
+                )
+            self.git.switch(name)
+            self.ledger.append_event("branch_reused", step=step.id, branch=name)
+        else:
+            self.git.create_and_switch(name)
+            self.ledger.append_event("branch_created", step=step.id, branch=name)
         return None
 
     # -- planning --------------------------------------------------------------
@@ -292,14 +307,54 @@ class Executor:
         if not self.autocommit:
             return None
         title = step.title or step.id
-        message = (
-            f"{step.id}: {title}\n\n"
-            "Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
-        )
+        message = f"{step.id}: {title}\n\n{_TRAILER}"
         try:
-            return _git_commit(self.root, message)
+            return self.git.commit_all(message)
         except subprocess.CalledProcessError:
             return None
+
+    # -- branch lifecycle ------------------------------------------------------
+
+    def _drive_step(
+        self,
+        step: Step,
+        *,
+        unattended: bool,
+        on_event: Callable[[dict], None] | None,
+    ) -> StepResult:
+        """Bracket :meth:`run_step` with topology management (REQ-020): prepare the feature
+        branch before, auto-merge after a green land. Shared by both drivers."""
+        surfaced = self.prepare_branch(step)
+        if surfaced is not None:
+            self.ledger.append_event("branch_surfaced", step=step.id, detail=surfaced)
+            return StepResult(step, RunOutcome.REFUSED, surfaced)
+        res = self.run_step(step, unattended=unattended, on_event=on_event)
+        if res.outcome is RunOutcome.DONE and step.phase == "land":
+            self._merge_after_land(step)
+        return res
+
+    def _merge_after_land(self, step: Step) -> None:
+        """Reconcile the trailing ledger write and merge the feature branch (D4, D6).
+
+        ``run_step`` writes the final cursor (``status: done`` + the ``checkpoint`` event)
+        *after* its land commit, leaving ``state.yaml``/``events.jsonl`` dirty on the
+        feature branch. Commit that as a **follow-up** (never ``--amend`` — amending would
+        change the land-commit hash the just-recorded ``checkpoint`` points at), then merge
+        ``--no-ff`` so the integration branch is clean at rest with an auditable boundary.
+        """
+        feature = self.current_branch()
+        if feature == self.integration_branch:
+            return  # nothing was branched (e.g. land ran on the integration branch)
+        title = step.title or step.id
+        self.git.commit_all(f"{step.req}: ledger checkpoint\n\n{_TRAILER}")
+        self.git.switch(self.integration_branch)
+        self.git.merge_no_ff(
+            feature,
+            f"Merge {feature} into {self.integration_branch} — {step.req} {title}\n\n{_TRAILER}",
+        )
+        self.ledger.append_event(
+            "branch_merged", step=step.id, branch=feature, into=self.integration_branch
+        )
 
     # -- drivers ---------------------------------------------------------------
 
@@ -317,13 +372,7 @@ class Executor:
         step = self.next_eligible()
         if step is None:
             return None
-        step_refusal = self.step_branch_guard(step)
-        if step_refusal is not None:
-            self.ledger.append_event(
-                "branch_refused", branch=self.current_branch(), step=step.id
-            )
-            return StepResult(step, RunOutcome.REFUSED, step_refusal)
-        return self.run_step(step, unattended=unattended, on_event=on_event)
+        return self._drive_step(step, unattended=unattended, on_event=on_event)
 
     def run(
         self,
@@ -348,18 +397,12 @@ class Executor:
             step = self.next_eligible()
             if step is None:
                 break
-            step_refusal = self.step_branch_guard(step)
-            if step_refusal is not None:
-                # Declaration (design) may have run on the integration branch; the first
-                # implementation step stops the run so a human branches and resumes.
-                self.ledger.append_event(
-                    "branch_refused", branch=self.current_branch(), step=step.id
-                )
-                results.append(StepResult(step, RunOutcome.REFUSED, step_refusal))
-                break
-            res = self.run_step(step, unattended=True, on_event=on_event)
+            res = self._drive_step(step, unattended=True, on_event=on_event)
             results.append(res)
             count += 1
+            if res.outcome is RunOutcome.REFUSED:
+                # A diverged feature branch was surfaced (D7): stop so a human reconciles.
+                break
             if res.outcome is RunOutcome.LIMIT:
                 # Out of quota: stop the whole run (step is back to PENDING).
                 break
