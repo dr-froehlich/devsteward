@@ -75,3 +75,8 @@
 {"ts": "2026-06-09T08:05:48+00:00", "event": "checkpoint", "step": "REQ-026:design", "commit": "da3b5eb021df5ed793443a33bd431aa30b65ce58"}
 {"ts": "2026-06-09T08:05:48+00:00", "event": "step_started", "step": "REQ-026:build", "command": "/advance REQ-026 build"}
 {"ts": "2026-06-09T08:13:20+00:00", "event": "verify", "step": "REQ-026:build", "ok": true, "detail": "no acceptance tests declared (marker trust)"}
+{"ts": "2026-06-09T08:13:20+00:00", "event": "checkpoint", "step": "REQ-026:build", "commit": "1a8b1fa3610715895c52db39b8522adeef699f0d"}
+{"ts": "2026-06-09T08:13:20+00:00", "event": "step_started", "step": "REQ-026:land", "command": "/advance REQ-026 land"}
+{"ts": "2026-06-09T08:14:56+00:00", "event": "verify", "step": "REQ-026:land", "ok": false, "detail": "[1] python -m pytest tests/test_lifecycle.py::test_activate_draft_to_open\n    /home/peter/.local/share/pipx/venvs/devsteward/bin/python: No module named pytest"}
+{"ts": "2026-06-09T11:59:54+00:00", "event": "step_recover", "req": "REQ-025", "steps": ["REQ-025:land"]}
+{"ts": "2026-06-09T11:59:58+00:00", "event": "step_recover", "req": "REQ-026", "steps": ["REQ-026:land"]}
