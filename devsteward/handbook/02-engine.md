@@ -48,6 +48,20 @@ no-op `build` is caught at land when its acceptance tests fail: the guarantee ho
 "done" that matters. (Earlier this was only true by accident — every phase marker-trusted,
 so a REQ with no tests at all could reach `done`. That false-done path is now closed.)
 
+The land gate's *green* is sharper than exit-0 (REQ-028): exit-0 cannot tell a pass from a
+skip or a zero-collection, so the gate reads pytest's per-test outcomes. A named acceptance
+test that **skips** fails the gate (a skip is not the proof the REQ promised — skip ≠ green;
+skips in the *full* suite stay legal), and one that **collects zero tests** (a typo'd,
+renamed, or unowned id) fails too — a REQ cannot certify itself by naming a test that never
+runs. Beyond each named test, land runs the **full project suite** and requires it clean, so
+a known-broken behaviour elsewhere cannot ship green. All of this runs under the project's
+**configured environment** (`verify.python`/`verify.full_suite` in config, else the project
+venv, then the engine's own): an unusable env is a hard, surfaced error, never a silent
+`127 pytest: not found` that reads as "not yet verified". And `steward lint` reconciles the
+marker against the ledger — a `done` REQ whose ledger `land` is `failed`/absent is a hard
+lint error, because the ledger is the cursor of record and a hand-edited `done` must not
+outrun it.
+
 ## The ledger (`.devsteward/`)
 
 - `state.yaml` — round-trip-stable YAML: the profile, the cursor, the per-step status

@@ -37,3 +37,16 @@ git:
   production_branch: main
   integration_branch: dev
   feature_branch: req-{num}-{slug}
+
+# How the land gate verifies (REQ-028). A `land` step is DONE only when its named
+# acceptance behaviour *observably ran and passed*: a skipped or zero-collection named
+# test fails the gate (skip ≠ green), and the whole suite must be clean.
+#   full_suite — the command for the project's full test suite, run at land in addition
+#                to each named acceptance test (default `python -m pytest`; set to `null`
+#                to disable). Skips in the full suite stay legal; failures/errors fail land.
+#   python     — optional explicit interpreter the gate runs tests under (e.g.
+#                `.venv/bin/python`). A configured-but-unusable interpreter is a hard,
+#                surfaced error. Unset: discover the project venv, then the engine's own.
+# verify:
+#   full_suite: python -m pytest
+#   python: .venv/bin/python
