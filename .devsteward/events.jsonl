@@ -48,3 +48,5 @@
 {"ts": "2026-06-08T20:22:37+00:00", "event": "checkpoint", "step": "REQ-020:build", "commit": "af2c7be52ab149b2d2f0d80b913c8de29f3a0f51"}
 {"ts": "2026-06-09T04:01:48+00:00", "event": "step_started", "step": "REQ-020:land", "command": "/advance REQ-020 land"}
 {"ts": "2026-06-09T04:04:31+00:00", "event": "verify", "step": "REQ-020:land", "ok": false, "detail": "[127] python -m pytest tests/test_branch_lifecycle.py::test_creates_and_switches_branch_on_first_build\n    /bin/sh: 1: python: not found"}
+{"ts": "2026-06-09T04:14:29+00:00", "event": "step_started", "step": "REQ-021:design", "command": "/advance REQ-021 design"}
+{"ts": "2026-06-09T04:17:10+00:00", "event": "verify", "step": "REQ-021:design", "ok": true, "detail": "no acceptance tests declared (marker trust)"}
