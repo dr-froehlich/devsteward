@@ -58,3 +58,4 @@
 {"ts": "2026-06-09T04:22:33+00:00", "event": "step_started", "step": "REQ-021:land", "command": "/advance REQ-021 land"}
 {"ts": "2026-06-09T06:09:50+00:00", "event": "reconcile", "step": "REQ-020:land", "ok": true, "detail": "ledger flip failed→done: land verify hit exit 127 (python not found in engine env, only python3/.venv); tests pass under the venv and the REQ was merged into dev manually (6297636, merge 03c3089). engine fix: verifier now rebinds python token to sys.executable"}
 {"ts": "2026-06-09T09:00:00+00:00", "event": "verify", "step": "REQ-021:land", "ok": true, "detail": "6 acceptance tests green under .venv interpreter (manual land; interrupted run reconciled)"}
+{"ts": "2026-06-09T09:00:01+00:00", "event": "checkpoint", "step": "REQ-021:land", "commit": "b06b7c8e5c15f7a7930c1397fc7b02b9a2d9c940"}
