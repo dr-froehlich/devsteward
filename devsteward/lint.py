@@ -8,7 +8,10 @@ Checks, per the plan:
 4. **index ↔ REQ in sync** — every REQ has a row in ``REQUIREMENTS_INDEX.md`` and vice
    versa, with matching status;
 5. every acceptance criterion has a non-empty **test id**;
-6. the frozen north star ``REQ-001`` is not silently mutated away from its declared kind.
+6. the frozen north star ``REQ-001`` is not silently mutated away from its declared kind;
+7. **marker ↔ ledger** — a ledger-tracked REQ marked ``done`` in frontmatter has a green
+   ``land`` in the ledger (REQ-028 AC5): the ledger is the cursor of record, and a
+   hand-edited ``done`` over a ``failed``/absent land must not pass unseen.
 
 Returns a list of human-readable problems; empty ⇒ green.
 """
@@ -22,6 +25,8 @@ from pathlib import Path
 import jsonschema
 
 from .config import Config
+from .core.ledger import Ledger
+from .core.model import StepStatus
 from .profiles.req.index import read_statuses
 from .profiles.req.reqfile import ReqFile, load_reqs
 
@@ -123,5 +128,27 @@ def lint(cfg: Config) -> list[str]:
     north = next((r for r in reqs if r.id == "REQ-001"), None)
     if north is not None and north.status in ("dropped", "superseded"):
         problems.append("REQ-001 (north star) must not be dropped or superseded")
+
+    # 7. marker ↔ ledger reconciliation (REQ-028 AC5). A REQ is *ledger-tracked* if any of
+    #    its steps appears in state.yaml; for such a REQ marked `done`, its `land` step must
+    #    be DONE in the ledger. A `done` over a failed/absent land is the FlowSteward
+    #    false-done shape. Mirror lint rule 5: REQs the engine never drove (pre-ledger or
+    #    imported `done`s with no footprint) are outside the ledger's purview and untouched.
+    ledger = Ledger(cfg.root)
+    if ledger.exists():
+        statuses = ledger.all_statuses()
+        for r in reqs:
+            if r.status.lower() != "done":
+                continue
+            tracked = any(sid.startswith(f"{r.id}:") for sid in statuses)
+            if not tracked:
+                continue
+            land = statuses.get(f"{r.id}:land")
+            if land is not StepStatus.DONE:
+                shown = land.value if land is not None else "absent"
+                problems.append(
+                    f"{r.id}: frontmatter status 'done' but ledger land step is "
+                    f"'{shown}' — the ledger contradicts the marker"
+                )
 
     return problems

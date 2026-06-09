@@ -56,6 +56,7 @@ class Config:
             "feature_branch": "req-{num}-{slug}",
         }
     )
+    verify: dict = field(default_factory=dict)
     raw: dict = field(default_factory=dict)
 
     @property
@@ -93,6 +94,20 @@ class Config:
         return (self.claude or {}).get("effort", "high")
 
     @property
+    def verify_full_suite(self) -> str | None:
+        """The full project suite the land gate runs (REQ-028 AC3); default ``python -m
+        pytest`` at the repo root. Set ``verify.full_suite`` to ``null`` to disable it."""
+        return (self.verify or {}).get("full_suite", "python -m pytest")
+
+    @property
+    def verify_python(self) -> str | None:
+        """Optional explicit interpreter the land gate runs tests under (REQ-028 AC4).
+
+        A configured-but-unusable interpreter is a hard error, not a fall-through. Unset
+        (the default) means discover: project venv, then ``sys.executable``."""
+        return (self.verify or {}).get("python")
+
+    @property
     def index_path(self) -> Path:
         return self.root / self.index_file
 
@@ -117,5 +132,6 @@ def load_config(root: Path | None = None) -> Config:
         accounts=data.get("accounts", {"provider": "cswap"}),
         claude=data.get("claude", {"permission_mode": "dangerously-skip"}),
         git=data.get("git", {}),
+        verify=data.get("verify", {}),
         raw=data,
     )

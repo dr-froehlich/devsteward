@@ -58,3 +58,90 @@ def test_executor_refuses_land_without_tests(project):
     assert res.outcome is RunOutcome.VERIFY_FAILED
     assert committer.committed == []
     assert Ledger(project).status_of("REQ-X:land") is StepStatus.FAILED
+
+
+# --- REQ-028: a skip is not green; zero collected is not green; the full suite gates ----
+
+
+def test_land_skip_is_not_green(tmp_path):
+    """AC1: a named acceptance test that *skips* fails the land gate (skip ≠ green); a
+    passing test still passes, and design/build still pass on marker-trust."""
+    test_file = tmp_path / "test_behaviour.py"
+    test_file.write_text(
+        "import pytest\n"
+        "def test_proves_x():\n"
+        "    pytest.skip('no live socket on a clean checkout')\n",
+        encoding="utf-8",
+    )
+    v = ReqVerifier(cwd=str(tmp_path), full_suite=None)
+    step = Step(
+        id="REQ-X:land",
+        command="/advance",
+        phase="land",
+        verify=(f"python -m pytest {test_file.name}::test_proves_x",),
+    )
+    ok, reason = v.verify(step)
+    assert ok is False, reason
+    assert "skip" in reason.lower()
+
+    # the very same named test, now actually proving X, passes
+    test_file.write_text("def test_proves_x():\n    assert True\n", encoding="utf-8")
+    assert v.verify(step)[0] is True
+
+    # REQ-015 Decision 2 preserved: design/build carry no tests and marker-trust through
+    for phase in ("design", "build"):
+        s = Step(id=f"REQ-X:{phase}", command="/advance", verify=(), phase=phase)
+        assert v.verify(s)[0] is True, f"{phase} should advance on marker-trust"
+
+
+def test_land_zero_collected_is_not_green(tmp_path):
+    """AC2: a named test command that collects zero tests (a non-existent, renamed, or
+    unowned id) fails the gate rather than reading an empty selection as green."""
+    test_file = tmp_path / "test_behaviour.py"
+    test_file.write_text("def test_real():\n    assert True\n", encoding="utf-8")
+    v = ReqVerifier(cwd=str(tmp_path), full_suite=None)
+    step = Step(
+        id="REQ-X:land",
+        command="/advance",
+        phase="land",
+        verify=(f"python -m pytest {test_file.name}::test_does_not_exist",),
+    )
+    ok, reason = v.verify(step)
+    assert ok is False, reason
+    assert "0 tests" in reason
+
+    # the real, owned test id collects and passes
+    good = Step(
+        id="REQ-X:land",
+        command="/advance",
+        phase="land",
+        verify=(f"python -m pytest {test_file.name}::test_real",),
+    )
+    assert v.verify(good)[0] is True
+
+
+def test_land_full_suite_red_fails_step(tmp_path):
+    """AC3: at land the engine runs the full project suite in addition to the named AC
+    tests; a failure elsewhere fails the step even though every named AC test passes."""
+    (tmp_path / "test_named.py").write_text(
+        "def test_named_ac():\n    assert True\n", encoding="utf-8"
+    )
+    (tmp_path / "test_other.py").write_text(
+        "def test_other_behaviour():\n    assert False\n", encoding="utf-8"
+    )
+    v = ReqVerifier(cwd=str(tmp_path), full_suite="python -m pytest")
+    step = Step(
+        id="REQ-X:land",
+        command="/advance",
+        phase="land",
+        verify=("python -m pytest test_named.py::test_named_ac",),
+    )
+    ok, reason = v.verify(step)
+    assert ok is False, reason
+    assert "suite" in reason.lower()
+
+    # with the rest of the suite green, the same land — same passing named test — passes
+    (tmp_path / "test_other.py").write_text(
+        "def test_other_behaviour():\n    assert True\n", encoding="utf-8"
+    )
+    assert v.verify(step)[0] is True

@@ -84,3 +84,7 @@
 {"ts": "2026-06-09T20:19:34+00:00", "event": "checkpoint", "step": "REQ-026:land", "commit": "f1325b3ac6b39852e431063a87d1c2761db17f29"}
 {"ts": "2026-06-09T20:21:43+00:00", "event": "step_started", "step": "REQ-028:design", "command": "/advance REQ-028 design", "recover": false}
 {"ts": "2026-06-09T20:26:20+00:00", "event": "verify", "step": "REQ-028:design", "ok": true, "detail": "no acceptance tests declared (marker trust)"}
+{"ts": "2026-06-09T20:26:20+00:00", "event": "checkpoint", "step": "REQ-028:design", "commit": "85ad61313059f5aad17cfdc9f169b7b5be7d63ef"}
+{"ts": "2026-06-09T20:26:20+00:00", "event": "branch_created", "step": "REQ-028:build", "branch": "req-028-gating-integrity"}
+{"ts": "2026-06-09T20:26:21+00:00", "event": "step_started", "step": "REQ-028:build", "command": "/advance REQ-028 build", "recover": false}
+{"ts": "2026-06-09T20:34:51+00:00", "event": "verify", "step": "REQ-028:build", "ok": true, "detail": "no acceptance tests declared (marker trust)"}

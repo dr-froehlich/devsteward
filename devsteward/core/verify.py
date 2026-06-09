@@ -15,11 +15,15 @@ for steps where no test could exist.
 
 from __future__ import annotations
 
+import os
 import re
 import shlex
 import subprocess
 import sys
+import tempfile
+from dataclasses import dataclass
 from pathlib import Path
+from xml.etree import ElementTree as ET
 
 from .model import Step
 
@@ -75,9 +79,128 @@ def _resolve_interpreter(cmd: str, cwd: str | None = None) -> str:
     if not _PY_PREFIX.match(cmd):
         return cmd
     interpreter = _pick_interpreter(cwd)
+    return _rebind_python(cmd, interpreter)
+
+
+def _rebind_python(cmd: str, interpreter: str) -> str:
+    """Rebind a leading bare ``python``/``python3`` token to an explicit interpreter."""
+    if not _PY_PREFIX.match(cmd):
+        return cmd
     return _PY_PREFIX.sub(
         lambda m: f"{m.group(1)}{shlex.quote(interpreter)}{m.group(3)}", cmd, count=1
     )
+
+
+class NoUsableEnvError(RuntimeError):
+    """No interpreter that can import pytest was found among the candidates.
+
+    REQ-028 Decision 4: a configured-but-unusable environment (or a discovery that turns
+    up nothing pytest-capable) is a **hard, surfaced** error — never a silent skip-ahead
+    that lets the test command die with ``127``/``No module named pytest`` and read as
+    "not yet verified". A ``done`` must never be reachable *because* the suite couldn't run.
+    """
+
+
+def resolve_test_interpreter(cwd: str | None = None, configured: str | None = None) -> str:
+    """The interpreter the land gate runs its tests under, or a hard error.
+
+    ``configured`` (``verify.python`` in project config) is authoritative: if set but it
+    cannot import pytest, that is a :class:`NoUsableEnvError`, not a fall-through — an
+    explicit choice that doesn't work must surface, not be quietly replaced. With no
+    configured interpreter, discovery prefers the project venv, then ``sys.executable``,
+    taking the first that can import pytest; if none can, that too is a hard error.
+    """
+    if configured:
+        interp = configured
+        if not os.path.isabs(interp):
+            interp = str(Path(cwd or ".") / interp)
+        if _has_pytest(interp):
+            return interp
+        raise NoUsableEnvError(
+            f"configured test interpreter cannot import pytest: {configured}"
+        )
+    candidates = [*_venv_interpreters(cwd), sys.executable]
+    for interp in candidates:
+        if _has_pytest(interp):
+            return interp
+    raise NoUsableEnvError(
+        "no interpreter can import pytest among: " + ", ".join(candidates)
+    )
+
+
+def _is_pytest_command(cmd: str) -> bool:
+    """True if ``cmd`` invokes pytest (``python -m pytest …`` or a ``pytest`` executable).
+
+    Only pytest commands carry machine-readable per-test outcomes (via JUnit XML); a
+    non-pytest acceptance command falls back to exit-code semantics.
+    """
+    try:
+        toks = shlex.split(cmd)
+    except ValueError:
+        toks = cmd.split()
+    return any(
+        t == "pytest" or t.endswith("/pytest") or t.endswith("\\pytest") or t.endswith("pytest.exe")
+        for t in toks
+    )
+
+
+@dataclass(frozen=True)
+class Outcome:
+    """Per-test counts parsed from a pytest run's JUnit XML.
+
+    ``parsed`` records whether the XML was produced and read; an unparsed run that exited
+    non-zero (usage/collection error) reports ``collected == 0``.
+    """
+
+    collected: int
+    passed: int
+    skipped: int
+    failed: int
+    errors: int
+    returncode: int
+    tail: str
+    parsed: bool
+
+
+def _pytest_outcome(cmd: str, cwd: str | None, timeout: float) -> Outcome:
+    """Run a pytest command with an injected ``--junitxml`` and parse per-test counts.
+
+    Exit code 0 cannot tell a pass from a skip (both exit 0) or a zero-collection from a
+    real pass; the built-in JUnit XML can. No plugin/dependency is added — ``--junitxml``
+    and ``junit_family=xunit2`` ship with pytest.
+    """
+    fd, xml_path = tempfile.mkstemp(suffix=".xml", prefix="devsteward-junit-")
+    os.close(fd)
+    try:
+        full = f"{cmd} --junitxml={shlex.quote(xml_path)} -o junit_family=xunit2"
+        try:
+            proc = subprocess.run(
+                full, shell=True, cwd=cwd, capture_output=True, text=True, timeout=timeout
+            )
+        except subprocess.TimeoutExpired:
+            return Outcome(0, 0, 0, 0, 0, 124, f"timeout: {cmd}", parsed=False)
+        tail = "\n    ".join((proc.stdout + proc.stderr).strip().splitlines()[-3:])
+        collected = passed = skipped = failed = errors = 0
+        parsed = False
+        if os.path.exists(xml_path) and os.path.getsize(xml_path) > 0:
+            try:
+                root = ET.parse(xml_path).getroot()
+            except ET.ParseError:
+                root = None
+            if root is not None:
+                for suite in root.iter("testsuite"):
+                    collected += int(suite.get("tests", 0) or 0)
+                    failed += int(suite.get("failures", 0) or 0)
+                    errors += int(suite.get("errors", 0) or 0)
+                    skipped += int(suite.get("skipped", 0) or 0)
+                    parsed = True
+                passed = max(collected - failed - errors - skipped, 0)
+        return Outcome(collected, passed, skipped, failed, errors, proc.returncode, tail, parsed)
+    finally:
+        try:
+            os.unlink(xml_path)
+        except OSError:
+            pass
 
 
 class CommandVerifier:

@@ -29,10 +29,15 @@ def build_on_verified(cfg: Config):
 
 def build_verifier(cfg: Config):
     # The REQ profile gives the guarantee teeth at land (a land step must run real
-    # acceptance tests); the generic profile keeps the plain run-named-tests verifier.
+    # acceptance tests, no skip/zero-collection passes, the full suite is clean, and the
+    # project env is resolved — REQ-028); the generic profile keeps the plain verifier.
     if cfg.profile == "generic":
         return CommandVerifier(cwd=str(cfg.root))
-    return ReqVerifier(cwd=str(cfg.root))
+    return ReqVerifier(
+        cwd=str(cfg.root),
+        full_suite=cfg.verify_full_suite,
+        python=cfg.verify_python,
+    )
 
 
 def build_accounts(
