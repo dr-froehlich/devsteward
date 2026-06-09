@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import jsonschema
+
 from devsteward.config import Config
-from devsteward.lint import lint
+from devsteward.lint import _schema, lint
 
 from conftest import write_index, write_req
 
@@ -97,6 +99,70 @@ def test_test_id_required_only_for_active(tmp_path):
     write_index(open_dir, [("REQ-001", "REQ-001", "OPEN", "–")])
     cfg = Config(root=open_dir, requirements_dir="", index_file="REQUIREMENTS_INDEX.md")
     assert any("test id" in p for p in lint(cfg))
+
+
+# --- REQ-021: lettered REQ ids (single-letter suffix on the 3-digit number) ------------
+
+
+def _valid_frontmatter(**overrides) -> dict:
+    """A minimal schema-valid REQ frontmatter dict, with fields overridable."""
+    fm = {
+        "id": "REQ-099",
+        "title": "letter",
+        "status": "open",
+        "kind": "feature",
+        "added": "2026-06-09",
+        "depends_on": [],
+    }
+    fm.update(overrides)
+    return fm
+
+
+def test_lettered_id_schema_accepts_and_rejects():
+    """AC1 — the schema accepts a single trailing letter on id, depends_on, and supersedes,
+    and rejects a multi-letter or numeric suffix."""
+    validator = jsonschema.Draft202012Validator(_schema())
+
+    def errs(fm: dict) -> list:
+        return list(validator.iter_errors(fm))
+
+    # accepted: a lettered id, a lettered depends_on item, and a lettered supersedes.
+    assert errs(_valid_frontmatter(id="REQ-099z")) == []
+    assert errs(_valid_frontmatter(depends_on=["REQ-099z"])) == []
+    assert errs(_valid_frontmatter(supersedes="REQ-099z")) == []
+
+    # rejected: two letters, a trailing digit (no letter slot for it), each on every field.
+    for bad in ("REQ-099ab", "REQ-0991"):
+        assert errs(_valid_frontmatter(id=bad)), f"id {bad} should be rejected"
+        assert errs(_valid_frontmatter(depends_on=[bad])), f"depends_on {bad} should reject"
+        assert errs(_valid_frontmatter(supersedes=bad)), f"supersedes {bad} should reject"
+
+
+def test_lettered_id_index_row_synced(tmp_path):
+    """AC2 — _INDEX_ROW_RE matches a lettered-id row, so a lettered REQ with its row present
+    lints clean (no 'missing a row') and its status is sync-checked."""
+    req_dir = tmp_path / "reqs"
+    write_req(req_dir, "REQ-028p", status="done")
+    write_index(req_dir, [("REQ-028p", "persistent cart", "DONE", "–")])
+    problems = lint(_cfg(tmp_path))
+    assert problems == []
+    assert not any("missing a row" in p for p in problems)
+
+    # and the row's status is actually compared: drift on the lettered id is flagged.
+    write_index(req_dir, [("REQ-028p", "persistent cart", "OPEN", "–")])  # index says OPEN
+    assert any("index status" in p for p in lint(_cfg(tmp_path)))
+
+
+def test_lettered_id_depends_on_resolves(tmp_path):
+    """AC3 — a REQ whose depends_on references a lettered id passes schema and cross-ref."""
+    req_dir = tmp_path / "reqs"
+    write_req(req_dir, "REQ-027", status="open", depends_on=["REQ-028p"])
+    write_req(req_dir, "REQ-028p", status="done")
+    write_index(req_dir, [("REQ-027", "uses cart", "OPEN", "REQ-028p"),
+                          ("REQ-028p", "persistent cart", "DONE", "–")])
+    problems = lint(_cfg(tmp_path))
+    assert problems == []
+    assert not any("resolve" in p for p in problems)
 
 
 def test_cycle_detected(tmp_path):

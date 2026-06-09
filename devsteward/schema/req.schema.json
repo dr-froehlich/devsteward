@@ -9,8 +9,8 @@
   "properties": {
     "id": {
       "type": "string",
-      "pattern": "^REQ-[0-9]{3}$",
-      "description": "Zero-padded requirement id, e.g. REQ-001."
+      "pattern": "^REQ-[0-9]{3}[a-z]?$",
+      "description": "Zero-padded requirement id, e.g. REQ-001. An optional single lowercase letter splits an umbrella REQ into sub-parts (e.g. REQ-028p), purely lexically — no parent/child semantics."
     },
     "title": {
       "type": "string",
@@ -39,7 +39,7 @@
     },
     "depends_on": {
       "type": "array",
-      "items": { "type": "string", "pattern": "^REQ-[0-9]{3}$" },
+      "items": { "type": "string", "pattern": "^REQ-[0-9]{3}[a-z]?$" },
       "uniqueItems": true
     },
     "concept_refs": {
@@ -54,7 +54,7 @@
     },
     "supersedes": {
       "type": ["string", "null"],
-      "pattern": "^REQ-[0-9]{3}$"
+      "pattern": "^REQ-[0-9]{3}[a-z]?$"
     },
     "tags": {
       "type": "array",

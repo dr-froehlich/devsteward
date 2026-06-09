@@ -13,7 +13,9 @@ point: a sharp `/intake` is worth more than fast output. Institutionalize the qu
 - Read `CLAUDE.md`, `docs/requirements/REQ-001.md` (the north star), and
   `docs/requirements/REQUIREMENTS_INDEX.md`. The new REQ must advance REQ-001 or be
   explicitly scoped against it.
-- Find the next free id: highest `REQ-NNN` in the index + 1, zero-padded.
+- Find the next free id: highest `REQ-NNN` in the index + 1, zero-padded. Ids may carry a
+  trailing letter (`REQ-028p`, an umbrella split into sub-parts) — **strip any trailing
+  letter before taking the max**, so `REQ-028p` counts as `028`, never `028` + 1 skipped.
 
 ## 2. Interrogate (the sacred part)
 
