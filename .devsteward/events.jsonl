@@ -65,3 +65,6 @@
 {"ts": "2026-06-09T07:40:14+00:00", "event": "branch_created", "step": "REQ-025:build", "branch": "req-025-visible-account-rotation-fixed-quota"}
 {"ts": "2026-06-09T07:40:14+00:00", "event": "step_started", "step": "REQ-025:build", "command": "/advance REQ-025 build"}
 {"ts": "2026-06-09T07:59:15+00:00", "event": "verify", "step": "REQ-025:build", "ok": true, "detail": "no acceptance tests declared (marker trust)"}
+{"ts": "2026-06-09T07:59:15+00:00", "event": "checkpoint", "step": "REQ-025:build", "commit": "564efc64896fb15a257bd4e4147e64b09a00868c"}
+{"ts": "2026-06-09T07:59:15+00:00", "event": "step_started", "step": "REQ-025:land", "command": "/advance REQ-025 land"}
+{"ts": "2026-06-09T10:30:00+00:00", "event": "verify", "step": "REQ-025:land", "ok": true, "detail": "10 acceptance tests green under .venv interpreter (AC1-AC10); full suite 100 passed, 1 skipped; steward lint OK (interactive land, DEVSTEWARD_UNATTENDED stale)"}
