@@ -49,6 +49,12 @@ three bundled skills. Built and dogfooded in Phase 0/1.
 - REQ-024 — **`onboard` skill** (draft): orchestrate the full migration of an existing project
   (convert → seed → stamp → reconcile) with verification gates and merge-not-overwrite. Plan
   0005 pieces 2–5; memzy is the reality test before heavier projects.
+- REQ-025 — **visible account rotation + fixed-quota gating + graceful stop** (draft;
+  eligible now): port `Theresa/run_batch.py`'s proven machinery onto the engine seams —
+  read cswap `usage.json` for 5h/7d %, gate at a fixed 70% (CLI/config overridable, no
+  adaptive), prefer-current rotation with `--use` pin, interruptible wait through resets,
+  visible utilization/switch lines, two-level Ctrl-C, `start_new_session=True` (no Ctrl-C
+  to claude), and `--model`/`--effort` defaulting to Opus/high.
 - Future REQs land here as `/intake` produces them.
 
 ## Dependency graph
@@ -64,7 +70,7 @@ REQ-001
  └─ REQ-003 ──┬─ REQ-004 ── REQ-022 (draft, seed-ledger; with REQ-021)
               ├─ REQ-005 ── REQ-009
               ├─ REQ-006
-              ├─ REQ-008
+              ├─ REQ-008 ── REQ-012 ── REQ-025 (draft, account rotation + quota gate + graceful stop; with REQ-003)
               └─ REQ-018 (draft, interactive checkpoint)
  REQ-011 (done, production-branch guard) ── REQ-019 (done, integration-branch guard) ── REQ-020 (draft, branch lifecycle automation)
  REQ-024 (draft, onboard skill) ── orchestrates REQ-007 + REQ-009 + REQ-010/023 + REQ-021 + REQ-022 (memzy onboarding)
