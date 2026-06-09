@@ -1,7 +1,7 @@
 version: 1
 profile: req
 cursor:
-  step: REQ-021:land
+  step: REQ-025:design
 steps:
   REQ-011:design:
     status: done
@@ -39,4 +39,7 @@ steps:
   REQ-021:land:
     status: done
     updated: '2026-06-09T09:00:00+00:00'
+  REQ-025:design:
+    status: running
+    updated: '2026-06-09T07:34:30+00:00'
 decisions: []
