@@ -14,7 +14,7 @@ from devsteward.core.verify import CommandVerifier
 from conftest import FakeRunner, ListStepSource, RecordingCommitter, ok_result, park_result
 
 
-def _executor(root, steps, runner, committer=None):
+def _executor(root, steps, runner, committer=None, on_verified=None):
     return Executor(
         root=root,
         source=ListStepSource(steps),
@@ -22,6 +22,7 @@ def _executor(root, steps, runner, committer=None):
         accounts=SingleAccountProvider(),
         runner=runner,
         committer=committer or RecordingCommitter(),
+        on_verified=on_verified,
     )
 
 
@@ -46,6 +47,74 @@ def test_verify_failure_blocks_done(project):
 
     res = ex.run_step(step)
     assert res.outcome is RunOutcome.VERIFY_FAILED
+    assert committer.committed == []
+    assert Ledger(project).status_of("REQ-009:land") is StepStatus.FAILED
+
+
+def test_on_verified_runs_after_pass_before_commit(project):
+    """The terminal-flip hook fires only on a passing verify, ahead of the commit, so any
+    status flip it makes is captured by the one checkpoint commit (the engine-owns-`done`
+    fix)."""
+    order: list[str] = []
+    step = Step(id="REQ-009:land", command="/advance", verify=("true",))
+
+    class Spy(RecordingCommitter):
+        def __call__(self, s):
+            order.append("commit")
+            return super().__call__(s)
+
+    committer = Spy()
+    ex = _executor(
+        project, [step], FakeRunner(default=ok_result()), committer,
+        on_verified=lambda s: order.append(f"verified:{s.id}"),
+    )
+    res = ex.run_step(step)
+    assert res.outcome is RunOutcome.DONE
+    assert order == ["verified:REQ-009:land", "commit"]
+
+
+def test_on_verified_skipped_when_verify_fails(project):
+    """A failed land never reaches the terminal flip — nothing writes a premature `done`."""
+    calls: list[str] = []
+    step = Step(id="REQ-009:land", command="/advance", verify=("false",))
+    ex = _executor(
+        project, [step], FakeRunner(default=ok_result()),
+        on_verified=lambda s: calls.append(s.id),
+    )
+    res = ex.run_step(step)
+    assert res.outcome is RunOutcome.VERIFY_FAILED
+    assert calls == []
+
+
+def test_checkpoint_flips_commits_and_advances(project):
+    """`steward checkpoint` runs the verify→flip→commit→advance tail for an interactive
+    land — one transaction, no claude call."""
+    flipped: list[str] = []
+    step = Step(id="REQ-009:land", command="/advance", verify=("true",))
+    committer = RecordingCommitter()
+    ex = _executor(
+        project, [step], FakeRunner(default=ok_result()), committer,
+        on_verified=lambda s: flipped.append(s.id),
+    )
+    res = ex.checkpoint(step)
+    assert res.outcome is RunOutcome.DONE
+    assert flipped == ["REQ-009:land"]
+    assert committer.committed == ["REQ-009:land"]
+    assert Ledger(project).status_of("REQ-009:land") is StepStatus.DONE
+
+
+def test_checkpoint_verify_failure_does_not_flip_or_commit(project):
+    """A red checkpoint marks the step failed and touches neither the flip nor the commit."""
+    flipped: list[str] = []
+    step = Step(id="REQ-009:land", command="/advance", verify=("false",))
+    committer = RecordingCommitter()
+    ex = _executor(
+        project, [step], FakeRunner(default=ok_result()), committer,
+        on_verified=lambda s: flipped.append(s.id),
+    )
+    res = ex.checkpoint(step)
+    assert res.outcome is RunOutcome.VERIFY_FAILED
+    assert flipped == []
     assert committer.committed == []
     assert Ledger(project).status_of("REQ-009:land") is StepStatus.FAILED
 

@@ -94,11 +94,16 @@ class Executor:
         feature_branch_template: str = "req-{num}-{slug}",
         git: GitTopology | None = None,
         branch_resolver: Callable[[Path], str] | None = None,
+        on_verified: Callable[[Step], None] | None = None,
     ):
         self.root = Path(root)
         self.source = source
         self.verifier = verifier
         self.accounts = accounts
+        # Profile hook run *after* a passing verify and *before* the checkpoint commit, so
+        # any status flip it makes (the REQ profile marks the REQ `done`) is gated on green
+        # tests and rides in the same commit. None for the generic profile.
+        self.on_verified = on_verified
         self.runner = runner
         self.committer = committer
         self.autocommit = autocommit
@@ -315,12 +320,55 @@ class Executor:
             led.save()
             return StepResult(step, RunOutcome.VERIFY_FAILED, detail)
 
+        # Terminal flip (verify-gated, in-commit): let the profile mark the work done
+        # *before* the commit so the status change is captured by the one checkpoint commit,
+        # never authored speculatively by the skill ahead of verification.
+        if self.on_verified is not None:
+            self.on_verified(step)
+
         # Commit + advance.
         sha = self._commit(step)
         led.set_status(step.id, StepStatus.DONE)
         led.save()
         led.append_event("checkpoint", step=step.id, commit=sha)
         return StepResult(step, RunOutcome.DONE, detail, commit=sha)
+
+    def checkpoint(self, step: Step) -> StepResult:
+        """The verify → flip → commit → advance *tail*, for an interactive land the human
+        already did (no ``claude`` invocation).
+
+        Interactive ``/advance`` does the thinking and leaves the tree dirty; this command
+        (``steward checkpoint``) re-runs the named acceptance tests, lets the profile flip
+        the REQ ``done``, makes the one authoritative commit, and advances the ledger —
+        the *same* atomic tail :meth:`run_step` uses in batch. It replaces the old manual
+        hand-edit of ``state.yaml`` that let the ledger drift out of sync with a committed
+        ``done`` (the REQ-025 failure shape).
+        """
+        refusal = self.branch_guard()
+        if refusal is not None:  # never commit a checkpoint onto the production branch
+            return StepResult(step, RunOutcome.REFUSED, refusal)
+        led = self.ledger
+        verified, detail = self.verifier.verify(step)
+        led.append_event("verify", step=step.id, ok=verified, detail=detail[:2000])
+        if not verified:
+            led.set_status(step.id, StepStatus.FAILED)
+            led.save()
+            return StepResult(step, RunOutcome.VERIFY_FAILED, detail)
+        if self.on_verified is not None:
+            self.on_verified(step)
+        sha = self._commit(step)
+        led.set_cursor(step.id)
+        led.set_status(step.id, StepStatus.DONE)
+        led.save()
+        led.append_event("checkpoint", step=step.id, commit=sha)
+        return StepResult(step, RunOutcome.DONE, detail, commit=sha)
+
+    def step_by_id(self, step_id: str) -> Step | None:
+        """Look up a derived step by id (``steward checkpoint`` resolves its target here)."""
+        for s in self.steps():
+            if s.id == step_id:
+                return s
+        return None
 
     def _detect_park(self, step: Step, text: str) -> Decision | None:
         """A fork is parked if the skill wrote a new open decision for this step, or

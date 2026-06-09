@@ -49,14 +49,18 @@ yet.
 in the REQ's `yaml acceptance` block, so they exist and can run at Land. Match the
 surrounding code's style. English-only code; isolate any localized UI strings.
 
-**C · Land** — make every acceptance test green, update the REQ's `status: done`,
-`completed:` date, and `verified_by:`, sync its `REQUIREMENTS_INDEX.md` row, and ensure
-`steward lint` is green. Green must be **real** either way:
+**C · Land** — make every acceptance test green and fill the REQ's `completed:` date and
+`verified_by:`. **Do not touch `status:` and do not edit the `REQUIREMENTS_INDEX.md` row —
+the engine owns the flip to `done`** and writes it (frontmatter + index, in lockstep) only
+*after* the acceptance tests pass for real. Writing `done` yourself before verification is
+the false-done hole: a failed land would leave a stray `done` in the working tree, which
+makes the not-yet-landed REQ look finished. Ensure `steward lint` is green. Green must be
+**real** either way:
 
-- *(batch)* the engine re-runs the named tests independently before it marks the step done —
-  do not fake green.
-- *(interactive)* there is no engine recheck, so you are attesting green to the human — run
-  the tests for real before you claim it.
+- *(batch)* the engine re-runs the named tests independently, then flips the REQ + index to
+  `done` inside the one checkpoint commit — do not fake green.
+- *(interactive)* `steward checkpoint` (see Close) re-runs the tests and does the flip — you
+  are attesting green to the human, so run them for real first.
 
 ## 3. At a fork (a decision you can't resolve from the REQ + repo)
 
@@ -70,15 +74,17 @@ surrounding code's style. English-only code; isolate any localized UI strings.
 
 End with the fixed report (below) **after** handling the commit per your mode:
 
-- *(interactive)* **you are the engine — supply its bookkeeping yourself:** branch first (no
-  engine branch-guard runs here); commit your work (same-commit discipline — frontmatter +
-  index + code together, co-author trailer); **and advance the ledger** — mark this step
-  `done` and record the checkpoint so the cursor moves to the next step, else the next
-  `/advance` redoes this one. Today that last step is a hand-edit of `.devsteward/state.yaml`
-  + `events.jsonl` (a `steward checkpoint` command is planned to automate it).
+- *(interactive)* branch first (no engine branch-guard runs in your client), then run
+  **`steward checkpoint REQ-NNN <phase>`**. It is the engine's bookkeeping as one
+  transaction: it re-runs the acceptance tests, flips the REQ + index to `done` (land only),
+  makes the one authoritative commit (frontmatter + index + code together, co-author
+  trailer), and advances the ledger so the cursor moves on. Do **not** commit separately and
+  do **not** hand-edit `state.yaml` — `checkpoint` is the committer (committing first would
+  double-commit; editing the ledger by hand is what let it drift out of sync with a committed
+  `done`).
 - *(batch)* do **not** commit and do **not** branch. Leave the working tree dirty; the engine
-  verifies, makes the one authoritative commit, and advances the ledger. Committing here would
-  *double-commit* — the engine commits too.
+  verifies, flips the REQ + index to `done`, makes the one authoritative commit, and advances
+  the ledger. Committing here would *double-commit* — the engine commits too.
 
 ```
 Did:       <what this checkpoint produced>

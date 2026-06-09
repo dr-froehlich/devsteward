@@ -283,6 +283,37 @@ def advance(
     _print_report(ex, res)
 
 
+# -- checkpoint (interactive land tail) ---------------------------------------
+
+
+@main.command()
+@click.argument("req_id")
+@click.argument("phase", default="land")
+def checkpoint(req_id: str, phase: str) -> None:
+    """Verify, flip the REQ done, commit, and advance the ledger — one transaction.
+
+    The interactive ``/advance`` skill does the thinking and leaves the tree dirty; this
+    runs the engine's verify → flip-done → commit → advance tail (no ``claude`` call), so
+    the frontmatter ``done``, the index row, the commit, and the ledger checkpoint can no
+    longer drift apart. Use it in place of hand-editing ``state.yaml``.
+    """
+    cfg = _load_or_die()
+    ex = build_executor(cfg)
+    step_id = f"{req_id}:{phase}"
+    step = ex.step_by_id(step_id)
+    if step is None:
+        raise click.ClickException(
+            f"{step_id} is not a derivable step — is {req_id} active (not draft/done) and "
+            f"is the phase one of design/build/land?"
+        )
+    res = ex.checkpoint(step)
+    if res.outcome is RunOutcome.REFUSED:
+        raise click.ClickException(res.detail)
+    if res.outcome is RunOutcome.VERIFY_FAILED:
+        raise click.ClickException(f"verify failed — not checkpointed:\n{res.detail}")
+    _print_report(ex, res)
+
+
 # -- run (unattended) ---------------------------------------------------------
 
 

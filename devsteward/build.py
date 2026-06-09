@@ -9,6 +9,7 @@ from .core.git import GitCli
 from .core.verify import CommandVerifier
 from .profiles.generic import GenericStepSource
 from .profiles.req import ReqStepSource
+from .profiles.req.checkpoint import ReqDoneFlipper
 from .profiles.req.verify import ReqVerifier
 
 
@@ -16,6 +17,14 @@ def build_step_source(cfg: Config):
     if cfg.profile == "generic":
         return GenericStepSource()
     return ReqStepSource(cfg.req_dir)
+
+
+def build_on_verified(cfg: Config):
+    """The REQ profile owns the verify-gated terminal flip (REQ → ``done``); the generic
+    profile has no content status to flip."""
+    if cfg.profile == "generic":
+        return None
+    return ReqDoneFlipper(cfg.req_dir, cfg.index_path)
 
 
 def build_verifier(cfg: Config):
@@ -76,4 +85,5 @@ def build_executor(
         integration_branch=cfg.integration_branch,
         feature_branch_template=cfg.feature_branch_template,
         git=GitCli(cfg.root),
+        on_verified=build_on_verified(cfg),
     )
