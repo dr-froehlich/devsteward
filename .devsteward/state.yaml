@@ -46,6 +46,9 @@ steps:
     status: done
     updated: '2026-06-09T07:59:15+00:00'
   REQ-025:land:
-    status: done
-    updated: '2026-06-09T10:30:00+00:00'
+    status: failed
+    updated: '2026-06-09T08:02:32+00:00'
+  REQ-026:design:
+    status: running
+    updated: '2026-06-09T08:02:32+00:00'
 decisions: []

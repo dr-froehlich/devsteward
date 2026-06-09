@@ -68,3 +68,7 @@
 {"ts": "2026-06-09T07:59:15+00:00", "event": "checkpoint", "step": "REQ-025:build", "commit": "564efc64896fb15a257bd4e4147e64b09a00868c"}
 {"ts": "2026-06-09T07:59:15+00:00", "event": "step_started", "step": "REQ-025:land", "command": "/advance REQ-025 land"}
 {"ts": "2026-06-09T10:30:00+00:00", "event": "verify", "step": "REQ-025:land", "ok": true, "detail": "10 acceptance tests green under .venv interpreter (AC1-AC10); full suite 100 passed, 1 skipped; steward lint OK (interactive land, DEVSTEWARD_UNATTENDED stale)"}
+{"ts": "2026-06-09T10:30:01+00:00", "event": "checkpoint", "step": "REQ-025:land", "commit": "453ad4f30f540cdc9b3f7a44d213911136c2490b"}
+{"ts": "2026-06-09T08:02:32+00:00", "event": "verify", "step": "REQ-025:land", "ok": false, "detail": "[1] python -m pytest tests/test_accounts.py::test_usage_snapshot_parses_and_degrades\n    /home/peter/.local/share/pipx/venvs/devsteward/bin/python: No module named pytest"}
+{"ts": "2026-06-09T08:02:32+00:00", "event": "step_started", "step": "REQ-026:design", "command": "/advance REQ-026 design"}
+{"ts": "2026-06-09T08:05:48+00:00", "event": "verify", "step": "REQ-026:design", "ok": true, "detail": "no acceptance tests declared (marker trust)"}
