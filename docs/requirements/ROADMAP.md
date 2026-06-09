@@ -60,6 +60,14 @@ three bundled skills. Built and dogfooded in Phase 0/1.
   recover REQ-NNN` (flip a FAILED step to a new ledger-level `RECOVER` status the existing
   `/advance` skill picks up and assesses; no repair skill), and `--only REQ-NNN` on
   `run`/`advance` to drive a single REQ full-circle, failing if it has no eligible step.
+- REQ-027 — **acceptance criteria must name observable deliverables** (draft): the fix for
+  nine green-but-hollow REQs (canonical: FlowSteward REQ-003 AC1, a mock discharging a
+  system claim). Adds a per-AC `check:` taxonomy (`regression | artifact | manual`) defined
+  by oracle coupling, a lint granularity gate + ≥1-artifact-or-waiver rule for
+  externally-facing REQs, no auto-pass of `manual` checks headless, and rewrites `/intake`
+  to seed system-level, artifact-bound acceptance + declare the optional concept phase and
+  lab dependency. Sets up the System Tester phase/skill and the first lab harness as
+  follow-ons.
 - Future REQs land here as `/intake` produces them.
 
 ## Dependency graph
@@ -77,7 +85,8 @@ REQ-001
               ├─ REQ-006
               ├─ REQ-008 ── REQ-012 ── REQ-025 (draft, account rotation + quota gate + graceful stop; with REQ-003)
               ├─ REQ-018 (draft, interactive checkpoint)
-              └─ REQ-026 (draft, lifecycle CLI: activate / recover / --only; with REQ-002)
+              ├─ REQ-026 (draft, lifecycle CLI: activate / recover / --only; with REQ-002)
+              └─ REQ-027 (draft, acceptance taxonomy + intake seeding; with REQ-002)
  REQ-011 (done, production-branch guard) ── REQ-019 (done, integration-branch guard) ── REQ-020 (draft, branch lifecycle automation)
  REQ-024 (draft, onboard skill) ── orchestrates REQ-007 + REQ-009 + REQ-010/023 + REQ-021 + REQ-022 (memzy onboarding)
 ```
