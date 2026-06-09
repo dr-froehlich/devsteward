@@ -2,6 +2,8 @@
 non-zero exit, zero stream-json events) from a genuine mid-task ERROR, so a broken
 account wrapper or bad argv is diagnosable instead of an opaque false "failed"."""
 
+import sys
+
 from devsteward.core.claude import Outcome, run_claude
 
 
@@ -12,7 +14,7 @@ def test_launch_failure_distinct():
     launch = run_claude(
         "/advance REQ-X build",
         argv_prefix=[
-            "python",
+            sys.executable,
             "-c",
             "import sys; sys.stderr.write('error: unrecognized arguments: exec\\n'); "
             "sys.exit(2)",
@@ -26,7 +28,7 @@ def test_launch_failure_distinct():
     midtask = run_claude(
         "/advance REQ-X build",
         argv_prefix=[
-            "python",
+            sys.executable,
             "-c",
             "import json, sys; "
             "print(json.dumps({'type': 'assistant', 'message': {'content': "
@@ -39,6 +41,6 @@ def test_launch_failure_distinct():
     # A clean run with no output and exit 0 is still OK (no false launch failure).
     fine = run_claude(
         "/advance REQ-X build",
-        argv_prefix=["python", "-c", "pass"],
+        argv_prefix=[sys.executable, "-c", "pass"],
     )
     assert fine.outcome is Outcome.OK

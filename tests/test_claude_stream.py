@@ -2,6 +2,8 @@
 and the CLI printer must render the common event shapes. Guards the fix for the silent
 ``steward advance`` (no visible confirmation that anything is happening)."""
 
+import sys
+
 from devsteward.core.claude import Outcome, run_claude
 
 # A stand-in for `claude`: ignores the appended -p/--output-format args and just prints
@@ -20,7 +22,7 @@ def test_run_claude_emits_events_live():
     seen: list[dict] = []
     res = run_claude(
         "/advance REQ-X design",
-        argv_prefix=["python", "-c", _FAKE_CLAUDE],
+        argv_prefix=[sys.executable, "-c", _FAKE_CLAUDE],
         on_event=seen.append,
     )
     # Every parsed event reached the callback, in order, as it arrived.
@@ -32,7 +34,7 @@ def test_run_claude_emits_events_live():
 
 def test_run_claude_silent_when_no_callback():
     # The default path stays byte-for-byte as before (no callback, full buffer).
-    res = run_claude("cmd", argv_prefix=["python", "-c", _FAKE_CLAUDE])
+    res = run_claude("cmd", argv_prefix=[sys.executable, "-c", _FAKE_CLAUDE])
     assert res.outcome is Outcome.OK
     assert len(res.raw_lines) == 3
 

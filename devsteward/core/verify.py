@@ -15,9 +15,26 @@ for steps where no test could exist.
 
 from __future__ import annotations
 
+import re
+import shlex
 import subprocess
+import sys
 
 from .model import Step
+
+# A leading ``python``/``python3`` token in an acceptance command. REQ authors write
+# ``python -m pytest …``, but the engine's runtime env may have no bare ``python`` on PATH
+# (only ``python3``, with pytest living in a venv). We rebind that token to the interpreter
+# running steward so the tests run under the same environment the engine installs into —
+# turning an env-shape mismatch (exit 127, ``python: not found``) back into a real result.
+_PY_PREFIX = re.compile(r"^(\s*)(python3?)(\s)")
+
+
+def _resolve_interpreter(cmd: str) -> str:
+    """Rebind a leading bare ``python``/``python3`` to ``sys.executable``."""
+    return _PY_PREFIX.sub(
+        lambda m: f"{m.group(1)}{shlex.quote(sys.executable)}{m.group(3)}", cmd, count=1
+    )
 
 
 class CommandVerifier:
@@ -35,7 +52,7 @@ class CommandVerifier:
         for cmd in step.verify:
             try:
                 proc = subprocess.run(
-                    cmd,
+                    _resolve_interpreter(cmd),
                     shell=True,
                     cwd=self.cwd,
                     capture_output=True,

@@ -9,6 +9,8 @@ land is the opt-in reality gate (REQ-013).
 
 from __future__ import annotations
 
+import sys
+
 from devsteward.core.accounts import SingleAccountProvider
 from devsteward.core.claude import _permission_argv, run_claude
 from devsteward.core.executor import Executor
@@ -39,14 +41,14 @@ def test_permission_argv_mapping():
 
 def test_run_claude_appends_permission_flag_by_default():
     """AC2: the default invocation carries --dangerously-skip-permissions; 'ask' carries none."""
-    res = run_claude("/advance", argv_prefix=["python", "-c", _ARGV_ECHO])
+    res = run_claude("/advance", argv_prefix=[sys.executable, "-c", _ARGV_ECHO])
     assert "--dangerously-skip-permissions" in res.text
 
-    soft = run_claude("/advance", argv_prefix=["python", "-c", _ARGV_ECHO],
+    soft = run_claude("/advance", argv_prefix=[sys.executable, "-c", _ARGV_ECHO],
                       permission_mode="bypassPermissions")
     assert "--permission-mode bypassPermissions" in soft.text
 
-    off = run_claude("/advance", argv_prefix=["python", "-c", _ARGV_ECHO],
+    off = run_claude("/advance", argv_prefix=[sys.executable, "-c", _ARGV_ECHO],
                      permission_mode="ask")
     assert "--dangerously-skip-permissions" not in off.text
     assert "--permission-mode" not in off.text
