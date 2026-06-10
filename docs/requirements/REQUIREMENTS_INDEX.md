@@ -23,7 +23,7 @@ commit** as its frontmatter and the code.
 | REQ-015 | Verify teeth — a REQ cannot land on marker-trust | DONE | [REQ-015](REQ-015.md) | REQ-004, REQ-006 |
 | REQ-016 | Usage-limit detection trusts the runtime signal, not echoed content | DONE | [REQ-016](REQ-016.md) | REQ-003, REQ-012 |
 | REQ-017 | Converter (legacy prose) — back-port ExamEngineer's prose-header REQs (backlog) | DRAFT | [REQ-017](REQ-017.md) | REQ-002, REQ-010 |
-| REQ-018 | `steward checkpoint` — the engine is the verifying bookkeeper for interactive work | DRAFT | [REQ-018](REQ-018.md) | REQ-003, REQ-020, REQ-028, REQ-029 |
+| REQ-018 | `steward checkpoint` — the engine is the verifying bookkeeper for interactive work | OPEN | [REQ-018](REQ-018.md) | REQ-003, REQ-020, REQ-028, REQ-029 |
 | REQ-019 | Branching regime — declaration on the integration branch; only implementation branches | DONE | [REQ-019](REQ-019.md) | REQ-011 |
 | REQ-020 | Branch lifecycle automation — the executor manages the implementation feature branch end-to-end | DONE | [REQ-020](REQ-020.md) | REQ-011, REQ-019 |
 | REQ-021 | Lettered REQ ids — accept a single-letter suffix for split-umbrella requirements | DONE | [REQ-021](REQ-021.md) | REQ-002 |
