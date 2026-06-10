@@ -44,9 +44,15 @@ validation. Driven **interactively** (not by `steward run`) in this order — se
 3. REQ-018 — **revised**: `steward checkpoint` verifies with the REQ-028 gate and shares
    REQ-029's mechanical bookkeeping — the engine certifies in both modes; handbook flips
    to interactive-first
-4. REQ-030 — **System-Test phase** (stub): conditional on `artifact|manual` ACs; fresh
-   context, never sees develop's diff; evidence = ledger event + captured artifact +
-   `verified_by`; `manual` = decision stop; `steward validate REQ-NNN` re-run
+4. REQ-030 — **System-Test phase** (fleshed out 2026-06-10): conditional on
+   `artifact|manual` ACs; one `validate` step between develop and the mechanical land
+   (validation **gates** the land); fresh System Tester session preps the lab and
+   captures artifacts, the **engine** runs the artifact test commands and consumes only
+   the pass/fail signal; evidence = committed `.devsteward/evidence/` artifacts +
+   hashed `events.jsonl` event + `verified_by`; `manual` = decision stop (replaces the
+   D12 hand-flip); `process.lab` blocks eligibility like a dependency; red validation
+   parks, no repair loop; `steward validate REQ-NNN` is the single entry point
+   (first run + re-run); e2e proof is a `manual` AC
 5. REQ-031 — **first lab, IMAP** (stub): owned, versioned fixture with reality-derived
    provenance; FlowSteward REQ-003a/006/007 re-driven through the validate phase
 6. (no REQ yet) re-earn batch mode: one overnight `steward run` under the new model,
@@ -131,7 +137,7 @@ REQ-001
               └─ REQ-004 ── REQ-027 (done, acceptance taxonomy + intake seeding; with REQ-002, REQ-009)
  REQ-028 ── REQ-029 (draft, develop fusion + mechanical land + repair-on-red; with REQ-004, REQ-020, REQ-027)
  REQ-029 ──┬─ REQ-018 (draft, revised — see above)
-           └─ REQ-030 (draft, System-Test phase + evidence events; with REQ-027) ── REQ-031 (draft, first lab: IMAP + FlowSteward re-drive)
+           └─ REQ-030 (draft, System-Test phase + evidence events; with REQ-005, REQ-027) ── REQ-031 (draft, first lab: IMAP + FlowSteward re-drive)
  REQ-011 (done, production-branch guard) ── REQ-019 (done, integration-branch guard) ── REQ-020 (draft, branch lifecycle automation)
  REQ-024 (draft, onboard skill) ── orchestrates REQ-007 + REQ-009 + REQ-010/023 + REQ-021 + REQ-022 (memzy onboarding)
 ```
