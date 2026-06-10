@@ -95,33 +95,37 @@ inspection. Declaration (intake, plans, the ledger) is no longer a step — it i
 directly on the integration branch — so the automation only ever branches the one
 implementation phase.
 
-## Two modes: batch worker vs. interactive pair
+## Two drivers, one bookkeeper
 
-`/advance` is one skill run two ways, with **different contracts**. The fork that was once
-ambiguous is settled: *the engine commands are a batch worker; the bare skill is an
-interactive pair.* The switch is the `DEVSTEWARD_UNATTENDED` environment variable, which the
-engine sets when it shells out.
+`/advance` is one skill run two ways. The **engine is the verifying bookkeeper in both** —
+the REQ-028 gate, the mechanical land, and the merge are identical whoever drove the
+cognition (the `checkpoint` event records which: `driver: interactive` or `headless`).
+What differs is only the driver and what happens at a fork. The switch is the
+`DEVSTEWARD_UNATTENDED` environment variable, which the engine sets when it shells out.
 
-- **Batch worker — `steward advance` / `steward run`.** Both drive `claude -p` headless
-  (`DEVSTEWARD_UNATTENDED=1`); there is no human channel. The **engine owns the guarantees**:
-  it re-runs the acceptance tests itself (teeth at the develop gate), lands the REQ
+- **Interactive — `/advance` in a live session, closed by `steward checkpoint`.** The
+  **default driving mode** for a single developer. A person runs the skill directly in
+  Claude Code; at a fork it asks via `AskUserQuestion` and continues — the interview
+  stays live. The session does the cognition and leaves the tree dirty; the close is
+  **`steward checkpoint`**, which re-runs the named acceptance tests through the same
+  land-grade gate as batch and, on green, performs the same mechanical bookkeeping —
+  status flip, index sync, the one authoritative commit, ledger advance, the trailing
+  ledger follow-up, and the `--no-ff` merge back into the integration branch. On red
+  nothing lands: the red verify event and the `FAILED` step are the honest trail; fix and
+  re-run (no `recover` needed). The gate cannot be talked into green — that property does
+  not depend on who drove.
+- **Batch lane — `steward advance` / `steward run`.** The overnight lane for queues of
+  **well-specified, low-fork REQs**. Both drive `claude -p` headless
+  (`DEVSTEWARD_UNATTENDED=1`); there is no human channel, so a fork is never asked — it is
+  **parked** and surfaced. The engine re-runs the acceptance tests itself, lands the REQ
   mechanically on green (repairing up to twice on red, then parking), and advances the
-  ledger. A fork is never asked — it is **parked** and surfaced. `steward advance` does one
-  checkpoint; `steward run` marches every eligible step, parking on forks and stopping on a
-  usage limit or hard failure so a human can look.
-- **Interactive pair — `/advance` in a live session.** A person runs the skill directly in
-  Claude Code. There is no executor in the loop and therefore **no engine guarantees**: the
-  skill verifies, the skill commits (same-commit discipline), **the human advances the ledger
-  by hand** (mark the step done + record the checkpoint, or the next `/advance` redoes it),
-  and at a fork it asks via `AskUserQuestion`. The human reviewing the work is the guarantee —
-  trust comes from the person, not the engine. *(That hand-advance of the ledger is the gap
-  REQ-018's `steward checkpoint` closes — until it lands, it is a hand-edit of
-  `.devsteward/`.)*
+  ledger. `steward advance` does one checkpoint; `steward run` marches every eligible
+  step, parking on forks and stopping on a usage limit or hard failure so a human can look.
 
-**One commit, one owner.** Commit ownership is exclusive by mode: the engine commits in
-batch, the skill commits interactively — *never both*. (Earlier the skill committed even
-under the engine, which then committed again — a double commit; resolved by keying the
-skill's close step off `DEVSTEWARD_UNATTENDED`.)
+**One commit, one owner.** The engine commits in both modes — the skill never does. In
+batch the executor makes the checkpoint commit; interactively `steward checkpoint` makes
+it. (Earlier the skill committed its own work, which double-committed under the engine and
+left the interactive ledger to a hand-edit; both holes are closed by the shared tail.)
 
 ## The fixed report
 
@@ -141,8 +145,9 @@ Next:      the next eligible step
 steward status                       # where are we?
 /intake "let users export to CSV"    # interview → draft REQ-014
 steward lint                         # green?
-steward advance                      # develop REQ-014 (plan + code + tests; engine lands on green)
-# or, hands-off:
+/advance                             # interactive: plan + code + tests, asking at forks
+steward checkpoint REQ-014           # engine verifies, lands, merges — one transaction
+# or, the batch lane for a queue of well-specified REQs:
 steward run                          # march everything eligible; park on forks
 steward decision list                # anything parked?
 steward decision answer DEC-001 "use RFC 4180 quoting"

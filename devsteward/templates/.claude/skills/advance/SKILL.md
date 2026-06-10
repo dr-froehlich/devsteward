@@ -9,23 +9,26 @@ You do **exactly one** checkpoint and stop. After REQ-029 the cycle per requirem
 single fused **Develop** checkpoint: plan-first, then the code, then the acceptance tests,
 all in one session. On green the engine **lands the REQ mechanically** (status flip, index
 sync, commit, `--no-ff` merge) — you never write `status: done` and the land spends no
-Claude tokens. Your job is the cognitive work of the one checkpoint — but *who verifies it
-and who commits it* depends on **which mode you are in**.
+Claude tokens. **The engine is the verifying bookkeeper in both modes** — the same gate,
+the same land, whoever drives. Your job is the cognitive work of the one checkpoint; what
+varies by mode is who invokes the bookkeeper and what happens at a fork.
 
 ## 0. Which mode are you in? (decide first)
 
-`/advance` is one skill run two ways, with different contracts. The switch is the
-`DEVSTEWARD_UNATTENDED` environment variable.
+`/advance` is one skill run two ways. The switch is the `DEVSTEWARD_UNATTENDED`
+environment variable.
 
 - **Batch (engine-driven)** — `DEVSTEWARD_UNATTENDED=1` is set. You were launched headless
   by `steward advance` / `steward run` via `claude -p`; **there is no human in the loop.**
-  The engine owns the guarantees: it re-runs the acceptance tests itself, lands the REQ on
-  green, and advances the ledger. You do the thinking, leave the working tree dirty for the
-  engine, and **park** any fork (you cannot ask). Do **not** commit and do **not** branch.
+  The executor re-runs the acceptance tests itself, lands the REQ on green, and advances
+  the ledger. You do the thinking, leave the working tree dirty for the engine, and
+  **park** any fork (you cannot ask). Do **not** commit and do **not** branch.
 - **Interactive (human-driven)** — `DEVSTEWARD_UNATTENDED` is unset. A person ran `/advance`
-  in a live session. **There is no engine in the loop, and therefore no engine guarantees.**
-  You verify your own work, you land it via `steward checkpoint`, and at a fork you **ask**.
-  The human reviewing the work is the guarantee.
+  in a live session — the **default driving mode**. The engine's guarantees still apply:
+  you close via **`steward checkpoint`**, which re-runs the acceptance tests through the
+  same land-grade gate as batch and lands only on green (the gate cannot be talked into
+  green — certification is the engine's, never yours to assert). At a fork you **ask** —
+  the live interview is what this mode buys.
 
 Everything tagged *(batch)* or *(interactive)* below applies to that mode only.
 
@@ -61,8 +64,8 @@ The fused **Develop** checkpoint, in order, in one session:
   acceptance tests pass. Writing `done` yourself before verification is the false-done hole.
   - *(batch)* the engine re-runs the named tests independently, then lands the REQ inside
     the one checkpoint commit — do not fake green.
-  - *(interactive)* `steward checkpoint` (see Close) re-runs the tests and lands — you are
-    attesting green to the human, so run them for real first.
+  - *(interactive)* `steward checkpoint` (see Close) re-runs the tests independently and
+    refuses to land on red — run them for real first so the close is one clean pass.
 
 ## 3. At a fork (a decision you can't resolve from the REQ + repo)
 
@@ -77,13 +80,16 @@ The fused **Develop** checkpoint, in order, in one session:
 End with the fixed report (below) **after** handling the land per your mode:
 
 - *(interactive)* branch first (no engine branch-guard runs in your client), then run
-  **`steward checkpoint REQ-NNN develop`**. It is the engine's bookkeeping as one
-  transaction: it re-runs the acceptance tests, checks the plan artifact exists, flips the
-  REQ + index to `done`, makes the one authoritative commit (frontmatter + index + code
-  together, co-author trailer), and advances the ledger. Do **not** commit separately and do
-  **not** hand-edit `state.yaml` — `checkpoint` is the committer (committing first would
-  double-commit; editing the ledger by hand is what let it drift out of sync with a
-  committed `done`).
+  **`steward checkpoint REQ-NNN develop`** (with no arguments it targets the current
+  cursor step). It is the engine's bookkeeping as one transaction: it re-runs the
+  acceptance tests, checks the plan artifact exists, flips the REQ + index to `done`,
+  makes the one authoritative commit (frontmatter + index + code together, co-author
+  trailer), advances the ledger, commits the trailing ledger write as a follow-up, and
+  merges the feature branch `--no-ff` into the integration branch (the checkpoint event
+  records `driver: interactive`). On red nothing lands — fix and re-run; no `recover`
+  needed. Do **not** commit separately and do **not** hand-edit `state.yaml` —
+  `checkpoint` is the committer (committing first would double-commit; editing the
+  ledger by hand is what let it drift out of sync with a committed `done`).
 - *(batch)* do **not** commit and do **not** branch. Leave the working tree dirty; the engine
   verifies, lands the REQ (flip + index + commit + `--no-ff` merge), and advances the ledger.
   Committing here would *double-commit* — the engine commits too.

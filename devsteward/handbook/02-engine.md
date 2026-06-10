@@ -36,11 +36,15 @@ recorded, surfaced decision — never a guess committed to history. The engine a
 **single commit** (the skill leaves the working tree dirty and does not commit), so each
 checkpoint lands as one authoritative commit rather than a skill commit plus an engine one.
 
-These guarantees exist only in the **batch** mode (`steward advance` / `steward run`, driving
-`claude -p` headless). A human running `/advance` directly in a live session has no executor
-in the loop and so gets none of them: they verify, commit, **and advance the ledger**
-themselves (the last is a hand-edit today — REQ-018's `steward checkpoint` will do it), and
-may ask at a fork. See the two-mode contract in `03-workflow.md`.
+These guarantees hold **in both driving modes** (REQ-018). In batch (`steward advance` /
+`steward run`, driving `claude -p` headless) the executor runs the whole loop. A human
+driving `/advance` in a live session — the default mode — closes with **`steward
+checkpoint`**, which runs the *same* gate and the *same* mechanical land: verification is
+never the session's to assert, and the close-out (trailing ledger follow-up + `--no-ff`
+merge) is the engine's too. The `checkpoint` event records the **driver**
+(`interactive` or `headless`) — who did the cognition — while certification is the
+engine's either way. The one interactive difference: at a fork the skill *asks*
+(`AskUserQuestion`) instead of parking. See the two-driver contract in `03-workflow.md`.
 
 ### One fused step, mechanical land, bounded repair (REQ-029)
 
@@ -91,9 +95,10 @@ hand-edited `done` must not outrun it.
 - `state.yaml` — round-trip-stable YAML: the profile, the cursor, the per-step status
   overlay, and parked `decisions:`.
 - `events.jsonl` — append-only, git-friendly event log: `step_started`, `verify`,
-  `checkpoint` (with commit sha), `repair_started`, `repair_exhausted`, `land_refused`,
-  `attended_parked`, `decision_parked`, `decision_answered`, … Old `design`/`build`/`land`
-  rows from before REQ-029 stay as history — reinterpreted, never rewritten.
+  `checkpoint` (with the commit sha and the `driver` — `interactive` or `headless`),
+  `repair_started`, `repair_exhausted`, `land_refused`, `attended_parked`,
+  `decision_parked`, `decision_answered`, … Old `design`/`build`/`land` rows from before
+  REQ-029 stay as history — reinterpreted, never rewritten.
 
 The ledger holds *no requirement content* — only where the cursor is and what happened.
 

@@ -17,8 +17,11 @@ owns the single commit here: the skill does the work but leaves the tree dirty, 
 `_commit` below makes the one authoritative checkpoint commit — the skill must not also
 commit (that would double-commit). `advance_once` does exactly one step; `run` marches
 every eligible step. A human-driven `/advance` inside an interactive Claude Code session
-is the separate **interactive** mode — the only context where `AskUserQuestion` applies
-and where the skill (not the engine) verifies and commits, with no engine guarantees.
+is the **interactive** mode — the only context where `AskUserQuestion` applies — and it
+closes through :meth:`Executor.checkpoint` (``steward checkpoint``): the *same* verify
+gate, mechanical land, and merge as batch. The engine is the verifying bookkeeper in
+both modes; only the driver of the cognition varies (REQ-018), and the ``checkpoint``
+event records which one drove (``driver: headless | interactive``).
 """
 
 from __future__ import annotations
@@ -359,15 +362,24 @@ class Executor:
         return self.mechanical_land(step, detail)
 
     def checkpoint(self, step: Step) -> StepResult:
-        """The verify → flip → commit → advance *tail*, for an interactive land the human
-        already did (no ``claude`` invocation).
+        """The full verify → land → merge close-out for an interactively driven step
+        (no ``claude`` invocation) — REQ-018.
 
         Interactive ``/advance`` does the thinking and leaves the tree dirty; this command
-        (``steward checkpoint``) re-runs the named acceptance tests, lets the profile flip
-        the REQ ``done``, makes the one authoritative commit, and advances the ledger —
-        the *same* atomic tail :meth:`run_step` uses in batch. It replaces the old manual
-        hand-edit of ``state.yaml`` that let the ledger drift out of sync with a committed
-        ``done`` (the REQ-025 failure shape).
+        (``steward checkpoint``) re-runs the named acceptance tests through the same
+        REQ-028 gate as a batch land, performs the shared :meth:`mechanical_land` on green
+        (flip ``done``, index sync, the one authoritative commit, ledger advance — with
+        ``driver: interactive`` on the checkpoint event), and finishes the topology like
+        batch: the trailing ledger write is committed as a follow-up and the feature
+        branch is merged ``--no-ff`` into the integration branch (no merge is attempted
+        on the integration branch itself). It replaces the old manual hand-edit of
+        ``state.yaml`` that let the ledger drift out of sync with a committed ``done``
+        (the REQ-025 failure shape).
+
+        On a red gate the red ``verify`` event and the ``FAILED`` step status are the
+        honest trail of the attempt, but there are **zero land-side writes** — no flip,
+        no index touch, no commit, no cursor move, no checkpoint event — so a re-run
+        after a fix lands with no ``recover``.
         """
         refusal = self.branch_guard()
         if refusal is not None:  # never commit a checkpoint onto the production branch
@@ -379,9 +391,14 @@ class Executor:
             led.set_status(step.id, StepStatus.FAILED)
             led.save()
             return StepResult(step, RunOutcome.VERIFY_FAILED, detail)
-        return self.mechanical_land(step, detail)
+        res = self.mechanical_land(step, detail, driver="interactive")
+        if res.outcome is RunOutcome.DONE and step.phase == "develop":
+            self._merge_after_land(step)
+        return res
 
-    def mechanical_land(self, step: Step, detail: str = "") -> StepResult:
+    def mechanical_land(
+        self, step: Step, detail: str = "", driver: str = "headless"
+    ) -> StepResult:
         """The deterministic post-green tail — **no claude** (REQ-029 Decision 2).
 
         The single shared routine both the batch develop path (:meth:`run_step`) and the
@@ -390,6 +407,10 @@ class Executor:
         Decision 6 — refuse if no plan names the REQ), then the verify-gated terminal flip
         (the profile marks the REQ ``done`` *before* the commit so it rides the one
         checkpoint commit), the single authoritative commit, and the ledger advance.
+
+        ``driver`` is recorded on the ``checkpoint`` event (REQ-018 Decision 5): who did
+        the cognition — ``headless`` (batch) or ``interactive`` — while certification is
+        the engine's in both modes.
 
         The caller must have already verified the step green; this routine assumes it.
         Returns ``PARKED`` if the land gate refuses (nothing committed), else ``DONE``.
@@ -415,7 +436,7 @@ class Executor:
         led.set_cursor(step.id)
         led.set_status(step.id, StepStatus.DONE)
         led.save()
-        led.append_event("checkpoint", step=step.id, commit=sha)
+        led.append_event("checkpoint", step=step.id, commit=sha, driver=driver)
         return StepResult(step, RunOutcome.DONE, detail, commit=sha)
 
     def _park_attended(self, step: Step) -> StepResult:
