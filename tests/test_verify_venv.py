@@ -36,9 +36,9 @@ def test_verifier_uses_project_env_no_127(tmp_path, monkeypatch):
     v = ReqVerifier(cwd=str(tmp_path), python="/no/such/python", full_suite=None)
     ok, reason = v.verify(
         Step(
-            id="REQ-X:land",
+            id="REQ-X:develop",
             command="/advance",
-            phase="land",
+            phase="develop",
             verify=("python -m pytest tests/test_x.py::test_y",),
         )
     )

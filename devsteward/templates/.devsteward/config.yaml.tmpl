@@ -21,6 +21,14 @@ accounts:
 #                       matches the proven batch runner). Use in a trusted repo.
 #   bypassPermissions / acceptEdits / plan / default — claude --permission-mode values.
 #   ask               — no flag (attended/interactive; a headless run can't edit).
+#
+# Per-step-kind model/effort (REQ-029). Each REQ is one `develop` Claude session; a red
+# gate spawns up to two `repair` sessions, then parks. `claude.model`/`claude.effort` are
+# the flat defaults (Opus / high); `claude.steps.<kind>` overrides a kind. Built-in
+# defaults: develop inherits the flat values; repair drops to Sonnet (cheap cold restart).
+#   steps:
+#     develop: {model: claude-opus-4-8, effort: high}
+#     repair:  {model: claude-sonnet-4-6}
 claude:
   permission_mode: dangerously-skip
 

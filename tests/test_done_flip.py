@@ -1,5 +1,5 @@
-"""The engine-owned terminal flip: a verified land marks the REQ `done` (frontmatter +
-index, in lockstep), and only the land phase does so."""
+"""The engine-owned terminal flip: a verified develop step marks the REQ `done`
+(frontmatter + index, in lockstep), and only the develop phase does so (REQ-029)."""
 
 from __future__ import annotations
 
@@ -19,17 +19,17 @@ def _flipper(tmp_path):
     return ReqDoneFlipper(req_dir, index_path), req_dir, index_path
 
 
-def test_land_flips_frontmatter_and_index(tmp_path):
+def test_develop_flips_frontmatter_and_index(tmp_path):
     flip, req_dir, index_path = _flipper(tmp_path)
-    flip(Step(id="REQ-007:land", command="/advance", req="REQ-007", phase="land"))
+    flip(Step(id="REQ-007:develop", command="/advance", req="REQ-007", phase="develop"))
     assert parse_req(req_dir / "REQ-007.md").status == "done"
     assert read_statuses(index_path)["REQ-007"] == "done"
 
 
-def test_non_land_phase_leaves_status_untouched(tmp_path):
+def test_non_develop_phase_leaves_status_untouched(tmp_path):
     flip, req_dir, index_path = _flipper(tmp_path)
-    for phase in ("design", "build"):
-        flip(Step(id=f"REQ-007:{phase}", command="/advance", req="REQ-007", phase=phase))
+    for phase in ("note", None):
+        flip(Step(id="REQ-007:other", command="/advance", req="REQ-007", phase=phase))
     assert parse_req(req_dir / "REQ-007.md").status == "open"
     assert read_statuses(index_path)["REQ-007"] == "open"
 
@@ -37,7 +37,7 @@ def test_non_land_phase_leaves_status_untouched(tmp_path):
 def test_flip_is_idempotent(tmp_path):
     """A re-run (e.g. a second `steward checkpoint`) over an already-done REQ is a no-op."""
     flip, req_dir, index_path = _flipper(tmp_path)
-    step = Step(id="REQ-007:land", command="/advance", req="REQ-007", phase="land")
+    step = Step(id="REQ-007:develop", command="/advance", req="REQ-007", phase="develop")
     flip(step)
     flip(step)
     assert parse_req(req_dir / "REQ-007.md").status == "done"

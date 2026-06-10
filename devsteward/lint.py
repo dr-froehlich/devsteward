@@ -159,10 +159,13 @@ def lint(cfg: Config) -> list[str]:
         problems.append("REQ-001 (north star) must not be dropped or superseded")
 
     # 7. marker ↔ ledger reconciliation (REQ-028 AC5). A REQ is *ledger-tracked* if any of
-    #    its steps appears in state.yaml; for such a REQ marked `done`, its `land` step must
-    #    be DONE in the ledger. A `done` over a failed/absent land is the FlowSteward
-    #    false-done shape. Mirror lint rule 5: REQs the engine never drove (pre-ledger or
-    #    imported `done`s with no footprint) are outside the ledger's purview and untouched.
+    #    its steps appears in state.yaml; for such a REQ marked `done`, its delivering step
+    #    must be DONE in the ledger. A `done` over a failed/absent land is the FlowSteward
+    #    false-done shape. The delivering step is `develop` (REQ-029); a `land` step DONE is
+    #    accepted too, since a REQ landed under the pre-REQ-029 model keeps its old ledger
+    #    row (reinterpret, never rewrite — REQ-029 Decision 7). Mirror lint rule 5: REQs the
+    #    engine never drove (pre-ledger or imported `done`s with no footprint) are outside the
+    #    ledger's purview and untouched.
     ledger = Ledger(cfg.root)
     if ledger.exists():
         statuses = ledger.all_statuses()
@@ -172,11 +175,12 @@ def lint(cfg: Config) -> list[str]:
             tracked = any(sid.startswith(f"{r.id}:") for sid in statuses)
             if not tracked:
                 continue
-            land = statuses.get(f"{r.id}:land")
-            if land is not StepStatus.DONE:
-                shown = land.value if land is not None else "absent"
+            develop = statuses.get(f"{r.id}:develop")
+            land = statuses.get(f"{r.id}:land")  # legacy (pre-REQ-029) ledger shape
+            if StepStatus.DONE not in (develop, land):
+                shown = (develop or land).value if (develop or land) is not None else "absent"
                 problems.append(
-                    f"{r.id}: frontmatter status 'done' but ledger land step is "
+                    f"{r.id}: frontmatter status 'done' but ledger develop step is "
                     f"'{shown}' — the ledger contradicts the marker"
                 )
 

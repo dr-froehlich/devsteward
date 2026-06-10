@@ -9,8 +9,12 @@ from .core.git import GitCli
 from .core.verify import CommandVerifier
 from .profiles.generic import GenericStepSource
 from .profiles.req import ReqStepSource
-from .profiles.req.checkpoint import ReqDoneFlipper
+from .profiles.req.checkpoint import PlanArtifactGate, ReqDoneFlipper
 from .profiles.req.verify import ReqVerifier
+
+#: REQ-029 Decision 3 (adopted plan 0011): a red develop gate gets two engine-spawned
+#: repair sessions before the step parks for a human.
+REPAIR_BUDGET = 2
 
 
 def build_step_source(cfg: Config):
@@ -25,6 +29,14 @@ def build_on_verified(cfg: Config):
     if cfg.profile == "generic":
         return None
     return ReqDoneFlipper(cfg.req_dir, cfg.index_path)
+
+
+def build_land_gate(cfg: Config):
+    """The REQ profile refuses the mechanical land when no plan names the REQ (REQ-029
+    Decision 6); the generic profile has no plan discipline."""
+    if cfg.profile == "generic":
+        return None
+    return PlanArtifactGate(cfg.plans_dir)
 
 
 def build_verifier(cfg: Config):
@@ -70,6 +82,19 @@ def build_executor(
     stop=None,
     autocommit: bool = True,
 ) -> Executor:
+    # Per-step-kind (model, effort) (REQ-029 Decision 4). A CLI --model/--effort override
+    # wins for the develop session (the primary); repair keeps its configured default.
+    develop_model, develop_effort = cfg.step_claude("develop")
+    if model is not None:
+        develop_model = model
+    if effort is not None:
+        develop_effort = effort
+    step_claude = {
+        "develop": (develop_model, develop_effort),
+        "repair": cfg.step_claude("repair"),
+    }
+    # The generic profile has no repair/land discipline; only the REQ profile spawns repairs.
+    repair_budget = 0 if cfg.profile == "generic" else REPAIR_BUDGET
     return Executor(
         root=cfg.root,
         source=build_step_source(cfg),
@@ -83,12 +108,15 @@ def build_executor(
         ),
         autocommit=autocommit,
         permission_mode=(cfg.claude or {}).get("permission_mode", "dangerously-skip"),
-        model=cfg.model if model is None else model,
-        effort=cfg.effort if effort is None else effort,
+        model=develop_model,
+        effort=develop_effort,
         stop=stop,
         production_branch=cfg.production_branch,
         integration_branch=cfg.integration_branch,
         feature_branch_template=cfg.feature_branch_template,
         git=GitCli(cfg.root),
         on_verified=build_on_verified(cfg),
+        land_gate=build_land_gate(cfg),
+        step_claude=step_claude,
+        repair_budget=repair_budget,
     )

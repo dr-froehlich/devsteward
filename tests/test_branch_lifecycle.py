@@ -2,9 +2,10 @@
 
 REQ-011 and REQ-019 *guarded* topology (refuse on production; refuse implementation on the
 integration branch). REQ-020 replaces the integration-branch refusal with *management*: on
-the integration branch a ``build``/``land`` step lazily creates+switches to the REQ's
-feature branch, and a green ``land`` merges it back ``--no-ff``. The production guard
-(REQ-011) is untouched.
+the integration branch the implementation step lazily creates+switches to the REQ's feature
+branch, and its green land merges it back ``--no-ff``. The production guard (REQ-011) is
+untouched. After REQ-029 the single implementation phase is ``develop`` (it carries the
+acceptance gate and triggers the merge on green).
 
 Driven through ``FakeGitTopology`` (no real checkout), consistent with ``test_branch_guard``:
 the fake records ``created``/``switched``/``commits``/``merged`` so the create→run→merge
@@ -61,26 +62,29 @@ def _step(phase, *, req="REQ-020", slug=_SLUG, verify=()):
     )
 
 
-def test_creates_and_switches_branch_on_first_build(project):
-    """AC1 — on the integration branch an eligible build step creates+switches to the REQ's
-    feature branch (default ``req-<nnn>-<slug>``) and runs the step, instead of refusing."""
+def test_creates_and_switches_branch_on_first_develop(project):
+    """AC1 — on the integration branch an eligible develop step creates+switches to the
+    REQ's feature branch (default ``req-<nnn>-<slug>``) and runs the step, instead of
+    refusing."""
     git = FakeGitTopology(current="dev")
     runner = FakeRunner(default=ok_result())
-    ex = _executor(project, [_step("build")], git=git, runner=runner)
+    ex = _executor(project, [_step("develop")], git=git, runner=runner)
 
     res = ex.advance_once()
     assert res.outcome is RunOutcome.DONE
     assert git.created == [_FEATURE]
-    assert git.current == _FEATURE
+    assert _FEATURE in git.switched  # created+switched onto the feature branch to run
     assert len(runner.calls) == 1  # the step actually ran (not refused)
-    assert Ledger(project).status_of("REQ-020:build") is StepStatus.DONE
+    assert Ledger(project).status_of("REQ-020:develop") is StepStatus.DONE
 
 
-def test_design_stays_on_integration_no_branch(project):
-    """AC2 — a design step on the integration branch runs there with no branch created;
-    creation is lazy on implementation only (declaration stays on dev)."""
+def test_non_implementation_phase_stays_on_integration(project):
+    """AC2 — a non-implementation step (phase not in ``implementation_phases``) runs on the
+    integration branch with no branch created; creation is lazy on implementation only.
+    After REQ-029 declaration (intake/plan) is no longer a step at all, but the guard that
+    only implementation phases branch is preserved."""
     git = FakeGitTopology(current="dev")
-    ex = _executor(project, [_step("design")], git=git)
+    ex = _executor(project, [_step("note")], git=git)
 
     res = ex.advance_once()
     assert res.outcome is RunOutcome.DONE
@@ -88,11 +92,11 @@ def test_design_stays_on_integration_no_branch(project):
     assert git.current == "dev"
 
 
-def test_auto_merges_no_ff_after_green_land(project):
-    """AC3 — after a green land the executor merges the feature branch into the integration
-    branch with --no-ff (the only merge path) and the co-author trailer."""
+def test_auto_merges_no_ff_after_green_develop(project):
+    """AC3 — after a green develop the executor merges the feature branch into the
+    integration branch with --no-ff (the only merge path) and the co-author trailer."""
     git = FakeGitTopology(current="dev")
-    ex = _executor(project, [_step("land", verify=("true",))], git=git)
+    ex = _executor(project, [_step("develop", verify=("true",))], git=git)
 
     res = ex.advance_once()
     assert res.outcome is RunOutcome.DONE
@@ -109,7 +113,7 @@ def test_ledger_clean_on_integration_at_rest(project):
     committed on the feature branch before the merge, so the integration branch is clean
     at rest rather than left dirty."""
     git = FakeGitTopology(current="dev")
-    ex = _executor(project, [_step("land", verify=("true",))], git=git)
+    ex = _executor(project, [_step("develop", verify=("true",))], git=git)
 
     res = ex.advance_once()
     assert res.outcome is RunOutcome.DONE
@@ -119,15 +123,16 @@ def test_ledger_clean_on_integration_at_rest(project):
     )
     assert git.merged and git.merged[0][1] == "dev"
     assert git.current == "dev"
-    assert Ledger(project).status_of("REQ-020:land") is StepStatus.DONE
+    assert Ledger(project).status_of("REQ-020:develop") is StepStatus.DONE
 
 
-def test_no_merge_on_failed_or_parked_land(project):
-    """AC5 — a land that fails verification or parks a decision is not merged; the feature
-    branch stays checked out for inspection."""
+def test_no_merge_on_failed_or_parked_develop(project):
+    """AC5 — a develop that fails verification or parks a decision is not merged; the
+    feature branch stays checked out for inspection. (No repair budget on the bare
+    executor, so a red gate surfaces VERIFY_FAILED directly — REQ-029.)"""
     # (a) failed verification
     git = FakeGitTopology(current="dev")
-    ex = _executor(project, [_step("land", verify=("false",))], git=git)
+    ex = _executor(project, [_step("develop", verify=("false",))], git=git)
     res = ex.advance_once()
     assert res.outcome is RunOutcome.VERIFY_FAILED
     assert git.merged == []
@@ -137,7 +142,7 @@ def test_no_merge_on_failed_or_parked_land(project):
     git2 = FakeGitTopology(current="dev")
     runner = FakeRunner(default=park_result("which database?"))
     ex2 = _executor(
-        project, [_step("land", req="REQ-021", verify=("true",))], git=git2, runner=runner
+        project, [_step("develop", req="REQ-021", verify=("true",))], git=git2, runner=runner
     )
     res2 = ex2.advance_once()
     assert res2.outcome is RunOutcome.PARKED
@@ -150,12 +155,11 @@ def test_reuses_existing_feature_branch(project):
     a diverged branch is surfaced rather than silently merged over."""
     # (a) reuse: branch exists and has not diverged
     git = FakeGitTopology(current="dev", branches={"dev", _FEATURE})
-    ex = _executor(project, [_step("build")], git=git)
+    ex = _executor(project, [_step("develop")], git=git)
     res = ex.advance_once()
     assert res.outcome is RunOutcome.DONE
     assert git.created == []  # reused, not created
-    assert _FEATURE in git.switched
-    assert git.current == _FEATURE
+    assert _FEATURE in git.switched  # switched onto the existing feature branch
 
     # (b) diverged: surfaced, the step does not run, no switch, no merge. A distinct REQ id
     # keeps this eligible (part (a) already marked REQ-020:build done in the shared ledger).
@@ -164,7 +168,7 @@ def test_reuses_existing_feature_branch(project):
     runner = FakeRunner(default=ok_result())
     committer = RecordingCommitter()
     ex2 = _executor(
-        project, [_step("build", req="REQ-099")], git=git2, runner=runner, committer=committer
+        project, [_step("develop", req="REQ-099")], git=git2, runner=runner, committer=committer
     )
     res2 = ex2.advance_once()
     assert res2.outcome is RunOutcome.REFUSED
@@ -182,7 +186,7 @@ def test_production_guard_unchanged(project):
     runner = FakeRunner(default=ok_result())
     committer = RecordingCommitter()
     ex = _executor(
-        project, [_step("land", verify=("true",))], git=git, runner=runner, committer=committer
+        project, [_step("develop", verify=("true",))], git=git, runner=runner, committer=committer
     )
 
     res = ex.advance_once()
@@ -191,7 +195,7 @@ def test_production_guard_unchanged(project):
     assert committer.committed == []
     assert git.created == [] and git.merged == [] and git.switched == []
     assert "main" in res.detail
-    assert Ledger(project).status_of("REQ-020:land") is StepStatus.PENDING
+    assert Ledger(project).status_of("REQ-020:develop") is StepStatus.PENDING
 
 
 def test_slug_and_branch_name_derivation(project):
@@ -202,5 +206,5 @@ def test_slug_and_branch_name_derivation(project):
 
     git = FakeGitTopology(current="dev")
     ex = _executor(project, [], git=git)
-    step = _step("build", req="REQ-022a", slug="onboarding-tooling")
+    step = _step("develop", req="REQ-022a", slug="onboarding-tooling")
     assert ex.feature_branch_name(step) == "req-022a-onboarding-tooling"

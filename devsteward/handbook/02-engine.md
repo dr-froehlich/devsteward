@@ -15,7 +15,9 @@ Knows nothing about requirements. For each eligible step it:
 4. **park-and-surface:** if the skill raised a fork, leaves the step blocked and moves on;
 5. **verifies** — runs the step's named acceptance tests; green is mandatory (a step with
    no tests marker-trusts, which a profile may forbid where it matters — see below);
-6. **commits** and **advances** the ledger to `done`.
+6. **lands** — on green, the engine itself commits and advances the ledger to `done` (in the
+   REQ profile this is the mechanical land: status flip, index sync, commit, `--no-ff`
+   merge — no Claude); on red, it may spawn a bounded repair session before parking.
 
 ### The four seams (`core/seams.py`)
 
@@ -40,34 +42,58 @@ in the loop and so gets none of them: they verify, commit, **and advance the led
 themselves (the last is a hand-edit today — REQ-018's `steward checkpoint` will do it), and
 may ask at a fork. See the two-mode contract in `03-workflow.md`.
 
-Verification has teeth **where the work is delivered**. In the REQ profile, `design` and
-`build` advance the cursor (they carry no per-phase tests), but a REQ is not done until it
-**lands**, and a `land` step must run at least one named acceptance test the engine re-runs
-itself — a land step that declares none is *refused*, not trusted (`ReqVerifier`). So a
-no-op `build` is caught at land when its acceptance tests fail: the guarantee holds for the
-"done" that matters. (Earlier this was only true by accident — every phase marker-trusted,
-so a REQ with no tests at all could reach `done`. That false-done path is now closed.)
+### One fused step, mechanical land, bounded repair (REQ-029)
 
-The land gate's *green* is sharper than exit-0 (REQ-028): exit-0 cannot tell a pass from a
+The REQ profile derives **one step per REQ**: `develop`. It is the single Claude session —
+plan-first, then code, then the acceptance tests — replacing the old `design → build → land`
+triple, which paid three cold sessions where two verified nothing. The plan artifact
+survives as in-session discipline, not a session boundary; the cognition is fused.
+
+`develop` is **where the work is delivered**, so it is the gate with teeth: it must run at
+least one named acceptance test the engine re-runs itself — a develop step that declares
+none is *refused*, not trusted (`ReqVerifier`). A no-op is caught when its acceptance tests
+fail: the guarantee holds for the "done" that matters. (Earlier the design/build/land split
+let a REQ with no tests at all reach `done` because every phase marker-trusted. That
+false-done path is closed.)
+
+On a **green** develop gate the engine performs the **mechanical land** itself — status
+flip, index `DONE`-sync, the single commit, the `--no-ff` merge, ledger advance — invoking
+**no Claude** (paying Opus to watch pytest run bought nothing; the verifier is the
+authority). The same mechanical-land routine is what interactive `steward checkpoint` runs,
+so a REQ lands identically however it was driven. The land also refuses when **no file in
+`docs/plans/` names the REQ id** (plan-first, enforced at the one moment it is cheap and
+load-bearing — never plan *quality*).
+
+On a **red** gate the engine spawns at most **two** bounded repair sessions — each a *fresh*
+session (no `--resume`) fed the failure brief (failed test ids + verifier detail), on the
+configured repair model (default **Sonnet**, so the cold restart is cheap) — then parks the
+step for a human. Model/effort are configurable **per step kind** (`claude.steps.<kind>`;
+develop defaults Opus-high, repair Sonnet). A REQ that declared `develop: split` or
+`concept: true` is **batch-ineligible**: `steward run` parks it naming the attended need
+rather than simulating the human's presence.
+
+The gate's *green* is sharper than exit-0 (REQ-028): exit-0 cannot tell a pass from a
 skip or a zero-collection, so the gate reads pytest's per-test outcomes. A named acceptance
 test that **skips** fails the gate (a skip is not the proof the REQ promised — skip ≠ green;
 skips in the *full* suite stay legal), and one that **collects zero tests** (a typo'd,
 renamed, or unowned id) fails too — a REQ cannot certify itself by naming a test that never
-runs. Beyond each named test, land runs the **full project suite** and requires it clean, so
-a known-broken behaviour elsewhere cannot ship green. All of this runs under the project's
-**configured environment** (`verify.python`/`verify.full_suite` in config, else the project
-venv, then the engine's own): an unusable env is a hard, surfaced error, never a silent
-`127 pytest: not found` that reads as "not yet verified". And `steward lint` reconciles the
-marker against the ledger — a `done` REQ whose ledger `land` is `failed`/absent is a hard
-lint error, because the ledger is the cursor of record and a hand-edited `done` must not
-outrun it.
+runs. Beyond each named test, the gate runs the **full project suite** and requires it
+clean, so a known-broken behaviour elsewhere cannot ship green. All of this runs under the
+project's **configured environment** (`verify.python`/`verify.full_suite` in config, else
+the project venv, then the engine's own): an unusable env is a hard, surfaced error, never a
+silent `127 pytest: not found` that reads as "not yet verified". And `steward lint`
+reconciles the marker against the ledger — a `done` REQ whose ledger `develop` is
+`failed`/absent is a hard lint error, because the ledger is the cursor of record and a
+hand-edited `done` must not outrun it.
 
 ## The ledger (`.devsteward/`)
 
 - `state.yaml` — round-trip-stable YAML: the profile, the cursor, the per-step status
   overlay, and parked `decisions:`.
 - `events.jsonl` — append-only, git-friendly event log: `step_started`, `verify`,
-  `checkpoint` (with commit sha), `decision_parked`, `decision_answered`, …
+  `checkpoint` (with commit sha), `repair_started`, `repair_exhausted`, `land_refused`,
+  `attended_parked`, `decision_parked`, `decision_answered`, … Old `design`/`build`/`land`
+  rows from before REQ-029 stay as history — reinterpreted, never rewritten.
 
 The ledger holds *no requirement content* — only where the cursor is and what happened.
 
