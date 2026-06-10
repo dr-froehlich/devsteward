@@ -18,6 +18,28 @@ steps:
 REQ's acceptance `test:` commands as its verification, so the engine re-runs them before
 marking the requirement done.
 
+## The V-model mapping: `check:` steers the phases
+
+Each acceptance criterion's `check:` classification (see 01 · format) is a **routing
+key** that maps it onto the V-model:
+
+| `check:` | V-model side | Phase | Oracle |
+|----------|--------------|-------|--------|
+| `regression` | verification (left) | **Build** | coupled / mock, headless |
+| `artifact` | validation (right) | **System-Test** | decoupled, durable (lab-produced; engine reads only the pass/fail signal) |
+| `manual` | validation (right) | **System-Test** | human — a decision stop |
+
+The classification steers **phase existence**: a REQ with only `regression` criteria
+runs no System-Test phase; any `artifact` *or* `manual` criterion makes the System-Test
+(validation) phase apply. A human review *is* validation — system-level by definition —
+which is why `manual` lives inside the System-Test phase rather than as a stray
+module-level stop.
+
+*Status:* the System-Test phase itself — its conditional flow-routing, the independent
+System Tester session, and the first lab — is REQ-030/031 territory. Until it lands, the
+taxonomy is seeded at intake and enforced by lint; an engine-driven land of a REQ with
+`artifact`/`manual` criteria fails loudly rather than faking validation.
+
 ## Sequencing whole requirements
 
 `REQ-B:design` depends on `REQ-A:land` for each `REQ-A` in `REQ-B.depends_on`. So a

@@ -1,12 +1,14 @@
 ---
 name: intake
-description: Interview a raw idea into a schema-valid draft REQ. Use when the user has a new feature/change idea ("I want to add…", "we should support…", "intake this") that is not yet a requirement. Interrogates risks, scope, dependencies, and the English-code/localized-UI split, then writes a draft REQ + its index row.
+description: Interview a raw idea into a schema-valid draft REQ. Use when the user has a new feature/change idea ("I want to add…", "we should support…", "intake this") that is not yet a requirement. Interrogates risks, scope, dependencies, and the English-code/localized-UI split, drives acceptance to system level and classifies each criterion's check:, then writes a draft REQ + its index row.
 ---
 
 # /intake — interview an idea into a draft REQ
 
 You turn a raw idea into a **schema-valid draft requirement**. The interrogation is the
 point: a sharp `/intake` is worth more than fast output. Institutionalize the questions.
+This is the one moment a human shapes the REQ before headless work — the house style you
+seed here is what every later step inherits.
 
 ## 1. Orient
 
@@ -26,19 +28,66 @@ Ask, in `AskUserQuestion` form when interactive, until you genuinely understand:
 - **Alternatives:** what simpler thing did we reject, and why?
 - **Risks / weaknesses:** what could make this the wrong call?
 - **Dependencies:** which existing REQs must be done first? (→ `depends_on`)
-- **Acceptance:** what observable behaviour proves it works? Each criterion must map to a
-  **runnable test** in this project's test command.
+- **Acceptance:** system-level, measurable, classified — §2a–§2b below.
+- **Process:** the three declarations only a present human can make — §2c below.
 - **Localization split:** any user-facing strings? They stay isolated/translatable; all
   code and technical text is English.
 
 **Park-and-surface:** if `DEVSTEWARD_UNATTENDED=1` is set, do **not** block on questions.
 Instead write a decision request to the ledger and stop (see §4).
 
+### 2a. Drive acceptance to system level
+
+Push every criterion toward an **end-to-end chain with a measurable, captured
+deliverable** — output that can be hashed, golden-compared, or signed off once. "Fetch
+*this* captured mail and compare the parsed fields" beats "connects to a server";
+"produces `report.csv` matching the golden copy" beats "export works". Abstract,
+artifact-less criteria are how REQs go green while hollow.
+
+The screening question is the **oracle** — *what decides pass/fail, and is it coupled to
+the code under test?* A criterion whose only oracle is a mock authored alongside the code
+cannot disconfirm anything: name it `regression` honestly, or sharpen the criterion until
+a decoupled observable exists. (Oracle = the part of a test that decides correct vs
+incorrect, distinct from the fixture and the system under test.)
+
+### 2b. Classify every criterion: `check:`
+
+Every acceptance criterion carries a required `check:` field — the routing key that maps
+it onto the V-model: `regression` → Build phase (verification); `artifact` and `manual` →
+System-Test phase (validation), which exists only if such a check exists. Decide by
+**oracle coupling, not test name**:
+
+- `regression` — module/unit scope; coupled or mock oracle; runs headless in Build.
+- `artifact` — system scope; a **decoupled, durable** oracle (a captured/golden/hashable
+  observable produced by the lab); the engine consumes only its pass/fail signal.
+- `manual` — system scope; **human** oracle; a decision stop inside the System-Test
+  phase.
+
+**Honest deferral:** when an `artifact`/`manual` check needs a lab that does not exist
+yet, record the follow-on REQ that owns the asset in `process.lab` — **never downgrade**
+the check to `regression` to make it runnable today, and never fake the lab with an
+inline double.
+
+### 2c. The three process declarations (while the human is present)
+
+Decide these now — they must not be made headless later — and record them in the
+optional `process:` frontmatter block (omit the block when every value is the default
+and no lab is needed):
+
+- `concept:` — is a **concept phase** (risk buy-down / spike where final test specs and
+  lab needs are frozen) warranted before develop? Default `false`.
+- `lab:` — which REQs own the **lab assets** the System-Test phase will require?
+  Default `[]`.
+- `develop:` — `fused`, one design+build session (the **default**), or `split`, an
+  attended design review before build — reserved for genuinely risky REQs. If split,
+  extract *why* and record the reason in the REQ's Decisions table.
+
 ## 3. Emit
 
 - Write `docs/requirements/REQ-NNN.md` from `_templates/req.md` with `status: draft`,
-  filled frontmatter, a real Context/Decisions/Requirement, and a `yaml acceptance`
-  block where **every** criterion has an `id` and a `test:`.
+  filled frontmatter (including the `process:` block when it deviates from defaults or
+  declares a lab), a real Context/Decisions/Requirement, and a `yaml acceptance` block
+  where **every** criterion has an `id`, a `test:`, and a `check:`.
 - Add its row to `REQUIREMENTS_INDEX.md` (status `DRAFT`).
 - Add it under **Next** in `ROADMAP.md` and to the dependency graph.
 - If scenarios help, add `SCN-NNN` files and reference them in `scenario_refs`.

@@ -38,6 +38,11 @@ PHASES = ("design", "build", "land")
 ACTIVE_STATUSES = {"open", "in-progress", "blocked"}
 TERMINAL_STATUSES = {"done", "dropped", "superseded"}
 
+# REQ-027: defaults for the optional `process:` frontmatter block — the intake-time
+# declarations (develop mode, concept phase, lab assets). An absent block means exactly
+# these values; REQ-029/030 read them through :attr:`ReqFile.process`.
+PROCESS_DEFAULTS = {"develop": "fused", "concept": False, "lab": []}
+
 
 @dataclass
 class ReqFile:
@@ -72,6 +77,20 @@ class ReqFile:
     def is_terminal(self) -> bool:
         return self.status in TERMINAL_STATUSES
 
+    @property
+    def process(self) -> dict:
+        """The optional ``process:`` block merged over :data:`PROCESS_DEFAULTS` (REQ-027).
+
+        Always returns all three keys; an absent or partial block yields the defaults
+        (``develop: fused``, ``concept: False``, ``lab: []``).
+        """
+        raw = self.frontmatter.get("process")
+        merged = dict(PROCESS_DEFAULTS)
+        if isinstance(raw, dict):
+            merged.update(raw)
+        merged["lab"] = list(merged.get("lab") or [])
+        return merged
+
 
 def _parse_acceptance(body: str) -> list[AcceptanceCheck]:
     m = _ACCEPTANCE_RE.search(body)
@@ -88,6 +107,7 @@ def _parse_acceptance(body: str) -> list[AcceptanceCheck]:
                 text=str(item.get("text", "")),
                 test=str(item.get("test", "")),
                 status=str(item.get("status", "pending")),
+                check=str(item.get("check", "")),
             )
         )
     return checks

@@ -17,27 +17,69 @@ concept_refs: []
 scenario_refs: [SCN-002]
 supersedes: null
 tags: [access]
+process:                # optional (REQ-027) — omit when every value is the default
+  develop: fused        # fused (default) | split — split = attended design review first
+  concept: false        # concept phase (risk buy-down / spike) before develop?
+  lab: [REQ-031]        # REQs owning lab assets the System-Test phase requires
 ```
 
 Validated against `req.schema.json` by `steward lint`. The `id` must match the filename
 (`REQ-007.md`). This is the layer the engine reads to build the dependency graph.
 
+The optional **`process:` block** records the intake-time declarations a present human
+made: whether develop runs **fused** (one design+build session, the default) or **split**
+(an attended design review first, for genuinely risky REQs), whether a **concept phase**
+(risk buy-down / spike) precedes develop, and which REQs own the **lab assets** the
+System-Test phase will require. An absent block means exactly the defaults
+(`develop: fused`, `concept: false`, `lab: []`); `lab:` references are lint-resolved like
+`depends_on`.
+
 ## Layer 2 — the acceptance block (the verification contract)
 
-A single fenced block the verifier can run and track:
+A single fenced block the verifier can run and track. A fully-tagged example showing all
+three `check:` values:
 
 ````
 ```yaml acceptance
 - id: AC1
-  text: A token scoped to the group authorizes every child course path.
+  text: The group-token parser grants every child course path in the fixture set.
   test: "pytest tests/test_scope.py::test_group_token_authorizes_children"
+  check: regression
   status: pending        # pending | pass | fail  (engine-owned)
+- id: AC2
+  text: A login against the lab IMAP server fetches the captured mail and the parsed
+    fields match the golden copy.
+  test: "pytest tests/system/test_imap_fetch.py::test_captured_mail_golden"
+  check: artifact
+  status: pending
+- id: AC3
+  text: A reviewer confirms the rendered report is legible and correctly localized.
+  test: "manual: reviewer signs off the rendered report"
+  check: manual
+  status: pending
 ```
 ````
 
-Every criterion has an `id`, a human `text`, and a runnable `test`. The `status` field is
-**engine-owned**: the verifier writes `pass`/`fail` back after running the test. Do not
-hand-edit it. `steward lint` fails if any active/done REQ has a criterion without a test.
+Every criterion has an `id`, a human `text`, a runnable `test`, and a **`check:`
+classification** — the REQ-027 routing key, validated by `steward lint` on active REQs
+(presence + enum only; lint never judges test *quality*):
+
+- **`regression`** — module/unit scope; the oracle is coupled to the code (mock
+  assertions); runs headless in the **Build** phase.
+- **`artifact`** — system scope; a **decoupled, durable** oracle: a captured / golden /
+  hashable observable produced by the lab, of which the engine consumes only the
+  pass/fail signal. Runs in the **System-Test** phase.
+- **`manual`** — system scope; a **human** oracle; a decision stop inside the
+  System-Test phase.
+
+**Oracle** (glossary): the part of a test that decides correct vs incorrect — distinct
+from the *fixture* (inputs/environment) and the *system under test*. A coupled oracle
+(authored alongside the code it checks) cannot disconfirm; what separates the three
+`check:` values is the oracle's coupling, not the test's name.
+
+The `status` field is **engine-owned**: the verifier writes `pass`/`fail` back after
+running the test. Do not hand-edit it. `steward lint` fails if any active REQ has a
+criterion without a test id or without a valid `check:`.
 
 ## Layer 3 — prose (the reasoning, untouched)
 
