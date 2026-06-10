@@ -7,11 +7,16 @@ Checks, per the plan:
 3. the dependency graph is **acyclic**;
 4. **index ↔ REQ in sync** — every REQ has a row in ``REQUIREMENTS_INDEX.md`` and vice
    versa, with matching status;
-5. every acceptance criterion has a non-empty **test id**;
+5. every acceptance criterion has a non-empty **test id** and (REQ-027) a valid
+   ``check:`` classification (``regression | artifact | manual``) — presence and enum
+   only, never test quality (that is intake's job, not a static linter's);
 6. the frozen north star ``REQ-001`` is not silently mutated away from its declared kind;
 7. **marker ↔ ledger** — a ledger-tracked REQ marked ``done`` in frontmatter has a green
    ``land`` in the ledger (REQ-028 AC5): the ledger is the cursor of record, and a
    hand-edited ``done`` over a ``failed``/absent land must not pass unseen.
+
+References in the optional ``process:`` block's ``lab:`` list (REQ-027) resolve like
+``depends_on`` (check 2).
 
 Returns a list of human-readable problems; empty ⇒ green.
 """
@@ -29,6 +34,11 @@ from .core.ledger import Ledger
 from .core.model import StepStatus
 from .profiles.req.index import read_statuses
 from .profiles.req.reqfile import ReqFile, load_reqs
+
+
+# REQ-027: the acceptance `check:` routing key — maps a criterion onto the V-model
+# (regression → Build/verification; artifact, manual → System-Test/validation).
+CHECK_VALUES = ("regression", "artifact", "manual")
 
 
 def _schema() -> dict:
@@ -91,6 +101,13 @@ def lint(cfg: Config) -> list[str]:
         sup = r.frontmatter.get("supersedes")
         if sup and sup not in ids:
             problems.append(f"{r.id}: supersedes '{sup}' does not resolve to a REQ")
+        proc = r.frontmatter.get("process")
+        if isinstance(proc, dict):
+            for lab in proc.get("lab") or []:
+                if lab not in ids:
+                    problems.append(
+                        f"{r.id}: process.lab '{lab}' does not resolve to a REQ"
+                    )
     problems.extend(_detect_cycle(reqs))
 
     # 4. index ↔ REQ sync
@@ -106,13 +123,15 @@ def lint(cfg: Config) -> list[str]:
         if rid not in ids:
             problems.append(f"{rid}: in index but no REQ file found")
 
-    # 5. every acceptance criterion has a test id — but only on **active** REQs
-    #    (open/in-progress/blocked), the ones the engine is on the hook to land. Drafts may
-    #    be incomplete by definition, and terminal REQs (done/dropped/superseded) have
-    #    nothing left to land — including records imported from another project's own
-    #    governance (REQ-010), where demanding a DevSteward-shaped test id is meaningless.
-    #    Reopen such a REQ and it becomes active, and the rule fires again — exactly when a
-    #    runnable test is needed.
+    # 5. every acceptance criterion has a test id and a valid `check:` — but only on
+    #    **active** REQs (open/in-progress/blocked), the ones the engine is on the hook to
+    #    land. Drafts may be incomplete by definition, and terminal REQs
+    #    (done/dropped/superseded) have nothing left to land — including records imported
+    #    from another project's own governance (REQ-010), where demanding a
+    #    DevSteward-shaped test id is meaningless. Reopen such a REQ and it becomes
+    #    active, and the rule fires again — exactly when a runnable test is needed.
+    #    The same scoping covers REQ-027's `check:` routing key (Decision 9): no backfill
+    #    of history, the rule fires when a REQ becomes the engine's problem.
     for r in reqs:
         if not r.is_active:
             continue
@@ -123,6 +142,16 @@ def lint(cfg: Config) -> list[str]:
                 problems.append(f"{r.id}: acceptance {ac.id or '?'} has no test id")
             if not ac.id.strip():
                 problems.append(f"{r.id}: an acceptance criterion has no id")
+            if not ac.check.strip():
+                problems.append(
+                    f"{r.id}: acceptance {ac.id or '?'} has no check: classification "
+                    f"(regression | artifact | manual)"
+                )
+            elif ac.check not in CHECK_VALUES:
+                problems.append(
+                    f"{r.id}: acceptance {ac.id or '?'} check '{ac.check}' is not one of "
+                    f"regression | artifact | manual"
+                )
 
     # 6. north star
     north = next((r for r in reqs if r.id == "REQ-001"), None)

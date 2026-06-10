@@ -60,6 +60,28 @@
       "type": "array",
       "items": { "type": "string" },
       "uniqueItems": true
+    },
+    "process": {
+      "type": "object",
+      "description": "Optional intake-time process declarations (REQ-027). Absent keys default to develop: fused, concept: false, lab: [].",
+      "additionalProperties": false,
+      "properties": {
+        "develop": {
+          "type": "string",
+          "enum": ["fused", "split"],
+          "description": "fused = one design+build session (default); split = an attended design review before build, for genuinely risky REQs."
+        },
+        "concept": {
+          "type": "boolean",
+          "description": "Whether a concept phase (risk buy-down / spike where final test specs and lab needs are frozen) precedes develop."
+        },
+        "lab": {
+          "type": "array",
+          "items": { "type": "string", "pattern": "^REQ-[0-9]{3}[a-z]?$" },
+          "uniqueItems": true,
+          "description": "REQs owning the lab assets the System-Test phase requires; references are lint-resolved like depends_on."
+        }
+      }
     }
   }
 }

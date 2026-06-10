@@ -87,6 +87,7 @@ Create a file `greeting.txt` at the project root whose content is the single wor
 - id: AC1
   text: greeting.txt exists at the project root and contains the word hello.
   test: "grep -qx hello greeting.txt"
+  check: regression
   status: pending
 ```
 

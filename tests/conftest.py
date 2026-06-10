@@ -144,21 +144,39 @@ def project(tmp_path: Path) -> Path:
 
 
 def write_req(req_dir: Path, rid: str, *, status="open", depends_on=(), acceptance=True,
-              title=None, kind="feature"):
-    """Write a minimal, schema-valid REQ file into ``req_dir``."""
+              title=None, kind="feature", check="regression", process=None):
+    """Write a minimal, schema-valid REQ file into ``req_dir``.
+
+    ``check`` classifies the single acceptance criterion (REQ-027); ``None`` omits the
+    line (an undeclared check). ``process`` is an optional dict rendered as the
+    ``process:`` frontmatter block.
+    """
     req_dir.mkdir(parents=True, exist_ok=True)
     title = title or f"{rid} title"
     deps = "[" + ", ".join(depends_on) + "]"
     acc = ""
     if acceptance:
+        check_line = f"  check: {check}\n" if check else ""
         acc = (
             "\n```yaml acceptance\n"
             "- id: AC1\n"
             f"  text: {rid} works.\n"
             '  test: "true"\n'
+            f"{check_line}"
             "  status: pending\n"
             "```\n"
         )
+    proc = ""
+    if process is not None:
+        lines = ["process:"]
+        for key, value in process.items():
+            if isinstance(value, list):
+                lines.append(f"  {key}: [{', '.join(value)}]")
+            elif isinstance(value, bool):
+                lines.append(f"  {key}: {str(value).lower()}")
+            else:
+                lines.append(f"  {key}: {value}")
+        proc = "\n".join(lines) + "\n"
     text = (
         f"---\n"
         f"id: {rid}\n"
@@ -173,6 +191,7 @@ def write_req(req_dir: Path, rid: str, *, status="open", depends_on=(), acceptan
         f"scenario_refs: []\n"
         f"supersedes: null\n"
         f"tags: []\n"
+        f"{proc}"
         f"---\n\n"
         f"## Context\n\n{rid} context.\n\n"
         f"## Requirement\n\nDo the thing.\n{acc}\n"

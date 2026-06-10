@@ -54,3 +54,25 @@ def test_update_acceptance_status_is_surgical(tmp_path):
     assert req.acceptance[0].status == "pass"
     # Prose around the block is preserved.
     assert "## Notes" in path.read_text(encoding="utf-8")
+
+
+def test_acceptance_check_parsed_and_default_empty(tmp_path):
+    """REQ-027 — `check:` is read per criterion; absent means undeclared (\"\"), so the
+    linter can tell omission from a default."""
+    write_req(tmp_path, "REQ-005", check="artifact")
+    assert parse_req(tmp_path / "REQ-005.md").acceptance[0].check == "artifact"
+
+    write_req(tmp_path, "REQ-006", check=None)
+    assert parse_req(tmp_path / "REQ-006.md").acceptance[0].check == ""
+
+
+def test_status_writeback_preserves_check(tmp_path):
+    """REQ-027 — the engine's surgical status write-back must not strip the `check:` key
+    (the ruamel round-trip is verified, not trusted)."""
+    write_req(tmp_path, "REQ-005", check="manual")
+    path = tmp_path / "REQ-005.md"
+    update_acceptance_status(path, {"AC1": "fail"})
+    req = parse_req(path)
+    assert req.acceptance[0].status == "fail"
+    assert req.acceptance[0].check == "manual"
+
