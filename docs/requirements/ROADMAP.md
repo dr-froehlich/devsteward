@@ -36,9 +36,11 @@ validation. Driven **interactively** (not by `steward run`) in this order — se
 
 1. REQ-027 — acceptance taxonomy + intake rewrite (amended: intake also records the
    fused-vs-split develop decision)
-2. REQ-029 — **phase-model rework** (stub): one fused `develop` step; land becomes engine
-   code on green (zero Claude tokens); bounded repair session (budget 2, Sonnet) on red;
-   per-step model/effort config
+2. REQ-029 — **phase-model rework** (fleshed out 2026-06-10): one fused `develop` step;
+   land becomes engine code on green (zero Claude tokens) and requires a `docs/plans/`
+   file naming the REQ; bounded repair session (budget 2, Sonnet, fresh context +
+   failure brief) on red; per-step model/effort config; split/concept REQs park in
+   batch; old ledgers reinterpreted, never rewritten; e2e proof run is a `manual` AC
 3. REQ-018 — **revised**: `steward checkpoint` verifies with the REQ-028 gate and shares
    REQ-029's mechanical bookkeeping — the engine certifies in both modes; handbook flips
    to interactive-first
@@ -127,7 +129,7 @@ REQ-001
               ├─ REQ-018 (draft, revised: checkpoint = verifying bookkeeper; with REQ-028, REQ-029)
               ├─ REQ-026 (draft, lifecycle CLI: activate / recover / --only; with REQ-002)
               └─ REQ-004 ── REQ-027 (open, acceptance taxonomy + intake seeding; with REQ-002, REQ-009)
- REQ-028 ── REQ-029 (draft, develop fusion + mechanical land + repair-on-red; with REQ-004, REQ-020)
+ REQ-028 ── REQ-029 (draft, develop fusion + mechanical land + repair-on-red; with REQ-004, REQ-020, REQ-027)
  REQ-029 ──┬─ REQ-018 (draft, revised — see above)
            └─ REQ-030 (draft, System-Test phase + evidence events; with REQ-027) ── REQ-031 (draft, first lab: IMAP + FlowSteward re-drive)
  REQ-011 (done, production-branch guard) ── REQ-019 (done, integration-branch guard) ── REQ-020 (draft, branch lifecycle automation)
