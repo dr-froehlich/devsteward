@@ -70,6 +70,6 @@ steps:
     status: done
     updated: '2026-06-10T20:23:17+00:00'
   REQ-030:validate:
-    status: running
+    status: done
     updated: '2026-06-10T20:33:20+00:00'
 decisions: []
