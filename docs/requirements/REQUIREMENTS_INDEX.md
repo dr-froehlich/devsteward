@@ -23,7 +23,7 @@ commit** as its frontmatter and the code.
 | REQ-015 | Verify teeth — a REQ cannot land on marker-trust | DONE | [REQ-015](REQ-015.md) | REQ-004, REQ-006 |
 | REQ-016 | Usage-limit detection trusts the runtime signal, not echoed content | DONE | [REQ-016](REQ-016.md) | REQ-003, REQ-012 |
 | REQ-017 | Converter (legacy prose) — back-port ExamEngineer's prose-header REQs (backlog) | DRAFT | [REQ-017](REQ-017.md) | REQ-002, REQ-010 |
-| REQ-018 | `steward checkpoint` — close the ledger after an interactive /advance, no claude re-run | DRAFT | [REQ-018](REQ-018.md) | REQ-003 |
+| REQ-018 | `steward checkpoint` — the engine is the verifying bookkeeper for interactive work | DRAFT | [REQ-018](REQ-018.md) | REQ-003, REQ-028, REQ-029 |
 | REQ-019 | Branching regime — declaration on the integration branch; only implementation branches | DONE | [REQ-019](REQ-019.md) | REQ-011 |
 | REQ-020 | Branch lifecycle automation — the executor manages the implementation feature branch end-to-end | DONE | [REQ-020](REQ-020.md) | REQ-011, REQ-019 |
 | REQ-021 | Lettered REQ ids — accept a single-letter suffix for split-umbrella requirements | DONE | [REQ-021](REQ-021.md) | REQ-002 |
@@ -34,5 +34,8 @@ commit** as its frontmatter and the code.
 | REQ-026 | Lifecycle CLI — activate a REQ, recover a failed step, and target one REQ with --only | DONE | [REQ-026](REQ-026.md) | REQ-002, REQ-003 |
 | REQ-027 | Acceptance test taxonomy — regression/artifact/manual that steers the V-model flow, seeded by intake | DRAFT | [REQ-027](REQ-027.md) | REQ-002, REQ-004, REQ-009 |
 | REQ-028 | Gating integrity — skip isn't green, the named behaviour must run, verifier uses project venv + full suite, lint reconciles marker↔ledger | DONE | [REQ-028](REQ-028.md) | REQ-002, REQ-006, REQ-015 |
+| REQ-029 | Phase-model rework — one fused develop step, mechanical land on green, bounded repair on red | DRAFT | [REQ-029](REQ-029.md) | REQ-004, REQ-020, REQ-028 |
+| REQ-030 | System-Test phase — independent validation session, evidence events, and the System Tester skill | DRAFT | [REQ-030](REQ-030.md) | REQ-027, REQ-029 |
+| REQ-031 | The first lab — an owned IMAP test server with reality-derived provenance; FlowSteward re-drive | DRAFT | [REQ-031](REQ-031.md) | REQ-030 |
 
 New requirement template: [`_templates/req.md`](../../devsteward/templates/docs/requirements/_templates/req.md)

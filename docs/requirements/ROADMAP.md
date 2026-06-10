@@ -27,6 +27,29 @@ three bundled skills. Built and dogfooded in Phase 0/1.
   implementation branches (**REQ-019**: extends the REQ-011 guard to refuse `build`/`land`
   on the integration branch — REQ-011's missing half)
 
+## Repositioning (plan 0011 — the 2026-06-10 strategic assessment)
+
+Interactive-first, one verified `develop` session, mechanical landings, independent
+validation. Driven **interactively** (not by `steward run`) in this order — see
+[plan 0011](../plans/0011-process-repositioning.md) and the
+[assessment report](../reports/2026-06-10-strategic-assessment-process-and-token-economics.md):
+
+1. REQ-027 — acceptance taxonomy + intake rewrite (amended: intake also records the
+   fused-vs-split develop decision)
+2. REQ-029 — **phase-model rework** (stub): one fused `develop` step; land becomes engine
+   code on green (zero Claude tokens); bounded repair session (budget 2, Sonnet) on red;
+   per-step model/effort config
+3. REQ-018 — **revised**: `steward checkpoint` verifies with the REQ-028 gate and shares
+   REQ-029's mechanical bookkeeping — the engine certifies in both modes; handbook flips
+   to interactive-first
+4. REQ-030 — **System-Test phase** (stub): conditional on `artifact|manual` ACs; fresh
+   context, never sees develop's diff; evidence = ledger event + captured artifact +
+   `verified_by`; `manual` = decision stop; `steward validate REQ-NNN` re-run
+5. REQ-031 — **first lab, IMAP** (stub): owned, versioned fixture with reality-derived
+   provenance; FlowSteward REQ-003a/006/007 re-driven through the validate phase
+6. (no REQ yet) re-earn batch mode: one overnight `steward run` under the new model,
+   then postmortem
+
 ## Next
 
 - REQ-010 — **memzy frontmatter-dialect converter** (open; promoted — memzy is the first
@@ -99,9 +122,12 @@ REQ-001
               ├─ REQ-005 ── REQ-009
               ├─ REQ-006 ── REQ-015 ── REQ-028 (draft, gating integrity: skip≠green, full-suite+venv gate, marker↔ledger lint; with REQ-002)
               ├─ REQ-008 ── REQ-012 ── REQ-025 (draft, account rotation + quota gate + graceful stop; with REQ-003)
-              ├─ REQ-018 (draft, interactive checkpoint)
+              ├─ REQ-018 (draft, revised: checkpoint = verifying bookkeeper; with REQ-028, REQ-029)
               ├─ REQ-026 (draft, lifecycle CLI: activate / recover / --only; with REQ-002)
               └─ REQ-004 ── REQ-027 (draft, acceptance taxonomy + intake seeding; with REQ-002, REQ-009)
+ REQ-028 ── REQ-029 (draft, develop fusion + mechanical land + repair-on-red; with REQ-004, REQ-020)
+ REQ-029 ──┬─ REQ-018 (draft, revised — see above)
+           └─ REQ-030 (draft, System-Test phase + evidence events; with REQ-027) ── REQ-031 (draft, first lab: IMAP + FlowSteward re-drive)
  REQ-011 (done, production-branch guard) ── REQ-019 (done, integration-branch guard) ── REQ-020 (draft, branch lifecycle automation)
  REQ-024 (draft, onboard skill) ── orchestrates REQ-007 + REQ-009 + REQ-010/023 + REQ-021 + REQ-022 (memzy onboarding)
 ```
