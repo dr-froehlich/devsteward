@@ -72,12 +72,15 @@ class ReqVerifier:
         if step.phase != "develop":
             return self._inner.verify(step)
 
-        if not step.verify:
+        if not step.verify and step.lands:
             return (
                 False,
                 "develop step has no acceptance tests — a REQ cannot land on marker-trust; "
                 "declare at least one runnable acceptance criterion the engine re-runs",
             )
+        # A develop step with no named regression tests but a trailing validate step
+        # (``lands=False``, REQ-030) is not marker-trust: the REQ's runnable gate lives at
+        # validation (the decoupled artifact/manual oracle). The full suite still runs.
 
         # AC4 — resolve the project's configured test environment before running anything;
         # an unusable env is a hard, surfaced error, never a silent pass-ahead to a 127.

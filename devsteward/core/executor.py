@@ -93,7 +93,7 @@ class Executor:
         stop=None,
         production_branch: str = "main",
         integration_branch: str = "dev",
-        implementation_phases: tuple[str, ...] = ("develop",),
+        implementation_phases: tuple[str, ...] = ("develop", "validate"),
         feature_branch_template: str = "req-{num}-{slug}",
         git: GitTopology | None = None,
         branch_resolver: Callable[[Path], str] | None = None,
@@ -101,6 +101,7 @@ class Executor:
         land_gate: Callable[[Step], str | None] | None = None,
         step_claude: dict[str, tuple[str | None, str | None]] | None = None,
         repair_budget: int = 0,
+        validate_runner: Callable[..., "StepResult"] | None = None,
     ):
         self.root = Path(root)
         self.source = source
@@ -120,6 +121,10 @@ class Executor:
         # REQ-029: how many fresh repair sessions a red develop gate may spawn before the
         # step parks for a human. 0 (the bare default) = no repair; build_executor wires 2.
         self.repair_budget = repair_budget
+        # REQ-030: the System-Test routine — ``(executor, step, *, unattended, on_event)``
+        # → StepResult. The REQ profile wires :func:`devsteward.profiles.req.validate
+        # .run_validate_step`; None (generic) means no validate phase exists.
+        self.validate_runner = validate_runner
         self.runner = runner
         self.committer = committer
         self.autocommit = autocommit
@@ -264,6 +269,13 @@ class Executor:
         on_event: Callable[[dict], None] | None = None,
     ) -> StepResult:
         led = self.ledger
+        # REQ-030: a validate step is the System-Test phase, not a develop session — the
+        # profile's routine owns its whole lifecycle (session, engine-run artifact gate,
+        # evidence, manual stops, land).
+        if step.phase == "validate" and self.validate_runner is not None:
+            return self.validate_runner(
+                self, step, unattended=unattended, on_event=on_event
+            )
         # Batch-park an attended REQ (REQ-029 Decision 9): a REQ that declared a split
         # develop or a concept phase chose to have a human present, so unattended `steward
         # run`/`advance` parks it (naming the need) instead of simulating the attendance.
@@ -359,6 +371,10 @@ class Executor:
             led.append_event("verify", step=step.id, ok=verified, detail=detail[:2000])
 
         # Green gate → the engine lands the REQ mechanically (no claude). REQ-029.
+        # REQ-030 Decision 6: a develop step with a trailing validate step defers the
+        # land — the work is committed, but the flip/index/merge wait for validation.
+        if not step.lands:
+            return self.commit_deferred(step, detail)
         return self.mechanical_land(step, detail)
 
     def checkpoint(self, step: Step) -> StepResult:
@@ -391,8 +407,12 @@ class Executor:
             led.set_status(step.id, StepStatus.FAILED)
             led.save()
             return StepResult(step, RunOutcome.VERIFY_FAILED, detail)
+        if not step.lands:
+            # REQ-030 Decision 6: a validate step follows — commit the develop work on
+            # the feature branch; the land (and the merge) fire after `steward validate`.
+            return self.commit_deferred(step, detail, driver="interactive")
         res = self.mechanical_land(step, detail, driver="interactive")
-        if res.outcome is RunOutcome.DONE and step.phase == "develop":
+        if res.outcome is RunOutcome.DONE and self._merges_after(step):
             self._merge_after_land(step)
         return res
 
@@ -438,6 +458,34 @@ class Executor:
         led.save()
         led.append_event("checkpoint", step=step.id, commit=sha, driver=driver)
         return StepResult(step, RunOutcome.DONE, detail, commit=sha)
+
+    def commit_deferred(
+        self, step: Step, detail: str = "", driver: str = "headless"
+    ) -> StepResult:
+        """Close a green non-landing step (REQ-030 Decision 6) — commit, no land.
+
+        The develop work is committed on the feature branch and the ledger advances, but
+        the REQ stays active: no ``done`` flip, no index touch, no land gate, no merge.
+        Those fire from the trailing ``validate`` step's green (:meth:`mechanical_land`).
+        """
+        led = self.ledger
+        sha = self._commit(step)
+        led.set_cursor(step.id)
+        led.set_status(step.id, StepStatus.DONE)
+        led.save()
+        led.append_event(
+            "develop_committed", step=step.id, commit=sha, driver=driver
+        )
+        return StepResult(step, RunOutcome.DONE, detail, commit=sha)
+
+    def _merges_after(self, step: Step) -> bool:
+        """Whether a green land on ``step`` closes the feature branch (``--no-ff`` merge).
+
+        Only a *landing* implementation step merges — a develop step that deferred to a
+        validate step leaves the branch open for it (REQ-030 Decision 6); generic
+        (phase-less) steps never managed topology in the first place.
+        """
+        return step.lands and step.phase in self.implementation_phases
 
     def _park_attended(self, step: Step) -> StepResult:
         """Park an attended step in batch (REQ-029 Decision 9): record a decision naming the
@@ -613,7 +661,7 @@ class Executor:
             self.ledger.append_event("branch_surfaced", step=step.id, detail=surfaced)
             return StepResult(step, RunOutcome.REFUSED, surfaced)
         res = self.run_step(step, unattended=unattended, on_event=on_event)
-        if res.outcome is RunOutcome.DONE and step.phase == "develop":
+        if res.outcome is RunOutcome.DONE and self._merges_after(step):
             self._merge_after_land(step)
         return res
 

@@ -43,10 +43,46 @@ runs no System-Test phase; any `artifact` *or* `manual` criterion makes the Syst
 which is why `manual` lives inside the System-Test phase rather than as a stray
 module-level stop.
 
-*Status:* the System-Test phase itself — its conditional flow-routing, the independent
-System Tester session, and the first lab — is REQ-030/031 territory. Until it lands, the
-taxonomy is seeded at intake and enforced by lint; an engine-driven land of a REQ with
-`artifact`/`manual` criteria fails loudly rather than faking validation.
+## The System-Test phase (REQ-030)
+
+A REQ that declares at least one `artifact` or `manual` criterion gets exactly one extra
+step, **`REQ-NNN:validate`**, between develop and the mechanical land; a REQ with only
+`regression` criteria gets none. The step order is **develop → validate → land**: the
+green develop gate then only *commits* the work on the feature branch (a
+`develop_committed` event — no status flip, no merge), and the land fires when validation
+is green — `done` keeps meaning *verified and validated*, and dependents wait on the
+dep's final step.
+
+The phase decouples the oracle. It runs as a **fresh System Tester session**
+(`/system-test`, model per `claude.steps.validate`, default Opus-high) that never sees
+the builder's diff: it orients from the REQ, brings the lab up, drives the validation
+procedure, and captures artifacts into `.devsteward/evidence/REQ-NNN/<timestamp>/`. Then
+the **engine** runs each `artifact` criterion's named `test:` command itself — the same
+skip-is-red / zero-collected-is-red teeth as the develop gate — and consumes only that
+pass/fail signal; the session's report carries zero gate weight.
+
+Validation is a **recorded evidence event**, not a regression-suite member: the
+`validation` event in `events.jsonl` carries per-AC results, each artifact's relative
+path + sha256, and any sign-offs; `verified_by` gets the engine-composed dated summary
+(the human supplies only the verdict + an optional one-line scope). A lab skip or a
+missing artifact is a hard red, never a pass.
+
+Mechanics around the gate:
+
+- **`manual` criteria are a decision stop.** Unattended, the step parks naming the
+  pending human oracle; attended, `steward validate REQ-NNN` presents the criterion and
+  records the sign-off (date, reviewer, scope) as the evidence event.
+- **A red validation parks immediately — no repair loop.** A red here means the develop
+  was hollow or the lab is broken; both are human questions. Fix by hand, then
+  `steward validate` again.
+- **Lab availability is an eligibility dependency.** While any `process.lab` REQ is not
+  `done` the validate step is simply ineligible — `steward status` names the lab REQ
+  being waited on; no red event, no parked decision.
+- **`steward validate REQ-NNN` is the single entry point.** On an in-flight REQ it
+  executes the pending validate step (green → the mechanical land + merge proceed); on a
+  `done` REQ it appends a fresh evidence event without disturbing the status. At the
+  release gate (`dev → main` PR) a human decides which `artifact` REQs to re-run — there
+  is deliberately no auto-staleness detection.
 
 ## Sequencing whole requirements
 

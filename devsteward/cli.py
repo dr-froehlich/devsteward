@@ -179,7 +179,11 @@ def status() -> None:
                 StepStatus.RUNNING: click.style("…", fg="cyan"),
             }.get(st, "•")
             tag = click.style(" (eligible)", fg="cyan") if s.id in eligible else ""
-            click.echo(f"  {mark} {s.id:<22} {st.value}{tag}")
+            # REQ-030 Decision 7: a validate step held by an undone lab REQ says so.
+            note = ""
+            if s.blocked_note and s.id not in eligible and st is not StepStatus.DONE:
+                note = click.style(f"  ⏳ {s.blocked_note}", fg="yellow")
+            click.echo(f"  {mark} {s.id:<22} {st.value}{tag}{note}")
 
     decisions = led.open_decisions()
     if decisions:
@@ -317,11 +321,119 @@ def checkpoint(req_id: str | None, phase: str | None) -> None:
             f"{step_id} is not a derivable step — is {step_id.partition(':')[0]} active "
             f"(not draft/done) and is the phase 'develop'?"
         )
+    if step.phase == "validate":
+        # The System-Test phase has its own gate (engine-run artifact ACs, evidence,
+        # sign-offs) — checkpointing it here would land on marker-trust (REQ-030).
+        raise click.ClickException(
+            f"{step_id} is a System-Test step — run `steward validate {step.req}` instead"
+        )
     res = ex.checkpoint(step)
     if res.outcome is RunOutcome.REFUSED:
         raise click.ClickException(res.detail)
     if res.outcome is RunOutcome.VERIFY_FAILED:
         raise click.ClickException(f"verify failed — not checkpointed:\n{res.detail}")
+    _print_report(ex, res)
+
+
+# -- validate (System-Test phase) ----------------------------------------------
+
+
+def _git_user_name(root: Path) -> str:
+    try:
+        out = subprocess.run(
+            ["git", "-C", str(root), "config", "user.name"],
+            capture_output=True, text=True, check=False,
+        ).stdout.strip()
+    except OSError:
+        out = ""
+    return out
+
+
+def _interactive_signoff(root: Path):
+    """The attended sign-off source (REQ-030 Decision 4): present the manual AC, take the
+    human's verdict + optional one-line scope — the engine composes everything else."""
+    from .profiles.req.validate import Signoff
+
+    def provider(ac) -> Signoff:
+        click.echo(click.style(f"\nmanual {ac.id}:", bold=True) + f" {ac.text}")
+        if ac.test:
+            click.echo(f"  oracle: {ac.test}")
+        approved = click.confirm(f"Sign off {ac.id}?", default=False)
+        reviewer = _git_user_name(root) or click.prompt("Reviewer")
+        scope = ""
+        if approved:
+            scope = click.prompt(
+                "Scope (one line, e.g. what was reviewed; empty to skip)",
+                default="", show_default=False,
+            ).strip()
+        return Signoff(approved=approved, reviewer=reviewer, scope=scope)
+
+    return provider
+
+
+@main.command()
+@click.argument("req_id")
+@click.option("--quiet", is_flag=True, help="Suppress live claude output; show only the report.")
+def validate(req_id: str, quiet: bool) -> None:
+    """Run REQ_ID's System-Test phase — the single entry point (REQ-030).
+
+    On an in-flight REQ this executes the pending ``validate`` step: the fresh System
+    Tester session preps the lab and captures artifacts, the engine runs each
+    ``artifact`` AC's named test itself, ``manual`` ACs take your sign-off here, and on
+    green the REQ lands mechanically (flip, index, commit, merge). On a **done** REQ it
+    appends a fresh dated evidence event without disturbing the status (re-run policy,
+    Decision 5). A red validation parks with the failure brief — no repair loop.
+    """
+    cfg = _load_or_die()
+    ex = build_executor(cfg)
+    routine = ex.validate_runner
+    if routine is None:
+        raise click.ClickException("the generic profile has no validation phase")
+    from .profiles.req.reqfile import load_reqs
+
+    req = next((r for r in load_reqs(cfg.req_dir) if r.id == req_id), None)
+    if req is None:
+        raise click.ClickException(f"{req_id}: no such requirement")
+    on_event = None if quiet else _stream_printer()
+    signoff = _interactive_signoff(cfg.root)
+
+    if req.status == "done":
+        res = routine.revalidate(ex, req_id, on_event=on_event, signoff=signoff)
+        if res.outcome is RunOutcome.REFUSED:
+            raise click.ClickException(res.detail)
+        if res.outcome is not RunOutcome.DONE:
+            raise click.ClickException(f"re-validation red:\n{res.detail}")
+        click.echo(click.style(
+            f"fresh evidence recorded for {req_id} (status untouched).", fg="green"
+        ))
+        return
+
+    step = ex.step_by_id(f"{req_id}:validate")
+    if step is None:
+        raise click.ClickException(
+            f"{req_id} has no validate step — it declares no artifact/manual acceptance "
+            f"criterion, or it is not active"
+        )
+    if ex.ledger.status_of(f"{req_id}:develop") is not StepStatus.DONE:
+        raise click.ClickException(
+            f"{req_id}:develop is not closed yet — validation follows the develop "
+            f"checkpoint (run `steward checkpoint {req_id} develop` first)"
+        )
+    refusal = ex.branch_guard()
+    if refusal is not None:
+        raise click.ClickException(refusal)
+    surfaced = ex.prepare_branch(step)
+    if surfaced is not None:
+        raise click.ClickException(surfaced)
+    res = routine(
+        ex, step, unattended=False, on_event=on_event, signoff=signoff,
+        driver="interactive",
+    )
+    if res.outcome is RunOutcome.REFUSED:
+        raise click.ClickException(res.detail)
+    if res.outcome is RunOutcome.PARKED:
+        click.echo(click.style(f"validation parked: {res.detail}", fg="yellow"))
+        raise SystemExit(1)
     _print_report(ex, res)
 
 

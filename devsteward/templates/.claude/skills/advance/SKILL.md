@@ -93,6 +93,11 @@ End with the fixed report (below) **after** handling the land per your mode:
 - *(batch)* do **not** commit and do **not** branch. Leave the working tree dirty; the engine
   verifies, lands the REQ (flip + index + commit + `--no-ff` merge), and advances the ledger.
   Committing here would *double-commit* — the engine commits too.
+- **REQ with a System-Test phase (REQ-030):** if the REQ declares any `artifact` or
+  `manual` acceptance criterion, the green develop gate **defers the land** — the close
+  (either mode) only commits the work on the feature branch (`develop_committed`); the
+  flip, index sync, and merge fire after `REQ-NNN:validate` is green (`steward validate
+  REQ-NNN`, or the batch loop). Say so under *Next:* in your report.
 
 ```
 Did:       <what this checkpoint produced>

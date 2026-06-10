@@ -10,6 +10,7 @@ from .core.verify import CommandVerifier
 from .profiles.generic import GenericStepSource
 from .profiles.req import ReqStepSource
 from .profiles.req.checkpoint import PlanArtifactGate, ReqDoneFlipper
+from .profiles.req.validate import ReqValidateRoutine
 from .profiles.req.verify import ReqVerifier
 
 #: REQ-029 Decision 3 (adopted plan 0011): a red develop gate gets two engine-spawned
@@ -37,6 +38,14 @@ def build_land_gate(cfg: Config):
     if cfg.profile == "generic":
         return None
     return PlanArtifactGate(cfg.plans_dir)
+
+
+def build_validate_runner(cfg: Config):
+    """The REQ profile's System-Test routine (REQ-030); the generic profile has no
+    validation phase."""
+    if cfg.profile == "generic":
+        return None
+    return ReqValidateRoutine(cfg.req_dir, python=cfg.verify_python)
 
 
 def build_verifier(cfg: Config):
@@ -92,6 +101,7 @@ def build_executor(
     step_claude = {
         "develop": (develop_model, develop_effort),
         "repair": cfg.step_claude("repair"),
+        "validate": cfg.step_claude("validate"),
     }
     # The generic profile has no repair/land discipline; only the REQ profile spawns repairs.
     repair_budget = 0 if cfg.profile == "generic" else REPAIR_BUDGET
@@ -119,4 +129,5 @@ def build_executor(
         land_gate=build_land_gate(cfg),
         step_claude=step_claude,
         repair_budget=repair_budget,
+        validate_runner=build_validate_runner(cfg),
     )

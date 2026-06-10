@@ -29,9 +29,19 @@ Interviews for stack + build/test commands, co-authors the frozen **REQ-001** no
 fills the placeholders, writes `.devsteward/config.yaml`, makes the first commit, and
 initializes the ledger.
 
+## `/system-test` — the System Tester (REQ-030)
+
+The independent validation session the engine spawns for a `validate` step (`steward
+validate` / `steward run`). Deliberately **decoupled**: it never reads the develop diff —
+it orients from the REQ alone, brings the lab up, drives the validation procedure, and
+captures artifacts into the evidence dir the engine names. It does no bookkeeping and
+carries no gate weight: the engine runs the `artifact` acceptance tests itself afterwards
+and consumes only their pass/fail signal; `manual` criteria stay a human decision stop.
+
 ## The park-and-surface contract
 
-All three skills obey the same rule when `DEVSTEWARD_UNATTENDED=1` is set (batch mode): do
+The interviewing skills obey the same rule when `DEVSTEWARD_UNATTENDED=1` is set (batch
+mode): do
 **not** block on `AskUserQuestion`. Instead append a decision request to
 `.devsteward/state.yaml` under `decisions:` (`{id, step, question, status: open}`) and stop.
 The engine surfaces it and advances to the next independent step. Without the env var

@@ -26,9 +26,11 @@ from .reqfile import load_reqs, set_frontmatter_status
 class ReqDoneFlipper:
     """Flip a REQ to ``done`` (frontmatter + index) when its ``develop`` step verifies.
 
-    Only the delivering ``develop`` phase flips the REQ status (REQ-029); any other phase
-    leaves it active. Idempotent: re-flipping an already-``done`` REQ is a no-op, so an
-    interactive ``steward checkpoint`` re-run is safe.
+    Only the *landing* phase flips the REQ status: ``develop`` (REQ-029), or ``validate``
+    when the REQ declared a System-Test phase (REQ-030 Decision 6 — develop then defers
+    and the validate land is the terminal one); any other phase leaves it active.
+    Idempotent: re-flipping an already-``done`` REQ is a no-op, so an interactive
+    ``steward checkpoint`` re-run is safe.
     """
 
     def __init__(self, req_dir: Path, index_path: Path):
@@ -36,7 +38,7 @@ class ReqDoneFlipper:
         self.index_path = Path(index_path)
 
     def __call__(self, step: Step) -> None:
-        if step.phase != "develop":
+        if step.phase not in ("develop", "validate"):
             return
         reqs = {r.id: r for r in load_reqs(self.req_dir)}
         req = reqs.get(step.req)

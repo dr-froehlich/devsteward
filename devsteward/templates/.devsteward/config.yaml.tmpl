@@ -22,13 +22,16 @@ accounts:
 #   bypassPermissions / acceptEdits / plan / default — claude --permission-mode values.
 #   ask               — no flag (attended/interactive; a headless run can't edit).
 #
-# Per-step-kind model/effort (REQ-029). Each REQ is one `develop` Claude session; a red
-# gate spawns up to two `repair` sessions, then parks. `claude.model`/`claude.effort` are
-# the flat defaults (Opus / high); `claude.steps.<kind>` overrides a kind. Built-in
-# defaults: develop inherits the flat values; repair drops to Sonnet (cheap cold restart).
+# Per-step-kind model/effort (REQ-029/030). Each REQ is one `develop` Claude session; a
+# red gate spawns up to two `repair` sessions, then parks; a REQ with artifact/manual
+# acceptance criteria adds one `validate` System Tester session. `claude.model`/
+# `claude.effort` are the flat defaults (Opus / high); `claude.steps.<kind>` overrides a
+# kind. Built-in defaults: develop and validate inherit the flat values; repair drops to
+# Sonnet (cheap cold restart).
 #   steps:
-#     develop: {model: claude-opus-4-8, effort: high}
-#     repair:  {model: claude-sonnet-4-6}
+#     develop:  {model: claude-opus-4-8, effort: high}
+#     repair:   {model: claude-sonnet-4-6}
+#     validate: {model: claude-opus-4-8, effort: high}
 claude:
   permission_mode: dangerously-skip
 
