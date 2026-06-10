@@ -85,8 +85,8 @@ validation. Driven **interactively** (not by `steward run`) in this order — se
   recover REQ-NNN` (flip a FAILED step to a new ledger-level `RECOVER` status the existing
   `/advance` skill picks up and assesses; no repair skill), and `--only REQ-NNN` on
   `run`/`advance` to drive a single REQ full-circle, failing if it has no eligible step.
-- REQ-027 — **acceptance test taxonomy, seeded by intake** (open; fleshed out 2026-06-10,
-  plan 0011 step 1): the fix for nine
+- REQ-027 — **acceptance test taxonomy, seeded by intake** (done 2026-06-10, plan 0011
+  step 1; AC4 signed off on the REQ-029 intake run): the fix for nine
   green-but-hollow REQs (canonical: FlowSteward REQ-003 AC1, a mock discharging a system
   claim). Adds a required per-AC `check:` field (`regression | artifact | manual`) as a
   **routing key** that maps acceptance onto the V-model — `regression` → Build (verification),
@@ -128,7 +128,7 @@ REQ-001
               ├─ REQ-008 ── REQ-012 ── REQ-025 (draft, account rotation + quota gate + graceful stop; with REQ-003)
               ├─ REQ-018 (draft, revised: checkpoint = verifying bookkeeper; with REQ-028, REQ-029)
               ├─ REQ-026 (draft, lifecycle CLI: activate / recover / --only; with REQ-002)
-              └─ REQ-004 ── REQ-027 (open, acceptance taxonomy + intake seeding; with REQ-002, REQ-009)
+              └─ REQ-004 ── REQ-027 (done, acceptance taxonomy + intake seeding; with REQ-002, REQ-009)
  REQ-028 ── REQ-029 (draft, develop fusion + mechanical land + repair-on-red; with REQ-004, REQ-020, REQ-027)
  REQ-029 ──┬─ REQ-018 (draft, revised — see above)
            └─ REQ-030 (draft, System-Test phase + evidence events; with REQ-027) ── REQ-031 (draft, first lab: IMAP + FlowSteward re-drive)

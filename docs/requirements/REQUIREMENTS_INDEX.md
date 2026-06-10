@@ -32,7 +32,7 @@ commit** as its frontmatter and the code.
 | REQ-024 | onboard skill — orchestrate migrating an existing project under the steward engine | DRAFT | [REQ-024](REQ-024.md) | REQ-007, REQ-009, REQ-010, REQ-021, REQ-022, REQ-023 |
 | REQ-025 | Visible account rotation, fixed-quota gating, and graceful stop for unattended runs | DONE | [REQ-025](REQ-025.md) | REQ-003, REQ-012 |
 | REQ-026 | Lifecycle CLI — activate a REQ, recover a failed step, and target one REQ with --only | DONE | [REQ-026](REQ-026.md) | REQ-002, REQ-003 |
-| REQ-027 | Acceptance test taxonomy — regression/artifact/manual that steers the V-model flow, seeded by intake | IN-PROGRESS | [REQ-027](REQ-027.md) | REQ-002, REQ-004, REQ-009 |
+| REQ-027 | Acceptance test taxonomy — regression/artifact/manual that steers the V-model flow, seeded by intake | DONE | [REQ-027](REQ-027.md) | REQ-002, REQ-004, REQ-009 |
 | REQ-028 | Gating integrity — skip isn't green, the named behaviour must run, verifier uses project venv + full suite, lint reconciles marker↔ledger | DONE | [REQ-028](REQ-028.md) | REQ-002, REQ-006, REQ-015 |
 | REQ-029 | Phase-model rework — one fused develop step, mechanical land on green, bounded repair on red | DRAFT | [REQ-029](REQ-029.md) | REQ-004, REQ-020, REQ-027, REQ-028 |
 | REQ-030 | System-Test phase — independent validation session, evidence events, and the System Tester skill | DRAFT | [REQ-030](REQ-030.md) | REQ-027, REQ-029 |
