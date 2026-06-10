@@ -201,6 +201,10 @@ def run_claude(
         argv,
         cwd=cwd,
         env=run_env,
+        # A headless child must not inherit the driver's stdin: an attended `steward
+        # validate` reads its sign-off answers there *after* the session (REQ-030), and
+        # an inheriting child swallows them.
+        stdin=subprocess.DEVNULL,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,

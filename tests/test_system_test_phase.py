@@ -332,6 +332,8 @@ def test_manual_decision_stop(tmp_path):
     _project(other, [_REGRESSION, _MANUAL])
     ex2 = _executor(other)
     ex2.advance_once(only="REQ-001")
+    ex2.advance_once(only="REQ-001")  # unattended pass parks the manual stop first
+    assert ex2.ledger.open_decisions()
     step = ex2.step_by_id("REQ-001:validate")
     res2 = ex2.validate_runner(
         ex2, step, unattended=False, driver="interactive",
@@ -347,6 +349,7 @@ def test_manual_decision_stop(tmp_path):
     req = parse_req(other / "docs/requirements/REQ-001.md")
     assert req.status == "done"
     assert "signed off by Petra" in req.frontmatter["verified_by"]
+    assert ex2.ledger.open_decisions() == []  # the parked stop is resolved, not stale
 
     # a declined verdict is a red validation, not a pass
     declined = tmp_path / "declined"

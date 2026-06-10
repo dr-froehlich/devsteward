@@ -273,6 +273,13 @@ class ReqValidateRoutine:
         detail = "; ".join(r["detail"].splitlines()[0] for r in results) or "validated"
         if not in_flight:
             return StepResult(step, RunOutcome.DONE, detail)
+        # A decision parked by an earlier unattended pass (the manual stop) is resolved
+        # by this green validation — close it so the ledger does not surface a stale fork.
+        for dec in led.open_decisions():
+            if dec.step == step.id:
+                led.answer_decision(
+                    dec.id, "resolved by green validation (sign-off recorded)"
+                )
         return ex.mechanical_land(step, detail, driver=driver)
 
     # -- pieces -------------------------------------------------------------------
