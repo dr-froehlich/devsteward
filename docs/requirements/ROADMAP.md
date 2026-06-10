@@ -41,9 +41,15 @@ validation. Driven **interactively** (not by `steward run`) in this order — se
    file naming the REQ; bounded repair session (budget 2, Sonnet, fresh context +
    failure brief) on red; per-step model/effort config; split/concept REQs park in
    batch; old ledgers reinterpreted, never rewritten; e2e proof run is a `manual` AC
-3. REQ-018 — **revised**: `steward checkpoint` verifies with the REQ-028 gate and shares
-   REQ-029's mechanical bookkeeping — the engine certifies in both modes; handbook flips
-   to interactive-first
+3. REQ-018 — **revised** (fleshed out 2026-06-10): `steward checkpoint` verifies with
+   the REQ-028 gate and shares REQ-029's mechanical bookkeeping — the engine certifies
+   in both modes. REQ-029 already shipped the command + tail + `/advance` close; this
+   REQ adds the full topology close-out (trailing ledger commit + `--no-ff` merge via
+   the REQ-020 routine), `driver: interactive|headless` provenance on the checkpoint
+   event, the interactive-first handbook flip, dedicated tests, and a human-reviewed
+   proof run (`manual` AC). Red records the failure but lands nothing; the dirty tree
+   is the expected input (the engine is the committer). Lands before REQ-030 — the
+   validate gate later reshapes both drivers through the shared `mechanical_land`
 4. REQ-030 — **System-Test phase** (fleshed out 2026-06-10): conditional on
    `artifact|manual` ACs; one `validate` step between develop and the mechanical land
    (validation **gates** the land); fresh System Tester session preps the lab and
@@ -132,7 +138,7 @@ REQ-001
               ├─ REQ-005 ── REQ-009
               ├─ REQ-006 ── REQ-015 ── REQ-028 (draft, gating integrity: skip≠green, full-suite+venv gate, marker↔ledger lint; with REQ-002)
               ├─ REQ-008 ── REQ-012 ── REQ-025 (draft, account rotation + quota gate + graceful stop; with REQ-003)
-              ├─ REQ-018 (draft, revised: checkpoint = verifying bookkeeper; with REQ-028, REQ-029)
+              ├─ REQ-018 (draft, revised: checkpoint = verifying bookkeeper + close-out; with REQ-020, REQ-028, REQ-029)
               ├─ REQ-026 (draft, lifecycle CLI: activate / recover / --only; with REQ-002)
               └─ REQ-004 ── REQ-027 (done, acceptance taxonomy + intake seeding; with REQ-002, REQ-009)
  REQ-028 ── REQ-029 (draft, develop fusion + mechanical land + repair-on-red; with REQ-004, REQ-020, REQ-027)
