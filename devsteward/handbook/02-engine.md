@@ -76,6 +76,15 @@ develop defaults Opus-high, repair Sonnet). A REQ that declared `develop: split`
 `concept: true` is **batch-ineligible**: `steward run` parks it naming the attended need
 rather than simulating the human's presence.
 
+**The System-Test phase (REQ-030)** slots between develop and the land when the REQ
+declares an `artifact` or `manual` criterion: the develop gate then runs the `regression`
+tests and only **commits** the work (`develop_committed` — no flip, no merge; an empty
+named-test list is acceptable here because the runnable gate lives at validation), and a
+`REQ-NNN:validate` step follows — a fresh, diff-free System Tester session captures
+artifacts, the engine runs the `artifact` tests itself, manual criteria take a human
+sign-off, and on green the *same* mechanical land fires. A red validation parks with no
+repair loop. See 03 · workflow for the full phase.
+
 The gate's *green* is sharper than exit-0 (REQ-028): exit-0 cannot tell a pass from a
 skip or a zero-collection, so the gate reads pytest's per-test outcomes. A named acceptance
 test that **skips** fails the gate (a skip is not the proof the REQ promised — skip ≠ green;
@@ -97,8 +106,12 @@ hand-edited `done` must not outrun it.
 - `events.jsonl` — append-only, git-friendly event log: `step_started`, `verify`,
   `checkpoint` (with the commit sha and the `driver` — `interactive` or `headless`),
   `repair_started`, `repair_exhausted`, `land_refused`, `attended_parked`,
-  `decision_parked`, `decision_answered`, … Old `design`/`build`/`land` rows from before
-  REQ-029 stay as history — reinterpreted, never rewritten.
+  `decision_parked`, `decision_answered`, `develop_committed`, `validation` (the dated
+  evidence event: per-AC results, artifact paths + sha256, sign-offs — REQ-030), … Old
+  `design`/`build`/`land` rows from before REQ-029 stay as history — reinterpreted,
+  never rewritten.
+- `evidence/REQ-NNN/<timestamp>/` — artifacts captured by validation runs (REQ-030),
+  committed so the evidence survives lab teardown.
 
 The ledger holds *no requirement content* — only where the cursor is and what happened.
 

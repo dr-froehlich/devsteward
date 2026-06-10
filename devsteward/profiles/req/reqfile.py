@@ -191,6 +191,33 @@ def set_frontmatter_status(path: Path, new_status: str) -> str:
     return old[0]
 
 
+_VERIFIED_BY_LINE_RE = re.compile(r"^(verified_by:)[ \t]*.*$", re.MULTILINE)
+
+
+def set_frontmatter_verified_by(path: Path, summary: str) -> None:
+    """Rewrite the ``verified_by:`` line inside the frontmatter (REQ-030 Decision 3).
+
+    The engine composes the dated validation summary mechanically (the human supplies
+    only the verdict + scope — REQ-030's sign-off-authorship note), so this is the one
+    writer. Surgical like :func:`set_frontmatter_status`. Raises ValueError if there is
+    no frontmatter or no ``verified_by:`` line within it.
+    """
+    p = Path(path)
+    text = p.read_text(encoding="utf-8")
+    fm = _FRONTMATTER_RE.match(text)
+    if not fm:
+        raise ValueError(f"{path}: missing YAML frontmatter")
+    span_start, span_end = fm.start(1), fm.end(1)
+    block = text[span_start:span_end]
+    quoted = '"' + summary.replace("\\", "\\\\").replace('"', '\\"') + '"'
+    new_block, n = _VERIFIED_BY_LINE_RE.subn(
+        lambda m: f"{m.group(1)} {quoted}", block, count=1
+    )
+    if n == 0:
+        raise ValueError(f"{path}: no 'verified_by:' line in frontmatter")
+    p.write_text(text[:span_start] + new_block + text[span_end:], encoding="utf-8")
+
+
 def update_acceptance_status(path: Path, statuses: dict[str, str]) -> None:
     """Write back engine-owned ``status:`` values into a REQ's acceptance block.
 

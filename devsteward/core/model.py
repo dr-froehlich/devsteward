@@ -68,6 +68,15 @@ class Step:
     #: Opaque human-readable reason the step is attended (the profile fills it; the core
     #: surfaces it verbatim in the batch park decision). Empty when ``attended`` is False.
     attended_reason: str = ""
+    #: Whether a green gate on this step *lands* its deliverable (terminal flip, land
+    #: gate, ``--no-ff`` merge). The REQ profile sets ``False`` on a develop step that
+    #: defers to a trailing ``validate`` step (REQ-030 Decision 6): the work is committed
+    #: on the feature branch, but the land fires only after validation is green.
+    lands: bool = True
+    #: Opaque human-readable note on why the step is currently held (the profile fills
+    #: it; ``steward status`` surfaces it verbatim). E.g. REQ-030 Decision 7: a validate
+    #: step waiting on a not-yet-done ``process.lab`` requirement.
+    blocked_note: str = ""
 
 
 @dataclass
