@@ -14,10 +14,12 @@ fail to propagate. DevSteward is the single controlled baseline.
    REQ, never by quietly weakening it.
 3. **A dependency DAG orders the work.** `depends_on` makes a REQ eligible only once its
    prerequisites are done. `ROADMAP.md` is the human view of that graph.
-4. **An engine walks the work.** One checkpoint at a time (`steward advance`) or marching
-   every eligible step (`steward run`) — both headless, parking forks. A human can also
-   drive `/advance` interactively, trading the engine's guarantees for the loop. See
-   [02 · The engine](02-engine.md).
+4. **An engine walks the work — and certifies it, whoever drives.** The default is
+   **interactive**: a human drives `/advance` in a live session (the interview stays
+   live at forks) and closes with `steward checkpoint`, which verifies and lands through
+   the same gate as batch. `steward advance` / `steward run` are the batch lane for
+   queues of well-specified, low-fork REQs — headless, parking forks. The guarantees are
+   the engine's in both modes. See [02 · The engine](02-engine.md).
 5. **Verification is mechanical.** Acceptance criteria name runnable tests; a step is
    done only when they are green — checked by the engine, not asserted by a model.
 
@@ -46,3 +48,9 @@ the **engine** (`steward` CLI) and the bundled **scaffolding** ride in the same 
 **Consumer projects** are private, pin a `devsteward` tag, and hold the real data. A
 consumer is created by `steward new` (or the `/bootstrap` skill, which wraps it with an
 interview).
+
+A standing rule closes the loop between the two: **engine REQs originate from consumer
+postmortems**. When real consumer work hits friction — a false done, a hand-edit the
+engine should own, a gate without teeth — the postmortem becomes a requirement on the
+engine, not a local workaround in the consumer. That is how the controlled baseline
+improves instead of forking.

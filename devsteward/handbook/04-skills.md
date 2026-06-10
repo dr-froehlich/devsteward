@@ -16,10 +16,11 @@ green. A sharp `/intake` is the highest-leverage moment in the method; never rus
 
 The generalized `/scaleup`. Orients from the ledger, does **exactly one** checkpoint — the
 fused **Develop** checkpoint (plan-first → code → acceptance tests) — stops at forks, and
-ends with the fixed report. It runs two ways with different contracts — headless under
-`steward advance` / `steward run` (the engine verifies, lands the REQ on green or repairs
-then parks on red; forks park) or directly in a live session (the human verifies and
-`steward checkpoint` lands; forks ask). See the two-mode contract in `03-workflow.md`.
+ends with the fixed report. It runs two ways under **one bookkeeper**: directly in a live
+session (the default — forks ask; the close is `steward checkpoint`, which verifies and
+lands through the same gate as batch) or headless under `steward advance` / `steward run`
+(the batch lane — forks park; the executor verifies and lands, repairing then parking on
+red). See the two-driver contract in `03-workflow.md`.
 
 ## `/bootstrap` — bring a new project to life
 
@@ -34,9 +35,10 @@ All three skills obey the same rule when `DEVSTEWARD_UNATTENDED=1` is set (batch
 **not** block on `AskUserQuestion`. Instead append a decision request to
 `.devsteward/state.yaml` under `decisions:` (`{id, step, question, status: open}`) and stop.
 The engine surfaces it and advances to the next independent step. Without the env var
-(interactive mode) the skills *do* ask via `AskUserQuestion` and continue — but that run
-carries no engine guarantee; the human in the loop is the guarantee. Either way **the
-interview stays sacred** — a fork is recorded or asked, never guessed.
+(interactive mode) the skills *do* ask via `AskUserQuestion` and continue — and the work
+still lands through the engine's gate (`steward checkpoint`), so the certification is the
+same either way. **The interview stays sacred** — a fork is recorded or asked, never
+guessed.
 
 ## Renaming
 

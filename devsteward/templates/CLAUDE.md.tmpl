@@ -45,16 +45,18 @@ engine runs them and only marks a step done when they pass.
 ```sh
 steward status            # where are we? what's eligible next?
 steward lint              # validate REQs before committing
-steward advance           # batch: one checkpoint headless (Design / Build / Land)
+steward checkpoint        # interactive close: verify, land, merge — one transaction
+steward advance           # batch: one fused develop checkpoint headless
 steward run               # batch: march eligible steps headless; park on forks
 steward decision list     # forks parked while running headless
 ```
 
 REQ = spec, ledger = cursor. Checkpoint state lives in `.devsteward/` (never in REQ
-files). Running headless is a **batch worker**: skills **park-and-surface** at forks
-(record the question and stop, never guess) and the **engine owns the commit**. Running
-`/advance` in a live session is the **interactive** alternative: the skill asks at forks
-and commits its own work — but with no engine guarantees behind it.
+files). The **engine is the verifying bookkeeper in both driving modes**. Interactive
+(the default): `/advance` in a live session asks at forks and closes via
+`steward checkpoint`, which re-runs the acceptance tests and lands on green. Batch (the
+overnight lane): skills **park-and-surface** at forks (record the question and stop,
+never guess) and the executor verifies, lands, and commits.
 
 ## Skills
 

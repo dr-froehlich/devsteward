@@ -34,8 +34,8 @@ lives at `devsteward/templates/CLAUDE.md.tmpl` and uses placeholders only).
   advances. Pluggable seams: step source, verifier, decision gate, account provider.
 - `devsteward/profiles/req/` — the REQ-workflow profile (Design → Build → Land) layered
   on the core. The only content-aware part.
-- `devsteward/cli.py` — `steward` (click): `new`, `advance`, `run`, `lint`, `status`,
-  `decision`.
+- `devsteward/cli.py` — `steward` (click): `new`, `advance`, `run`, `checkpoint`,
+  `lint`, `status`, `decision`.
 - `devsteward/templates/` — the scaffolding `steward new` stamps (package-data).
 - `devsteward/handbook/` — the reference guide (00-method … 04-skills).
 - `docs/requirements/` — DevSteward's **own** REQs (dogfooded). `.devsteward/` holds its

@@ -287,24 +287,35 @@ def advance(
 
 
 @main.command()
-@click.argument("req_id")
-@click.argument("phase", default="develop")
-def checkpoint(req_id: str, phase: str) -> None:
-    """Verify, flip the REQ done, commit, and advance the ledger — one transaction.
+@click.argument("req_id", required=False, default=None)
+@click.argument("phase", required=False, default=None)
+def checkpoint(req_id: str | None, phase: str | None) -> None:
+    """Verify, land, merge — close an interactively driven step as one transaction.
 
     The interactive ``/advance`` skill does the thinking and leaves the tree dirty; this
-    runs the engine's verify → flip-done → commit → advance tail (no ``claude`` call), so
-    the frontmatter ``done``, the index row, the commit, and the ledger checkpoint can no
-    longer drift apart. Use it in place of hand-editing ``state.yaml``.
+    runs the engine's land-grade gate and, on green, the same mechanical bookkeeping as a
+    batch land (flip done, index sync, the one commit, ledger advance) plus the topology
+    close-out (trailing ledger follow-up, ``--no-ff`` merge) — no ``claude`` call — so the
+    frontmatter ``done``, the index row, the commit, and the ledger checkpoint can no
+    longer drift apart. With no REQ_ID the target is the current cursor step; PHASE
+    defaults to ``develop``. On red nothing lands; fix and re-run.
     """
     cfg = _load_or_die()
     ex = build_executor(cfg)
-    step_id = f"{req_id}:{phase}"
+    if req_id is None:
+        step_id = ex.ledger.cursor_step
+        if not step_id:
+            raise click.ClickException(
+                "no cursor step to checkpoint — pass the target explicitly: "
+                "`steward checkpoint REQ-NNN [PHASE]`"
+            )
+    else:
+        step_id = f"{req_id}:{phase or 'develop'}"
     step = ex.step_by_id(step_id)
     if step is None:
         raise click.ClickException(
-            f"{step_id} is not a derivable step — is {req_id} active (not draft/done) and "
-            f"is the phase 'develop'?"
+            f"{step_id} is not a derivable step — is {step_id.partition(':')[0]} active "
+            f"(not draft/done) and is the phase 'develop'?"
         )
     res = ex.checkpoint(step)
     if res.outcome is RunOutcome.REFUSED:
