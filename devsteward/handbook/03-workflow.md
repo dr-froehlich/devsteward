@@ -1,22 +1,28 @@
 # 03 · The REQ workflow
 
-The shipped profile turns every active requirement into a three-checkpoint cycle and
+The shipped profile turns every active requirement into a single develop checkpoint and
 sequences requirements by their dependencies.
 
-## Design → Build → Land
+## One develop step per requirement (REQ-029)
 
-For each active REQ (`open` / `in-progress` / `blocked`) the REQ profile derives three
-steps:
+For each active REQ (`open` / `in-progress` / `blocked`) the REQ profile derives **one**
+step:
 
-| Step | Phase | What happens | Verified? |
-|------|-------|--------------|-----------|
-| `REQ-NNN:design` | A · Design | Approach, interfaces, files, tests to write | — |
-| `REQ-NNN:build`  | B · Build  | Implement + write the acceptance tests | — |
-| `REQ-NNN:land`   | C · Land   | Make tests green; flip status to `done` | **yes** |
+| Step | What happens | Verified? |
+|------|--------------|-----------|
+| `REQ-NNN:develop` | Plan-first → implement → write & green the acceptance tests | **yes** |
 
-`build` depends on `design`; `land` depends on `build`. The **land** step carries the
+`develop` is the single Claude session — the fused successor to the old `design → build →
+land` triple (which paid three cold sessions where two verified nothing). It carries the
 REQ's acceptance `test:` commands as its verification, so the engine re-runs them before
 marking the requirement done.
+
+On a **green** develop gate the engine performs the **mechanical land** itself — status
+flip, index sync, the single commit, the `--no-ff` merge, ledger advance — with **no
+Claude** (and it refuses unless a file in `docs/plans/` names the REQ). On a **red** gate it
+spawns up to **two** fresh repair sessions (failure brief, default Sonnet), then parks. A
+REQ that declared `develop: split` or `concept: true` is parked in batch, naming the
+attended need, rather than driven headless. (See 02 · engine for the gate's teeth.)
 
 ## The V-model mapping: `check:` steers the phases
 
@@ -25,11 +31,13 @@ key** that maps it onto the V-model:
 
 | `check:` | V-model side | Phase | Oracle |
 |----------|--------------|-------|--------|
-| `regression` | verification (left) | **Build** | coupled / mock, headless |
+| `regression` | verification (left) | **Build** (inside `develop`) | coupled / mock, headless |
 | `artifact` | validation (right) | **System-Test** | decoupled, durable (lab-produced; engine reads only the pass/fail signal) |
 | `manual` | validation (right) | **System-Test** | human — a decision stop |
 
-The classification steers **phase existence**: a REQ with only `regression` criteria
+The phase names here are V-model *stages*, not step ids: the `develop` step does the
+Build-side **verification** of every `regression` criterion (that is its gate). The
+classification steers **phase existence**: a REQ with only `regression` criteria
 runs no System-Test phase; any `artifact` *or* `manual` criterion makes the System-Test
 (validation) phase apply. A human review *is* validation — system-level by definition —
 which is why `manual` lives inside the System-Test phase rather than as a stray
@@ -42,7 +50,7 @@ taxonomy is seeded at intake and enforced by lint; an engine-driven land of a RE
 
 ## Sequencing whole requirements
 
-`REQ-B:design` depends on `REQ-A:land` for each `REQ-A` in `REQ-B.depends_on`. So a
+`REQ-B:develop` depends on `REQ-A:develop` for each `REQ-A` in `REQ-B.depends_on`. So a
 requirement only starts once its prerequisites have fully landed, while **independent
 requirements interleave freely**. A dependency that is already `done` is satisfied and
 dropped; a dependency that is draft, dropped, or missing leaves the dependent correctly
@@ -76,15 +84,16 @@ The production guard has no opt-out — strictness is the point — and it never
 (`dev → main` stays a human PR).
 
 **The executor manages the implementation feature branch** (it no longer merely refuses to
-implement on the integration branch). When a `build` or `land` step is eligible on the
-integration branch it lazily **creates and switches** to `feature_branch` (`{num}` is the
-REQ id without the `REQ-` prefix; `{slug}` a short slug of the title) and runs the step
-there; a partial prior run's branch is **reused** (a *diverged* one is surfaced, not merged
-over). After a **green land** it commits the trailing ledger write, switches back, and
+implement on the integration branch). When a `develop` step is eligible on the integration
+branch it lazily **creates and switches** to `feature_branch` (`{num}` is the REQ id without
+the `REQ-` prefix; `{slug}` a short slug of the title) and runs the step there; a partial
+prior run's branch is **reused** (a *diverged* one is surfaced, not merged over). After a
+**green develop** the mechanical land commits the trailing ledger write, switches back, and
 merges `--no-ff` with the co-author trailer — leaving the integration branch clean at rest.
-A failed or parked land does **not** merge: the feature branch stays checked out for
-inspection. A `design` step (declaration) still runs on the integration branch with no
-branch created — the automation is gated strictly on implementation phases.
+A failed or parked develop does **not** merge: the feature branch stays checked out for
+inspection. Declaration (intake, plans, the ledger) is no longer a step — it is committed
+directly on the integration branch — so the automation only ever branches the one
+implementation phase.
 
 ## Two modes: batch worker vs. interactive pair
 
@@ -95,10 +104,11 @@ engine sets when it shells out.
 
 - **Batch worker — `steward advance` / `steward run`.** Both drive `claude -p` headless
   (`DEVSTEWARD_UNATTENDED=1`); there is no human channel. The **engine owns the guarantees**:
-  it re-runs the acceptance tests itself (teeth at land), it makes the single commit, and it
-  advances the ledger. A fork is never asked — it is **parked** and surfaced. `steward
-  advance` does one checkpoint; `steward run` marches every eligible step, parking on forks
-  and stopping on a usage limit or hard failure so a human can look.
+  it re-runs the acceptance tests itself (teeth at the develop gate), lands the REQ
+  mechanically on green (repairing up to twice on red, then parking), and advances the
+  ledger. A fork is never asked — it is **parked** and surfaced. `steward advance` does one
+  checkpoint; `steward run` marches every eligible step, parking on forks and stopping on a
+  usage limit or hard failure so a human can look.
 - **Interactive pair — `/advance` in a live session.** A person runs the skill directly in
   Claude Code. There is no executor in the loop and therefore **no engine guarantees**: the
   skill verifies, the skill commits (same-commit discipline), **the human advances the ledger
@@ -131,9 +141,7 @@ Next:      the next eligible step
 steward status                       # where are we?
 /intake "let users export to CSV"    # interview → draft REQ-014
 steward lint                         # green?
-steward advance                      # design REQ-014
-steward advance                      # build REQ-014 (+ its tests)
-steward advance                      # land REQ-014 (engine runs the tests)
+steward advance                      # develop REQ-014 (plan + code + tests; engine lands on green)
 # or, hands-off:
 steward run                          # march everything eligible; park on forks
 steward decision list                # anything parked?

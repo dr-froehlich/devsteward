@@ -18,6 +18,15 @@ _yaml = YAML()
 
 CONFIG_FILE = "config.yaml"
 
+# REQ-029 Decision 4 — per-step-kind model/effort defaults. ``model``/``effort`` of None on
+# a kind means "inherit the flat ``claude.model``/``claude.effort``". develop inherits
+# (Opus-high); repair drops to Sonnet so a cold repair session is cheap. The validate kind
+# (REQ-030) will join here. Overridable per project via ``claude.steps.<kind>``.
+STEP_CLAUDE_DEFAULTS = {
+    "develop": {"model": None, "effort": None},
+    "repair": {"model": "claude-sonnet-4-6", "effort": None},
+}
+
 
 class ProjectNotFound(Exception):
     """Raised when no ``.devsteward/`` directory is found at or above the cwd."""
@@ -93,6 +102,22 @@ class Config:
     def effort(self) -> str:
         return (self.claude or {}).get("effort", "high")
 
+    def step_claude(self, kind: str) -> tuple[str, str]:
+        """The ``(model, effort)`` for a session of ``kind`` (REQ-029 Decision 4).
+
+        Precedence: a project's ``claude.steps.<kind>`` override → the built-in
+        :data:`STEP_CLAUDE_DEFAULTS` for the kind → the flat ``claude.model``/``effort``.
+        So ``develop`` resolves to the flat defaults (Opus-high) and ``repair`` to Sonnet
+        unless the project overrides either.
+        """
+        merged = dict(STEP_CLAUDE_DEFAULTS.get(kind, {}))
+        steps = (self.claude or {}).get("steps", {})
+        if isinstance(steps, dict) and isinstance(steps.get(kind), dict):
+            for key, value in steps[kind].items():
+                if value is not None:
+                    merged[key] = value
+        return merged.get("model") or self.model, merged.get("effort") or self.effort
+
     @property
     def verify_full_suite(self) -> str | None:
         """The full project suite the land gate runs (REQ-028 AC3); default ``python -m
@@ -106,6 +131,12 @@ class Config:
         A configured-but-unusable interpreter is a hard error, not a fall-through. Unset
         (the default) means discover: project venv, then ``sys.executable``."""
         return (self.verify or {}).get("python")
+
+    @property
+    def plans_dir(self) -> Path:
+        """Where plan artifacts live (REQ-029 Decision 6 — the mechanical land refuses to
+        land a REQ no plan here names). Conventionally ``docs/plans/`` under the repo root."""
+        return self.root / "docs" / "plans"
 
     @property
     def index_path(self) -> Path:

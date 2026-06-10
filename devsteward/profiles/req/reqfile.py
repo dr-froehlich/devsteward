@@ -32,8 +32,11 @@ _ACCEPTANCE_RE = re.compile(
     r"(?:^|\n)(`{3,}|~{3,})yaml acceptance[^\n]*\n(.*?)\n\1", re.DOTALL
 )
 
-# REQ-NNN derived step phases, in order. The land step carries the acceptance tests.
-PHASES = ("design", "build", "land")
+# REQ-NNN derived step phases (REQ-029). One fused ``develop`` step per REQ replaces the
+# old design→build→land triple: develop is the single Claude session (plan-first + code +
+# acceptance tests), it carries the acceptance tests as its gate, and on green the engine
+# lands it mechanically — there is no separate ``land`` Claude step.
+PHASES = ("develop",)
 # REQ statuses that produce work. draft = not yet ready; terminal statuses = no work.
 ACTIVE_STATUSES = {"open", "in-progress", "blocked"}
 TERMINAL_STATUSES = {"done", "dropped", "superseded"}

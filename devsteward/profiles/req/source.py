@@ -1,14 +1,21 @@
 """Derive executor steps from REQ files — the REQ profile's :class:`StepSource`.
 
-Each **active** requirement (``open``/``in-progress``/``blocked``) yields three steps in
-order: ``REQ-NNN:design`` → ``REQ-NNN:build`` → ``REQ-NNN:land``. The land step carries
-the requirement's acceptance ``test:`` commands as its verification.
+Each **active** requirement (``open``/``in-progress``/``blocked``) yields **one** step:
+``REQ-NNN:develop`` (REQ-029). It is the single Claude session for the REQ and carries the
+requirement's acceptance ``test:`` commands as its verification — the gate the engine
+re-runs before it lands the REQ mechanically.
 
-Whole requirements are sequenced in dependency order: ``REQ-B:design`` depends on
-``REQ-A:land`` for each dependency ``REQ-A``. Dependencies that are already ``done`` are
+Whole requirements are sequenced in dependency order: ``REQ-B:develop`` depends on
+``REQ-A:develop`` for each dependency ``REQ-A``. Dependencies that are already ``done`` are
 *satisfied* and dropped. A dependency that is **not** active and **not** done (draft,
 dropped, superseded, or missing) yields a dangling dependency id that no step satisfies —
 so the dependent stays correctly blocked until the situation is fixed (the linter flags it).
+
+**Ledger reinterpretation (REQ-029 Decision 7):** the source emits only the new ``:develop``
+ids. Old ``:design``/``:build``/``:land`` rows left in a pre-existing ledger are orphaned
+history — never rewritten, ignored for eligibility. A REQ whose old-shape ``land`` is done
+has frontmatter ``done`` (not active) so it yields no step; a REQ caught mid-flight is still
+active and gets a fresh ``:develop`` step (PENDING by default), restarting the cursor cleanly.
 """
 
 from __future__ import annotations
@@ -47,36 +54,39 @@ class ReqStepSource:
     def steps(self, ledger=None) -> list[Step]:  # ledger unused (no side effects)
         reqs = load_reqs(self.req_dir)
         by_id = {r.id: r for r in reqs}
+        (phase,) = PHASES  # one fused phase per REQ (REQ-029)
         out: list[Step] = []
         for r in reqs:
             if not r.is_active:
                 continue  # draft = not ready; terminal = no work
-            design_deps: list[str] = []
+            deps: list[str] = []
             for dep in r.depends_on:
                 dep_req = by_id.get(dep)
                 if dep_req is not None and dep_req.status == "done":
                     continue  # satisfied — drop it
-                design_deps.append(f"{dep}:land")  # active resolves; otherwise blocks
-            prev: str | None = None
-            for phase in PHASES:
-                sid = f"{r.id}:{phase}"
-                deps = tuple(design_deps) if phase == "design" else (prev,)
-                verify = (
-                    tuple(c.test for c in r.acceptance if c.test)
-                    if phase == "land"
-                    else ()
+                deps.append(f"{dep}:{phase}")  # active resolves; otherwise blocks
+            proc = r.process
+            attended_reason = ""
+            if proc.get("develop") == "split":
+                attended_reason = (
+                    f"{r.id} declared a split develop — needs an attended design review"
                 )
-                out.append(
-                    Step(
-                        id=sid,
-                        command=f"{_COMMAND} {r.id} {phase}",
-                        depends_on=tuple(d for d in deps if d),
-                        verify=verify,
-                        title=f"{r.title} — {phase}",
-                        req=r.id,
-                        phase=phase,
-                        slug=_slugify(r.title),
-                    )
+            elif proc.get("concept"):
+                attended_reason = (
+                    f"{r.id} declared a concept phase — needs an attended session"
                 )
-                prev = sid
+            out.append(
+                Step(
+                    id=f"{r.id}:{phase}",
+                    command=f"{_COMMAND} {r.id} {phase}",
+                    depends_on=tuple(deps),
+                    verify=tuple(c.test for c in r.acceptance if c.test),
+                    title=f"{r.title} — {phase}",
+                    req=r.id,
+                    phase=phase,
+                    slug=_slugify(r.title),
+                    attended=bool(attended_reason),
+                    attended_reason=attended_reason,
+                )
+            )
         return out

@@ -133,6 +133,14 @@ def scaffold_reality_project(root: Path) -> None:
         stale.unlink()
     (req_dir / "REQ-001.md").write_text(_REQ_001, encoding="utf-8")
     (req_dir / "REQUIREMENTS_INDEX.md").write_text(_INDEX, encoding="utf-8")
+    # REQ-029: the mechanical land refuses to land a REQ with no plan that names it. The
+    # harness's trivial REQ gets a one-line plan so the real e2e still reaches DONE.
+    plans_dir = root / "docs" / "plans"
+    plans_dir.mkdir(parents=True, exist_ok=True)
+    (plans_dir / "0001-greeting.md").write_text(
+        "# Plan 0001 — REQ-001 greeting\n\nWrite `greeting.txt` containing `hello`.\n",
+        encoding="utf-8",
+    )
 
 
 def init_git(root: Path) -> None:
@@ -176,7 +184,7 @@ def test_fixture_project_is_lintable_and_has_one_eligible_step(tmp_path):
     cfg = load_config(tmp_path)
     assert lint(cfg) == []
     ex = build_executor(cfg)
-    assert [s.id for s in ex.eligible_steps()] == ["REQ-001:design"]
+    assert [s.id for s in ex.eligible_steps()] == ["REQ-001:develop"]
 
 
 # -- the real end-to-end gate (opt-in) ----------------------------------------
@@ -197,7 +205,7 @@ def test_real_claude_end_to_end(tmp_path):
     cfg = load_config(tmp_path)
     ex = build_executor(cfg)
 
-    results = ex.run(max_steps=3)  # design -> build -> land
+    results = ex.run(max_steps=1)  # one fused develop step, then mechanical land
     outcomes = {r.step.id: r.outcome.value for r in results}
 
     greeting = tmp_path / "greeting.txt"
@@ -208,8 +216,8 @@ def test_real_claude_end_to_end(tmp_path):
     check = subprocess.run("grep -qx hello greeting.txt", shell=True, cwd=tmp_path)
     assert check.returncode == 0
 
-    # The land step reached DONE and a real commit landed beyond the initial one.
-    assert Ledger(tmp_path).status_of("REQ-001:land") is StepStatus.DONE
+    # The develop step reached DONE and a real commit landed beyond the initial one.
+    assert Ledger(tmp_path).status_of("REQ-001:develop") is StepStatus.DONE
     count = subprocess.run(
         ["git", "rev-list", "--count", "HEAD"], cwd=tmp_path, capture_output=True, text=True
     )

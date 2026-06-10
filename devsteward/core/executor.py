@@ -90,11 +90,14 @@ class Executor:
         stop=None,
         production_branch: str = "main",
         integration_branch: str = "dev",
-        implementation_phases: tuple[str, ...] = ("build", "land"),
+        implementation_phases: tuple[str, ...] = ("develop",),
         feature_branch_template: str = "req-{num}-{slug}",
         git: GitTopology | None = None,
         branch_resolver: Callable[[Path], str] | None = None,
         on_verified: Callable[[Step], None] | None = None,
+        land_gate: Callable[[Step], str | None] | None = None,
+        step_claude: dict[str, tuple[str | None, str | None]] | None = None,
+        repair_budget: int = 0,
     ):
         self.root = Path(root)
         self.source = source
@@ -104,6 +107,16 @@ class Executor:
         # any status flip it makes (the REQ profile marks the REQ `done`) is gated on green
         # tests and rides in the same commit. None for the generic profile.
         self.on_verified = on_verified
+        # REQ-029: a content-aware refusal run *before* the mechanical land commits — returns
+        # a surface message to refuse (the step parks) or None to proceed. The REQ profile
+        # wires the plan-artifact gate (docs/plans/ must name the REQ id); None = no gate.
+        self.land_gate = land_gate
+        # REQ-029: per-step-kind (model, effort), e.g. {"develop": (...), "repair": (...)}.
+        # A kind absent from the map falls back to the flat self.model/self.effort.
+        self.step_claude = step_claude or {}
+        # REQ-029: how many fresh repair sessions a red develop gate may spawn before the
+        # step parks for a human. 0 (the bare default) = no repair; build_executor wires 2.
+        self.repair_budget = repair_budget
         self.runner = runner
         self.committer = committer
         self.autocommit = autocommit
@@ -188,6 +201,11 @@ class Executor:
     def steps(self) -> list[Step]:
         return self.source.steps(self.ledger)
 
+    def _claude_for(self, kind: str) -> tuple[str | None, str | None]:
+        """The (model, effort) for a session of ``kind`` (``develop``/``repair``), falling
+        back to the flat default when the kind is unconfigured (REQ-029 Decision 4)."""
+        return self.step_claude.get(kind, (self.model, self.effort))
+
     #: Step statuses that make a step a candidate for running. ``RECOVER`` joins
     #: ``PENDING`` so a re-armed failed step (REQ-026) is picked up by the next run.
     _RUNNABLE = (StepStatus.PENDING, StepStatus.RECOVER)
@@ -243,6 +261,11 @@ class Executor:
         on_event: Callable[[dict], None] | None = None,
     ) -> StepResult:
         led = self.ledger
+        # Batch-park an attended REQ (REQ-029 Decision 9): a REQ that declared a split
+        # develop or a concept phase chose to have a human present, so unattended `steward
+        # run`/`advance` parks it (naming the need) instead of simulating the attendance.
+        if step.attended and unattended:
+            return self._park_attended(step)
         # Capture the recovery signal *before* flipping to RUNNING (REQ-026 D5/AC4): if the
         # step was re-armed via `steward recover`, tell the resuming skill so it assesses
         # the failed attempt's partial edits (already in the tree) instead of starting clean.
@@ -264,14 +287,15 @@ class Executor:
             led.append_event("quota_block", step=step.id, reason=reason)
             return StepResult(step, RunOutcome.LIMIT, reason)
 
+        model, effort = self._claude_for("develop")
         result = self.runner(
             command,
             argv_prefix=self.accounts.claude_argv(),
             cwd=str(self.root),
             unattended=unattended,
             permission_mode=self.permission_mode,
-            model=self.model,
-            effort=self.effort,
+            model=model,
+            effort=effort,
             on_event=on_event,
             on_spawn=(self.stop.register_child if self.stop is not None else None),
         )
@@ -312,26 +336,27 @@ class Executor:
         if parked is not None:
             return StepResult(step, RunOutcome.PARKED, parked.question)
 
-        # Verify: named acceptance tests must be green.
+        # Verify: named acceptance tests must be green (REQ-028 semantics in the profile).
         verified, detail = self.verifier.verify(step)
         led.append_event("verify", step=step.id, ok=verified, detail=detail[:2000])
         if not verified:
-            led.set_status(step.id, StepStatus.FAILED)
-            led.save()
-            return StepResult(step, RunOutcome.VERIFY_FAILED, detail)
+            # Red gate (REQ-029 Decision 3): spawn up to `repair_budget` fresh repair
+            # sessions, then park. With no budget (the bare default) surface the failure.
+            if self.repair_budget <= 0:
+                led.set_status(step.id, StepStatus.FAILED)
+                led.save()
+                return StepResult(step, RunOutcome.VERIFY_FAILED, detail)
+            repaired = self._repair_loop(
+                step, detail, unattended=unattended, on_event=on_event
+            )
+            if repaired is not None:
+                return repaired  # parked after budget, or a limit/failure during repair
+            # A repair turned the gate green; re-read the passing detail for the record.
+            verified, detail = self.verifier.verify(step)
+            led.append_event("verify", step=step.id, ok=verified, detail=detail[:2000])
 
-        # Terminal flip (verify-gated, in-commit): let the profile mark the work done
-        # *before* the commit so the status change is captured by the one checkpoint commit,
-        # never authored speculatively by the skill ahead of verification.
-        if self.on_verified is not None:
-            self.on_verified(step)
-
-        # Commit + advance.
-        sha = self._commit(step)
-        led.set_status(step.id, StepStatus.DONE)
-        led.save()
-        led.append_event("checkpoint", step=step.id, commit=sha)
-        return StepResult(step, RunOutcome.DONE, detail, commit=sha)
+        # Green gate → the engine lands the REQ mechanically (no claude). REQ-029.
+        return self.mechanical_land(step, detail)
 
     def checkpoint(self, step: Step) -> StepResult:
         """The verify → flip → commit → advance *tail*, for an interactive land the human
@@ -354,6 +379,36 @@ class Executor:
             led.set_status(step.id, StepStatus.FAILED)
             led.save()
             return StepResult(step, RunOutcome.VERIFY_FAILED, detail)
+        return self.mechanical_land(step, detail)
+
+    def mechanical_land(self, step: Step, detail: str = "") -> StepResult:
+        """The deterministic post-green tail — **no claude** (REQ-029 Decision 2).
+
+        The single shared routine both the batch develop path (:meth:`run_step`) and the
+        interactive ``steward checkpoint`` (REQ-018) land through, so the bookkeeping is
+        identical regardless of who drove the work. In order: the land gate (REQ-029
+        Decision 6 — refuse if no plan names the REQ), then the verify-gated terminal flip
+        (the profile marks the REQ ``done`` *before* the commit so it rides the one
+        checkpoint commit), the single authoritative commit, and the ledger advance.
+
+        The caller must have already verified the step green; this routine assumes it.
+        Returns ``PARKED`` if the land gate refuses (nothing committed), else ``DONE``.
+        """
+        led = self.ledger
+        if self.land_gate is not None:
+            refusal = self.land_gate(step)
+            if refusal is not None:
+                dec = Decision(
+                    id=led.next_decision_id(),
+                    step=step.id,
+                    question=refusal,
+                    req=step.req,
+                )
+                led.park_decision(dec)
+                led.set_status(step.id, StepStatus.BLOCKED)
+                led.save()
+                led.append_event("land_refused", step=step.id, detail=refusal)
+                return StepResult(step, RunOutcome.PARKED, refusal)
         if self.on_verified is not None:
             self.on_verified(step)
         sha = self._commit(step)
@@ -362,6 +417,123 @@ class Executor:
         led.save()
         led.append_event("checkpoint", step=step.id, commit=sha)
         return StepResult(step, RunOutcome.DONE, detail, commit=sha)
+
+    def _park_attended(self, step: Step) -> StepResult:
+        """Park an attended step in batch (REQ-029 Decision 9): record a decision naming the
+        attended need and leave the step BLOCKED, spawning no claude session."""
+        led = self.ledger
+        if not any(d.step == step.id for d in led.open_decisions()):
+            dec = Decision(
+                id=led.next_decision_id(),
+                step=step.id,
+                question=step.attended_reason
+                or f"{step.req or step.id} needs an attended session",
+                req=step.req,
+            )
+            led.park_decision(dec)
+        led.set_status(step.id, StepStatus.BLOCKED)
+        led.save()
+        led.append_event("attended_parked", step=step.id, reason=step.attended_reason)
+        return StepResult(step, RunOutcome.PARKED, step.attended_reason)
+
+    def _repair_command(self, step: Step, brief: str) -> str:
+        """The prompt for a fresh repair session (REQ-029 Decision 8): the develop command
+        plus a ``--repair`` marker and the gate's failure brief, so the skill assesses the
+        partial work in the tree *and* knows exactly what failed. No ``--resume``."""
+        return (
+            f"{step.command} --repair\n\n"
+            f"The previous develop attempt left the gate red. Failure brief:\n{brief}\n\n"
+            f"Assess the partial work already in the tree, fix the cause, and make the named "
+            f"acceptance tests pass."
+        )
+
+    def _repair_loop(
+        self,
+        step: Step,
+        brief: str,
+        *,
+        unattended: bool,
+        on_event: Callable[[dict], None] | None,
+    ) -> StepResult | None:
+        """Spawn up to ``repair_budget`` fresh repair sessions on a red gate (REQ-029
+        Decision 3/8). Returns ``None`` once a repair turns the gate green (the caller then
+        lands), or a terminal :class:`StepResult` — ``PARKED`` when the budget is exhausted
+        still red, or a ``LIMIT``/``FAILED`` raised by a repair session.
+        """
+        led = self.ledger
+        model, effort = self._claude_for("repair")
+        for attempt in range(1, self.repair_budget + 1):
+            ok, reason = self.accounts.precheck()
+            if not ok:
+                led.set_status(step.id, StepStatus.PENDING)
+                led.save()
+                led.append_event("quota_block", step=step.id, reason=reason)
+                return StepResult(step, RunOutcome.LIMIT, reason)
+            command = self._repair_command(step, brief)
+            led.append_event(
+                "repair_started", step=step.id, attempt=attempt, model=model
+            )
+            result = self.runner(
+                command,
+                argv_prefix=self.accounts.claude_argv(),
+                cwd=str(self.root),
+                unattended=unattended,
+                permission_mode=self.permission_mode,
+                model=model,
+                effort=effort,
+                on_event=on_event,
+                on_spawn=(self.stop.register_child if self.stop is not None else None),
+            )
+            if self.stop is not None:
+                self.stop.clear_child()
+
+            if result.outcome is claude_mod.Outcome.USAGE_LIMIT:
+                led.set_status(step.id, StepStatus.PENDING)
+                led.save()
+                led.append_event("usage_limit", step=step.id)
+                return StepResult(step, RunOutcome.LIMIT, "claude usage limit")
+            if result.outcome in (
+                claude_mod.Outcome.ERROR,
+                claude_mod.Outcome.TIMEOUT,
+                claude_mod.Outcome.LAUNCH_FAILURE,
+            ):
+                led.set_status(step.id, StepStatus.FAILED)
+                led.save()
+                led.append_event(
+                    "repair_failed", step=step.id, attempt=attempt,
+                    outcome=result.outcome.value,
+                )
+                return StepResult(step, RunOutcome.FAILED, result.outcome.value)
+
+            parked = self._detect_park(step, result.text)
+            if parked is not None:
+                return StepResult(step, RunOutcome.PARKED, parked.question)
+
+            verified, detail = self.verifier.verify(step)
+            led.append_event(
+                "verify", step=step.id, ok=verified, detail=detail[:2000], repair=attempt
+            )
+            if verified:
+                return None  # resolved — the caller lands
+            brief = detail  # feed the next attempt the latest failure
+
+        # Budget exhausted, still red → park for a human (REQ-029 Decision 3).
+        dec = Decision(
+            id=led.next_decision_id(),
+            step=step.id,
+            question=(
+                f"{step.req or step.id}: gate still red after {self.repair_budget} "
+                f"repair attempts — needs a human"
+            ),
+            req=step.req,
+        )
+        led.park_decision(dec)
+        led.set_status(step.id, StepStatus.BLOCKED)
+        led.save()
+        led.append_event(
+            "repair_exhausted", step=step.id, attempts=self.repair_budget
+        )
+        return StepResult(step, RunOutcome.PARKED, dec.question)
 
     def step_by_id(self, step_id: str) -> Step | None:
         """Look up a derived step by id (``steward checkpoint`` resolves its target here)."""
@@ -420,7 +592,7 @@ class Executor:
             self.ledger.append_event("branch_surfaced", step=step.id, detail=surfaced)
             return StepResult(step, RunOutcome.REFUSED, surfaced)
         res = self.run_step(step, unattended=unattended, on_event=on_event)
-        if res.outcome is RunOutcome.DONE and step.phase == "land":
+        if res.outcome is RunOutcome.DONE and step.phase == "develop":
             self._merge_after_land(step)
         return res
 

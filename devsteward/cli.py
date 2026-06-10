@@ -288,7 +288,7 @@ def advance(
 
 @main.command()
 @click.argument("req_id")
-@click.argument("phase", default="land")
+@click.argument("phase", default="develop")
 def checkpoint(req_id: str, phase: str) -> None:
     """Verify, flip the REQ done, commit, and advance the ledger — one transaction.
 
@@ -304,7 +304,7 @@ def checkpoint(req_id: str, phase: str) -> None:
     if step is None:
         raise click.ClickException(
             f"{step_id} is not a derivable step — is {req_id} active (not draft/done) and "
-            f"is the phase one of design/build/land?"
+            f"is the phase 'develop'?"
         )
     res = ex.checkpoint(step)
     if res.outcome is RunOutcome.REFUSED:

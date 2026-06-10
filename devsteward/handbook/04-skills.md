@@ -14,12 +14,12 @@ green. A sharp `/intake` is the highest-leverage moment in the method; never rus
 
 ## `/advance` — one checkpoint
 
-The generalized `/scaleup`. Orients from the ledger, does **exactly one** checkpoint
-(Design, Build, or Land), stops at forks, runs the acceptance tests at Land, and ends
-with the fixed report. It runs two ways with different contracts — headless under `steward
-advance` / `steward run` (the engine verifies and commits; forks park) or directly in a
-live session (the human verifies and the skill commits; forks ask). See the two-mode
-contract in `03-workflow.md`.
+The generalized `/scaleup`. Orients from the ledger, does **exactly one** checkpoint — the
+fused **Develop** checkpoint (plan-first → code → acceptance tests) — stops at forks, and
+ends with the fixed report. It runs two ways with different contracts — headless under
+`steward advance` / `steward run` (the engine verifies, lands the REQ on green or repairs
+then parks on red; forks park) or directly in a live session (the human verifies and
+`steward checkpoint` lands; forks ask). See the two-mode contract in `03-workflow.md`.
 
 ## `/bootstrap` — bring a new project to life
 

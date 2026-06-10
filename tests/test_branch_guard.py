@@ -146,25 +146,25 @@ def test_design_allowed_on_integration_branch(project):
 
 
 def test_implementation_proceeds_on_feature_branch(project):
-    """AC3 — on a feature branch (neither production nor integration) build and land run,
-    commit, and advance normally."""
-    for phase in ("build", "land"):
-        step = Step(
-            id=f"REQ-019:{phase}",
-            command=f"/advance REQ-019 {phase}",
-            verify=("true",),
-            phase=phase,
-        )
-        runner = FakeRunner(default=ok_result())
-        committer = RecordingCommitter()
-        ex = _executor(
-            project, [step], branch="feature/req-019", runner=runner, committer=committer
-        )
-        res = ex.advance_once()
-        assert res.outcome is RunOutcome.DONE, phase
-        assert len(runner.calls) == 1
-        assert committer.committed == [f"REQ-019:{phase}"]
-        assert Ledger(project).status_of(f"REQ-019:{phase}") is StepStatus.DONE
+    """AC3 — on a feature branch (neither production nor integration) the develop
+    implementation step runs, commits, and advances normally (REQ-029: develop is the
+    single implementation phase)."""
+    step = Step(
+        id="REQ-019:develop",
+        command="/advance REQ-019 develop",
+        verify=("true",),
+        phase="develop",
+    )
+    runner = FakeRunner(default=ok_result())
+    committer = RecordingCommitter()
+    ex = _executor(
+        project, [step], branch="feature/req-019", runner=runner, committer=committer
+    )
+    res = ex.advance_once()
+    assert res.outcome is RunOutcome.DONE
+    assert len(runner.calls) == 1
+    assert committer.committed == ["REQ-019:develop"]
+    assert Ledger(project).status_of("REQ-019:develop") is StepStatus.DONE
 
 
 def test_docs_state_declaration_implementation_regime():

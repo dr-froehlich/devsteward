@@ -71,7 +71,7 @@ def test_verify_runs_python_command_under_engine_interpreter():
     because the verifier runs it under sys.executable."""
     v = CommandVerifier()
     ok, detail = v.verify(
-        Step(id="REQ-X:land", command="/advance", verify=("python -c \"import sys\"",), phase="land")
+        Step(id="REQ-X:develop", command="/advance", verify=("python -c \"import sys\"",), phase="develop")
     )
     assert ok is True, detail
     # the reported detail keeps the author's original command for legibility

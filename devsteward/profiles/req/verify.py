@@ -1,14 +1,15 @@
-"""REQ-015 + REQ-028 — the REQ profile's verifier: give the land gate real teeth.
+"""REQ-015 + REQ-028 + REQ-029 — the REQ profile's verifier: give the gate real teeth.
 
 The generic :class:`~devsteward.core.verify.CommandVerifier` marker-trusts any step that
-declares no tests. For the REQ workflow that is exactly the false-done hole: ``design`` and
-``build`` carry no per-phase tests, so on the generic verifier *every* phase auto-passed —
-and a REQ that declared no acceptance tests at all reached ``done`` without the engine ever
-running anything (an empty no-op once landed this way).
+declares no tests. For the REQ workflow that is exactly the false-done hole: a delivering
+step that carried no per-phase tests auto-passed, and a REQ that declared no acceptance
+tests at all reached ``done`` without the engine ever running anything (an empty no-op once
+landed this way).
 
-:class:`ReqVerifier` keeps design/build permissive (they only advance the cursor — the REQ
-is not delivered until it lands) but makes **land** airtight. REQ-015 made *exit-0 ⇒ green*
-at land; REQ-028 sharpens what "green" means, because exit-0 lies in four ways:
+After REQ-029 the REQ profile has one step per REQ — ``develop`` — and it is the delivering
+gate: it carries the acceptance ``test:`` commands and the engine lands the REQ mechanically
+only when it runs green. REQ-015 made *exit-0 ⇒ green*; REQ-028 sharpens what "green" means,
+because exit-0 lies in four ways:
 
 * **a skip exits 0** — a ``pytest.skip`` lands as a pass, so a "prove X" test that declines
   to run is indistinguishable from one that proved X. A named test that **skips** now fails
@@ -22,8 +23,8 @@ at land; REQ-028 sharpens what "green" means, because exit-0 lies in four ways:
   as "not yet verified". The land gate resolves the **project's configured environment**
   first; an unusable one is a hard, surfaced error (see :class:`NoUsableEnvError`).
 
-design/build still pass on marker-trust (REQ-015 Decision 2) — the sharpened semantics are
-land-only.
+Any non-``develop`` step (a generic or phase-less step) still passes on marker-trust
+(REQ-015 Decision 2) — the sharpened semantics gate the delivering ``develop`` step.
 """
 
 from __future__ import annotations
@@ -42,7 +43,7 @@ from ...core.verify import (
 
 
 class ReqVerifier:
-    """The land gate: a REQ's named behaviour must observably run and pass.
+    """The develop gate: a REQ's named behaviour must observably run and pass.
 
     ``full_suite`` is the command for the project's whole test suite (AC3); ``None`` (the
     bare-constructor default) disables that gate so unit checks can isolate the named-test
@@ -65,15 +66,16 @@ class ReqVerifier:
         self._inner = CommandVerifier(cwd=cwd, timeout=timeout)
 
     def verify(self, step: Step) -> tuple[bool, str]:
-        # design/build (no per-phase tests) → marker-trust via the inner verifier; the
-        # guarantee is enforced at land.
-        if step.phase != "land":
+        # Non-delivering steps (none in the REQ profile after REQ-029, but a generic/phase-
+        # less step may reach here) → marker-trust via the inner verifier; the guarantee is
+        # enforced on the delivering ``develop`` gate.
+        if step.phase != "develop":
             return self._inner.verify(step)
 
         if not step.verify:
             return (
                 False,
-                "land step has no acceptance tests — a REQ cannot land on marker-trust; "
+                "develop step has no acceptance tests — a REQ cannot land on marker-trust; "
                 "declare at least one runnable acceptance criterion the engine re-runs",
             )
 
