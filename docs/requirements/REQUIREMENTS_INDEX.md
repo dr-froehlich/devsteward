@@ -37,6 +37,6 @@ commit** as its frontmatter and the code.
 | REQ-029 | Phase-model rework — one fused develop step, mechanical land on green, bounded repair on red | DONE | [REQ-029](REQ-029.md) | REQ-004, REQ-020, REQ-027, REQ-028 |
 | REQ-030 | System-Test phase — independent validation session, evidence events, and the System Tester skill | DONE | [REQ-030](REQ-030.md) | REQ-005, REQ-027, REQ-029 |
 | REQ-031 | The first lab — consume FlowSteward's IMAP lab through the System-Test phase; FlowSteward re-drive | DONE | [REQ-031](REQ-031.md) | REQ-030 |
-| REQ-032 | Ledger always committed — every terminal step outcome leaves a clean tree | DRAFT | [REQ-032](REQ-032.md) | REQ-018, REQ-020, REQ-030 |
+| REQ-032 | Ledger always committed — every terminal step outcome leaves a clean tree | DONE | [REQ-032](REQ-032.md) | REQ-018, REQ-020, REQ-030 |
 
 New requirement template: [`_templates/req.md`](../../devsteward/templates/docs/requirements/_templates/req.md)
