@@ -1,7 +1,7 @@
 version: 1
 profile: req
 cursor:
-  step: REQ-030:validate
+  step: REQ-031:validate
 steps:
   REQ-011:design:
     status: done
@@ -72,4 +72,25 @@ steps:
   REQ-030:validate:
     status: done
     updated: '2026-06-10T20:33:20+00:00'
-decisions: []
+  REQ-031:develop:
+    status: done
+    updated: '2026-06-11T14:06:39+00:00'
+  REQ-031:validate:
+    status: done
+    updated: '2026-06-11T14:46:38+00:00'
+decisions:
+- id: DEC-001
+  step: REQ-031:validate
+  question: "REQ-031 validation red — needs a human:\n[1] python -m pytest tests/test_imap_lab.py::test_evidence_artifact_matches_golden\n\
+    \    1 failed, 0 errors of 1\n    =========================== short test summary
+    info ============================\n    FAILED tests/test_imap_lab.py::test_evidence_artifact_matches_golden
+    - Assert...\n    ============================== 1 failed in 0.03s ==============================="
+  status: answered
+  options: []
+  answer: "Not a hollow develop and not a broken lab: the gate ran without DEVSTEWARD_LAB_IMAP_ENV
+    in the engine's environment (the System Tester sets it only inside its session).
+    Captured evidence verified green against the lab manifest with the seam set; procedure
+    note added in commit fac11fb. Re-run attended with the seam exported."
+  req: REQ-031
+  raised_at: '2026-06-11T14:38:54+00:00'
+  answered_at: '2026-06-11T14:43:08+00:00'

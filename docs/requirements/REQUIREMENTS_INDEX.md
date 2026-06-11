@@ -36,6 +36,6 @@ commit** as its frontmatter and the code.
 | REQ-028 | Gating integrity — skip isn't green, the named behaviour must run, verifier uses project venv + full suite, lint reconciles marker↔ledger | DONE | [REQ-028](REQ-028.md) | REQ-002, REQ-006, REQ-015 |
 | REQ-029 | Phase-model rework — one fused develop step, mechanical land on green, bounded repair on red | DONE | [REQ-029](REQ-029.md) | REQ-004, REQ-020, REQ-027, REQ-028 |
 | REQ-030 | System-Test phase — independent validation session, evidence events, and the System Tester skill | DONE | [REQ-030](REQ-030.md) | REQ-005, REQ-027, REQ-029 |
-| REQ-031 | The first lab — an owned IMAP test server with reality-derived provenance; FlowSteward re-drive | DRAFT | [REQ-031](REQ-031.md) | REQ-030 |
+| REQ-031 | The first lab — consume FlowSteward's IMAP lab through the System-Test phase; FlowSteward re-drive | DONE | [REQ-031](REQ-031.md) | REQ-030 |
 
 New requirement template: [`_templates/req.md`](../../devsteward/templates/docs/requirements/_templates/req.md)

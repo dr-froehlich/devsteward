@@ -84,6 +84,30 @@ Mechanics around the gate:
   release gate (`dev → main` PR) a human decides which `artifact` REQs to re-run — there
   is deliberately no auto-staleness detection.
 
+## Labs — owned fixtures with reality-derived provenance
+
+A **lab** is the decoupled oracle an `artifact` criterion runs against: an owned,
+versioned fixture with documented provenance, built by its own REQ — never a double
+authored in the same step as the code it certifies. The pattern (set by the first lab,
+FlowSteward's IMAP lab):
+
+- **Labs live in the consumer repo.** The consumer owns the domain, the test accounts,
+  and the credentials; and `process.lab` references are **registry-local**, so only a
+  lab REQ in the same registry can gate that repo's validate steps. DevSteward documents
+  the pattern; it does not ship domain fixtures.
+- **Prefer real systems over doubles.** A lab that targets a real server (a dedicated
+  test account, never production) over a live socket has the strongest provenance there
+  is. Containerized doubles are a fallback, not the default.
+- **Self-contained and dependency-free.** A lab tool shares no code with the package it
+  validates (stdlib-only, invoked by path), so the oracle stays decoupled and any
+  caller — including another repo's System Tester — can run it with its own interpreter.
+- **Configuration is a hard failure, never a skip.** Credentials are injected via an
+  env/path seam (no real paths or secrets committed); a lab that cannot come up exits
+  non-zero. A skipping lab is the false-green hole labs exist to close.
+- **The corpus is reality-derived and versioned.** Seed data is captured from real
+  traffic and sanitized (provenance notes document source and transformations), with a
+  manifest recording the golden expectation; version, manifest, and docs move together.
+
 ## Sequencing whole requirements
 
 `REQ-B:develop` depends on `REQ-A:develop` for each `REQ-A` in `REQ-B.depends_on`. So a
