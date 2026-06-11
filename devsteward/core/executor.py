@@ -476,6 +476,10 @@ class Executor:
         led.append_event(
             "develop_committed", step=step.id, commit=sha, driver=driver
         )
+        # REQ-032: the trailing ledger write (status done + develop_committed event) is
+        # committed as a follow-up to the work commit, so the feature branch is clean at
+        # rest while it waits for its validate sibling (Decision 1 — no dirty handoff).
+        self._commit_ledger_close(step, "ledger checkpoint")
         return StepResult(step, RunOutcome.DONE, detail, commit=sha)
 
     def _merges_after(self, step: Step) -> bool:
@@ -645,6 +649,23 @@ class Executor:
         except subprocess.CalledProcessError:
             return None
 
+    def _commit_ledger_close(self, step: Step, subject: str) -> str | None:
+        """Commit the trailing ledger write (and any captured evidence) on the active
+        branch as a follow-up, so a terminal step outcome leaves a clean tree (REQ-032).
+
+        ``git.commit_all`` stages ``-A`` and returns ``None`` when the tree is already
+        clean, so a no-op path makes **no empty commit** (Decision 4). It rides the step's
+        own branch context — the feature branch when one exists, else the integration
+        branch (Decision 3); the drivers' up-front :meth:`branch_guard` keeps every caller
+        off the production branch, so no extra guard is needed here. Tolerant of a missing
+        repo / failed commit the same way :meth:`_commit` is, so a non-git test harness or
+        a committer-stubbed land does not crash on the trailing close.
+        """
+        try:
+            return self.git.commit_all(f"{step.req or step.id}: {subject}\n\n{_TRAILER}")
+        except subprocess.CalledProcessError:
+            return None
+
     # -- branch lifecycle ------------------------------------------------------
 
     def _drive_step(
@@ -663,6 +684,14 @@ class Executor:
         res = self.run_step(step, unattended=unattended, on_event=on_event)
         if res.outcome is RunOutcome.DONE and self._merges_after(step):
             self._merge_after_land(step)
+        elif res.outcome is RunOutcome.PARKED:
+            # REQ-032: a park is a terminal outcome — every park path (attended, skill,
+            # land-gate refusal, repair-exhausted, in-flight validate red/manual) funnels
+            # back here. Commit the parked decision, the red event, and any captured
+            # evidence so the batch loop's next step branches off a clean tree rather than
+            # riding this step's ledger writes (the mixed-provenance leak). A REFUSED
+            # (diverged branch) deliberately halts the run for a human and is left as-is.
+            self._commit_ledger_close(step, "ledger close — parked")
         return res
 
     def _merge_after_land(self, step: Step) -> None:
@@ -687,6 +716,11 @@ class Executor:
         self.ledger.append_event(
             "branch_merged", step=step.id, branch=feature, into=self.integration_branch
         )
+        # REQ-032: commit the branch_merged event as its own follow-up on the integration
+        # branch (Decision 2 — the proven hand-made shape, never an `--amend` that would
+        # move the hash the just-recorded events point at), so the integration branch is
+        # actually clean at rest, as this method's docstring has always promised.
+        self._commit_ledger_close(step, "ledger close — branch_merged event")
 
     # -- drivers ---------------------------------------------------------------
 

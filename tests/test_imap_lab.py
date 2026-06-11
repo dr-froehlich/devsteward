@@ -76,12 +76,19 @@ def _lab_tool() -> Path:
 
 def test_evidence_artifact_matches_golden():
     """The newest captured live-socket fetch passes the lab's own offline golden verify
-    (REQ-031 AC2). Skips only while no evidence exists at all."""
+    (REQ-031 AC2). Skips when no evidence exists yet, or when the lab seam is absent
+    (develop full-suite: skips are green; validate gate: skip ≠ green — still red)."""
     fetched = _latest_evidence_fetch()
     if fetched is None:
         pytest.skip("no evidence captured under .devsteward/evidence/REQ-031/ yet")
+    if not os.environ.get(ENV_POINTER):
+        pytest.skip(
+            f"{ENV_POINTER} not set — point it at the FlowSteward checkout's .env "
+            f"to grade the captured evidence; a skip is red in the validate gate (skip ≠ green)"
+        )
+    lab = _lab_tool()  # hard-fails if seam is set but the lab tool file is missing
     proc = subprocess.run(
-        [sys.executable, str(_lab_tool()), "verify", "--against", str(fetched)],
+        [sys.executable, str(lab), "verify", "--against", str(fetched)],
         capture_output=True, text=True,
     )
     assert proc.returncode == 0, f"lab verify red: {proc.stderr}{proc.stdout}"

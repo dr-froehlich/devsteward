@@ -198,9 +198,12 @@ def test_full_close_out_merges(tmp_path):
 
     res = ex.checkpoint(ex.step_by_id("REQ-001:develop"))
     assert res.outcome is RunOutcome.DONE
-    # the land commit, then the trailing-ledger follow-up — both on the feature branch
-    assert [b for b, _ in git.commits] == [feature, feature]
+    # the land commit, then the trailing-ledger follow-up — both on the feature branch;
+    # then the branch_merged ledger-close commit on the integration branch (REQ-032: the
+    # integration branch is clean at rest, the event committed not left dirty).
+    assert [b for b, _ in git.commits] == [feature, feature, "dev"]
     assert "ledger checkpoint" in git.commits[1][1]
+    assert "ledger close — branch_merged event" in git.commits[2][1]
     # the --no-ff merge into the integration branch, recorded
     assert git.merged == [(feature, "dev", git.merged[0][2])]
     assert git.current == "dev"
