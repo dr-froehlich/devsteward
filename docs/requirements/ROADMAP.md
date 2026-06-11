@@ -59,12 +59,19 @@ validation. Driven **interactively** (not by `steward run`) in this order — se
    D12 hand-flip); `process.lab` blocks eligibility like a dependency; red validation
    parks, no repair loop; `steward validate REQ-NNN` is the single entry point
    (first run + re-run); e2e proof is a `manual` AC
-5. REQ-031 — **first lab, IMAP** (stub): owned, versioned fixture with reality-derived
-   provenance; FlowSteward REQ-003a/006/007 re-driven through the validate phase
-6. (no REQ yet) re-earn batch mode: one overnight `steward run` under the new model,
-   then postmortem
+5. REQ-031 — **first lab, IMAP** (**done** 2026-06-11): the lab lives in its home repo
+   (FlowSteward REQ-008, real mail server, reality-derived corpus); handbook documents
+   the consumer-owned-lab pattern; first real evidence event + FlowSteward re-drive
+   signed off
+6. re-earn batch mode: one overnight `steward run` under the new model on FlowSteward,
+   then postmortem — **gated on REQ-032**
 
 ## Next
+
+- REQ-032 — **ledger always committed** (draft): every terminal step outcome — land+merge,
+  deferred develop close, red validation, park — leaves a clean tree; the REQ-018
+  `branch_merged` wart plus the two sibling leaks surfaced 2026-06-11. The explicit gate
+  before the first multi-REQ batch night
 
 - REQ-010 — **memzy frontmatter-dialect converter** (open; promoted — memzy is the first
   consumer to migrate; archivist conversion + active-only lint relaxation)
