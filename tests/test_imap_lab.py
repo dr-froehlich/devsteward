@@ -26,7 +26,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
 EVIDENCE_ROOT = ROOT / ".devsteward" / "evidence" / "REQ-031"
-HANDBOOK_WORKFLOW = ROOT / "devsteward" / "handbook" / "03-workflow.md"
+HANDBOOK_WORKFLOW = ROOT / "devsteward" / "handbook" / "_03-workflow.qmd"
 ENV_POINTER = "DEVSTEWARD_LAB_IMAP_ENV"
 
 

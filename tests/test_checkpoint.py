@@ -265,7 +265,7 @@ def test_handbook_and_skill_interactive_first():
     batch lane, no 'no engine guarantees' framing remains, and both /advance copies
     (repo + stamped template, identical) close via steward checkpoint."""
     handbook = _REPO_ROOT / "devsteward" / "handbook"
-    chapters = sorted(handbook.glob("*.md"))
+    chapters = sorted(handbook.glob("_*.qmd"))
     assert chapters, f"no handbook chapters under {handbook}"
     for chapter in chapters:
         text = chapter.read_text(encoding="utf-8").lower()
@@ -273,7 +273,7 @@ def test_handbook_and_skill_interactive_first():
         assert "no engine guarantee" not in text, chapter.name
         assert "human is the guarantee" not in text, chapter.name
 
-    workflow = (handbook / "03-workflow.md").read_text(encoding="utf-8")
+    workflow = (handbook / "_03-workflow.qmd").read_text(encoding="utf-8")
     assert "default driving mode" in workflow
     assert "batch lane" in workflow
 

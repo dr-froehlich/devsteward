@@ -1,4 +1,4 @@
-# 03 · The REQ workflow
+# The REQ workflow {#sec-workflow}
 
 The shipped profile turns every active requirement into a single develop checkpoint and
 sequences requirements by their dependencies.
@@ -22,11 +22,11 @@ flip, index sync, the single commit, the `--no-ff` merge, ledger advance — wit
 Claude** (and it refuses unless a file in `docs/plans/` names the REQ). On a **red** gate it
 spawns up to **two** fresh repair sessions (failure brief, default Sonnet), then parks. A
 REQ that declared `develop: split` or `concept: true` is parked in batch, naming the
-attended need, rather than driven headless. (See 02 · engine for the gate's teeth.)
+attended need, rather than driven headless. (See @sec-engine for the gate's teeth.)
 
 ## The V-model mapping: `check:` steers the phases
 
-Each acceptance criterion's `check:` classification (see 01 · format) is a **routing
+Each acceptance criterion's `check:` classification (see @sec-format) is a **routing
 key** that maps it onto the V-model:
 
 | `check:` | V-model side | Phase | Oracle |

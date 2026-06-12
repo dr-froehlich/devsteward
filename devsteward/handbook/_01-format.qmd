@@ -1,4 +1,4 @@
-# 01 · The hybrid machine-readable REQ format
+# The hybrid machine-readable REQ format {#sec-format}
 
 A REQ file is Markdown with three layers, each tuned for a different reader.
 

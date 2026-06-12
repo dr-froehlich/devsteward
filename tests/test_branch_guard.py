@@ -103,8 +103,8 @@ def test_scaffolding_documents_model():
 
     for rel in (
         Path("templates") / "CLAUDE.md.tmpl",
-        Path("handbook") / "00-method.md",
-        Path("handbook") / "03-workflow.md",
+        Path("handbook") / "_00-method.qmd",
+        Path("handbook") / "_03-workflow.qmd",
     ):
         text = (_PKG / rel).read_text(encoding="utf-8")
         assert "main" in text and "dev" in text and "integration" in text.lower(), rel
@@ -174,7 +174,7 @@ def test_docs_state_declaration_implementation_regime():
     for path in (
         root / "CLAUDE.md",
         _PKG / "templates" / "CLAUDE.md.tmpl",
-        _PKG / "handbook" / "03-workflow.md",
+        _PKG / "handbook" / "_03-workflow.qmd",
     ):
         text = path.read_text(encoding="utf-8").lower()
         assert "only implementation branches" in text, path

@@ -1,4 +1,4 @@
-# 00 · The method
+# The method {#sec-method}
 
 DevSteward captures one developer's proven, evolved house style for running software
 projects with Claude Code and makes it reproducible. It exists because the alternative —
@@ -9,7 +9,7 @@ fail to propagate. DevSteward is the single controlled baseline.
 
 1. **Requirements are the unit of work.** Each is one file with a machine-readable
    contract (YAML frontmatter + an acceptance block) and rich prose (Context, Decisions,
-   Notes). See [01 · The format](01-format.md).
+   Notes). See @sec-format.
 2. **REQ-001 is a frozen north star.** Direction changes by *superseding* it with a new
    REQ, never by quietly weakening it.
 3. **A dependency DAG orders the work.** `depends_on` makes a REQ eligible only once its
@@ -19,7 +19,7 @@ fail to propagate. DevSteward is the single controlled baseline.
    live at forks) and closes with `steward checkpoint`, which verifies and lands through
    the same gate as batch. `steward advance` / `steward run` are the batch lane for
    queues of well-specified, low-fork REQs — headless, parking forks. The guarantees are
-   the engine's in both modes. See [02 · The engine](02-engine.md).
+   the engine's in both modes. See @sec-engine.
 5. **Verification is mechanical.** Acceptance criteria name runnable tests; a step is
    done only when they are green — checked by the engine, not asserted by a model.
 

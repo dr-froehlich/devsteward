@@ -1,4 +1,4 @@
-# 04 · The skills
+# The skills {#sec-skills}
 
 Three skills carry the cognitive work the engine orchestrates. They ship in
 `templates/.claude/skills/` and are stamped into every consumer. The engine invokes them
@@ -20,7 +20,7 @@ ends with the fixed report. It runs two ways under **one bookkeeper**: directly 
 session (the default — forks ask; the close is `steward checkpoint`, which verifies and
 lands through the same gate as batch) or headless under `steward advance` / `steward run`
 (the batch lane — forks park; the executor verifies and lands, repairing then parking on
-red). See the two-driver contract in `03-workflow.md`.
+red). See the two-driver contract in @sec-workflow.
 
 ## `/bootstrap` — bring a new project to life
 

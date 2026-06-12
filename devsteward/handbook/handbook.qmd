@@ -1,0 +1,26 @@
+---
+title: The DevSteward Handbook
+subtitle: One developer's proven house style for running software projects with Claude Code, made reproducible
+number-sections: true
+toc: true
+---
+
+DevSteward is a single controlled baseline for the way one developer runs software
+projects with Claude Code: requirements as the unit of work, a dependency DAG that orders
+them, and an engine that walks the work *and certifies it*. This handbook is the reference
+guide — the method, the file format, the engine, the workflow, and the skills — assembled
+as one document.
+
+It is authored as per-topic fragments and rendered as a single Quarto document, so a plain
+reader and the branded manuals site read the same content. Section cross-references resolve
+within the document.
+
+{{< include _00-method.qmd >}}
+
+{{< include _01-format.qmd >}}
+
+{{< include _02-engine.qmd >}}
+
+{{< include _03-workflow.qmd >}}
+
+{{< include _04-skills.qmd >}}

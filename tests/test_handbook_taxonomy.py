@@ -13,8 +13,8 @@ def _read(name: str) -> str:
 
 
 def test_handbook_documents_taxonomy_and_example():
-    fmt = _read("01-format.md")
-    workflow = _read("03-workflow.md")
+    fmt = _read("_01-format.qmd")
+    workflow = _read("_03-workflow.qmd")
 
     # the three-value taxonomy with check: as the contract field (01 · format).
     assert "`check:`" in fmt

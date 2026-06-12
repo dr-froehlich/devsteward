@@ -1,4 +1,4 @@
-# 02 · The engine
+# The engine {#sec-engine}
 
 The engine is two layers: a **content-agnostic executor core** and a swappable
 **profile** on top. This is what lets DevSteward "run any Claude automation" while still
@@ -44,7 +44,7 @@ never the session's to assert, and the close-out (trailing ledger follow-up + `-
 merge) is the engine's too. The `checkpoint` event records the **driver**
 (`interactive` or `headless`) — who did the cognition — while certification is the
 engine's either way. The one interactive difference: at a fork the skill *asks*
-(`AskUserQuestion`) instead of parking. See the two-driver contract in `03-workflow.md`.
+(`AskUserQuestion`) instead of parking. See the two-driver contract in @sec-workflow.
 
 ### One fused step, mechanical land, bounded repair (REQ-029)
 
@@ -83,7 +83,7 @@ named-test list is acceptable here because the runnable gate lives at validation
 `REQ-NNN:validate` step follows — a fresh, diff-free System Tester session captures
 artifacts, the engine runs the `artifact` tests itself, manual criteria take a human
 sign-off, and on green the *same* mechanical land fires. A red validation parks with no
-repair loop. See 03 · workflow for the full phase.
+repair loop. See @sec-workflow for the full phase.
 
 The gate's *green* is sharper than exit-0 (REQ-028): exit-0 cannot tell a pass from a
 skip or a zero-collection, so the gate reads pytest's per-test outcomes. A named acceptance
