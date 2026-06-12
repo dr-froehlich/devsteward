@@ -9,6 +9,7 @@ degrades to "proceed on the current account" whenever cswap or its usage data is
 from __future__ import annotations
 
 import json
+import time
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -18,8 +19,10 @@ from devsteward.core import accounts
 # -- fixtures ------------------------------------------------------------------
 
 
-def _write_usage(data_dir: Path, slots: dict[int, tuple]) -> None:
-    """``slots``: ``{slot: (pct_5h, pct_7d, countdown, clock)}`` → cache/usage.json."""
+def _write_usage(data_dir: Path, slots: dict[int, tuple], *, age: float = 0.0) -> None:
+    """``slots``: ``{slot: (pct_5h, pct_7d, countdown, clock)}`` → cache/usage.json.
+
+    ``age`` ages the embedded ``timestamp`` by that many seconds (default fresh)."""
     cache = data_dir / "cache"
     cache.mkdir(parents=True, exist_ok=True)
     data = {}
@@ -28,7 +31,9 @@ def _write_usage(data_dir: Path, slots: dict[int, tuple]) -> None:
             "five_hour": {"pct": p5, "countdown": countdown, "clock": clock},
             "seven_day": {"pct": p7},
         }
-    (cache / "usage.json").write_text(json.dumps({"data": data}))
+    (cache / "usage.json").write_text(
+        json.dumps({"timestamp": time.time() - age, "data": data})
+    )
 
 
 def _write_sequence(data_dir: Path, active: int) -> None:
@@ -71,6 +76,26 @@ def test_usage_snapshot_parses_and_degrades(tmp_path):
     # Malformed JSON → degrade signal too.
     (tmp_path / "cache" / "usage.json").write_text("{ not json")
     assert accounts.usage_snapshot(tmp_path, run=lambda *a, **k: None) == {}
+
+
+def test_fresh_cache_is_not_refreshed(tmp_path):
+    # A snapshot younger than the TTL is trusted as-is: no cswap --list.
+    _write_usage(tmp_path, {0: (10, 5, "1h", "14:00")}, age=0)
+    calls: list = []
+    accounts.usage_snapshot(tmp_path, run=_recording_run(calls))
+    assert calls == []
+
+
+def test_stale_cache_is_refreshed_before_gating(tmp_path):
+    # A snapshot older than the TTL must trigger a refresh *before* the read — otherwise a
+    # saturated account looks below-gate and a whole session is burned hitting the limit.
+    # Old cache says slot0 is at 10%; the refresh rewrites it to the real 99%.
+    _write_usage(tmp_path, {0: (10, 5, "1h", "14:00")}, age=accounts._USAGE_CACHE_TTL + 5)
+    calls: list = []
+    run = _recording_run(calls, on_list=lambda: _write_usage(tmp_path, {0: (99, 5, "1h", "14:00")}))
+    snap = accounts.usage_snapshot(tmp_path, run=run)
+    assert ["cswap", "--list"] in calls
+    assert snap[0].pct_5h == 99  # the refreshed value, not the stale 10
 
 
 # -- AC2 -----------------------------------------------------------------------

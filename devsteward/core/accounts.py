@@ -39,6 +39,29 @@ def _cswap_data_dir() -> Path:
     return next((d for d in _CSWAP_DIRS if d.exists()), _CSWAP_DIRS[0])
 
 
+# How fresh cswap's cached usage.json must be before we gate a session on it. cswap stamps
+# every fetch with a ``timestamp`` and honors a 15s TTL on its *own* read path
+# (switcher.py:_USAGE_CACHE_TTL); reading the file directly bypasses that, so without our own
+# freshness check a minutes-old snapshot can show an account below the gate when it is really
+# saturated — the gate passes, ``claude`` launches, and the whole session is burned hitting
+# the limit. 60s is the session-boundary cadence: cheap (one TTL-guarded ``cswap --list``)
+# against a multi-minute session, fresh enough that the gate reflects reality.
+_USAGE_CACHE_TTL = 60.0
+
+
+def _cache_stale(path: Path, ttl: float) -> bool:
+    """True when ``usage.json`` is missing, unreadable, or older than ``ttl`` seconds.
+
+    Trusts cswap's embedded ``timestamp`` (fetch time) rather than the file merely existing.
+    A missing/malformed cache is "stale" too, so the caller force-refreshes before falling
+    back to the empty-snapshot degrade path."""
+    try:
+        ts = float(json.loads(path.read_text()).get("timestamp", 0.0))
+    except (OSError, json.JSONDecodeError, TypeError, ValueError):
+        return True
+    return (time.time() - ts) > ttl
+
+
 @dataclass
 class AccountUsage:
     """Per-slot quota snapshot, mirroring ``run_batch.AccountUsage`` exactly."""
@@ -66,16 +89,19 @@ def usage_snapshot(
     data_dir: Path,
     *,
     force: bool = False,
+    ttl: float = _USAGE_CACHE_TTL,
     run: Callable[..., subprocess.CompletedProcess] = subprocess.run,
 ) -> dict[int, AccountUsage]:
     """Parse cswap's cached ``usage.json`` into per-slot 5h/7d% + reset countdown.
 
-    Optionally refreshes the cache first via ``cswap --list`` (best-effort, ``NO_COLOR``,
-    non-fatal). A **missing, unreadable, or malformed** ``usage.json`` returns ``{}`` — the
-    degrade signal the caller turns into "proceed without quota check" (run_batch.py:191-223).
+    Refreshes the cache first via ``cswap --list`` (best-effort, ``NO_COLOR``, non-fatal)
+    whenever it is forced, missing, or **older than ``ttl`` seconds** — a stale snapshot can
+    show a saturated account as below-gate and quietly burn a whole session. A **missing,
+    unreadable, or malformed** ``usage.json`` returns ``{}`` — the degrade signal the caller
+    turns into "proceed without quota check" (run_batch.py:191-223).
     """
     usage_cache = Path(data_dir) / "cache" / "usage.json"
-    if force or not usage_cache.exists():
+    if force or _cache_stale(usage_cache, ttl):
         try:
             run(
                 ["cswap", "--list"],
