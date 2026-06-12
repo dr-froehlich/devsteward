@@ -122,3 +122,4 @@
 {"ts": "2026-06-12T12:54:39+00:00", "event": "branch_created", "step": "REQ-033:develop", "branch": "req-033-rework-loop"}
 {"ts": "2026-06-12T12:54:39+00:00", "event": "step_started", "step": "REQ-033:develop", "command": "/advance REQ-033 develop", "recover": false}
 {"ts": "2026-06-12T13:04:50+00:00", "event": "verify", "step": "REQ-033:develop", "ok": true, "detail": "[0] python -m pytest tests/test_rework.py::test_rework_rearms_develop_and_validate\n    1 passed\n[0] python -m pytest tests/test_rework.py::test_rework_refusals\n    1 passed\n[0] python -m pytest tests/test_rework.py::test_rework_cycle_to_green_land\n    1 passed\n[0] full suite clean (python -m pytest)"}
+{"ts": "2026-06-12T13:04:50+00:00", "event": "develop_committed", "step": "REQ-033:develop", "commit": "43e3293aa267a5a4e3a598e07c910ffb71d76e2e", "driver": "headless"}
