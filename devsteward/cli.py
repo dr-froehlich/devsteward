@@ -17,7 +17,12 @@ from .core.executor import RunOutcome, StepResult
 from .core.ledger import Ledger
 from .core.stop import StopController
 from .core.model import StepStatus
-from .lifecycle import LifecycleError, activate as lifecycle_activate, recover as lifecycle_recover
+from .lifecycle import (
+    LifecycleError,
+    activate as lifecycle_activate,
+    recover as lifecycle_recover,
+    rework as lifecycle_rework,
+)
 from .lint import lint as run_lint
 
 
@@ -135,7 +140,8 @@ def recover(req_id: str) -> None:
 
     Flips the REQ's FAILED ledger step(s) to RECOVER and records an event; the working tree
     is left exactly as the failed attempt left it, for the resuming skill to assess. Fails
-    (non-zero) when the REQ has no failed step.
+    (non-zero) when the REQ has no failed step — a *red validation* leaves no failed step,
+    so return it to develop with `steward rework REQ_ID` instead.
     """
     cfg = _load_or_die()
     led = Ledger(cfg.root)
@@ -147,6 +153,34 @@ def recover(req_id: str) -> None:
     click.echo(
         click.style(
             f"recovered {req_id}: {flipped} -> recover. Re-run `steward run` to re-attempt.",
+            fg="green",
+        )
+    )
+
+
+@main.command()
+@click.argument("req_id")
+def rework(req_id: str) -> None:
+    """Return REQ_ID's red validation to develop for a fix-and-revalidate cycle.
+
+    The human-authorized return edge of the V-model (REQ-033): on an in-flight REQ whose
+    latest System-Test validation went red, this flips REQ_ID:develop to RECOVER and
+    REQ_ID:validate back to PENDING, answers the parked decision, and records a `rework`
+    event carrying the red evidence dir — the resuming `/advance` session reads it as its
+    repair context. Touches no git and no REQ file. Refuses when there is no red validation
+    to rework (a done REQ → supersede instead; nothing parked red → nothing to do).
+    """
+    cfg = _load_or_die()
+    led = Ledger(cfg.root)
+    try:
+        res = lifecycle_rework(cfg, led, req_id)
+    except LifecycleError as exc:
+        raise click.ClickException(str(exc)) from exc
+    where = f" (evidence: {res.evidence})" if res.evidence else ""
+    click.echo(
+        click.style(
+            f"reworking {req_id}: {res.develop_step} -> recover, {res.validate_step} -> "
+            f"pending{where}. Re-run `steward run` to fix and revalidate.",
             fg="green",
         )
     )

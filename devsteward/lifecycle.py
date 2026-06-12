@@ -1,6 +1,7 @@
-"""Operator verbs that shape the queue: ``activate`` and ``recover`` (REQ-026).
+"""Operator verbs that shape the queue: ``activate``, ``recover`` (REQ-026), ``rework``
+(REQ-033).
 
-Two pure status mutations, kept out of the content-agnostic core:
+Pure status mutations, kept out of the content-agnostic core:
 
 * :func:`activate` flips a REQ from ``draft``/``dropped`` to ``open``, editing the REQ
   frontmatter **and** its ``REQUIREMENTS_INDEX.md`` row in lockstep so the index↔REQ
@@ -10,9 +11,18 @@ Two pure status mutations, kept out of the content-agnostic core:
   (a :class:`StepStatus`, not a REQ-frontmatter status — D4) so the executor re-attempts
   them. It does not touch the working tree (D6): the failed attempt's partial edits are
   left for the resuming skill to assess.
+* :func:`rework` is the human-authorized return edge from a red validation (REQ-033): on
+  an in-flight REQ whose latest validation is red, it flips ``REQ-NNN:develop``
+  ``DONE → RECOVER`` and ``REQ-NNN:validate`` ``BLOCKED → PENDING``, answers any open
+  decision parked on the validate step, and appends a ``rework`` event carrying the red
+  validation's evidence path and failure brief. It amends REQ-030 Decision 8 without
+  repealing it (the engine still never auto-loops on red — this is the *recorded human
+  answer* to the parked question) and, like ``recover``, touches neither git nor the REQ
+  file (D5).
 
-Neither verb introduces a new ``claude`` invocation or skill — recovery is picked up by
-the existing ``/advance`` skill via the status flip.
+No verb introduces a new ``claude`` invocation or skill — the reopened work is picked up
+by the existing ``/advance`` skill via the status flip (``rework`` reopens develop as
+``RECOVER``, so the executor carries its usual ``--recover`` resume signal).
 """
 
 from __future__ import annotations
@@ -50,6 +60,16 @@ class ActivateResult:
 class RecoverResult:
     req_id: str
     steps: list[str]  # the step ids flipped FAILED -> RECOVER
+
+
+@dataclass
+class ReworkResult:
+    req_id: str
+    develop_step: str  # flipped DONE -> RECOVER
+    validate_step: str  # flipped BLOCKED -> PENDING
+    evidence: str | None  # the red validation's evidence dir (the repair context)
+    brief: str  # the red validation's failure brief
+    decision: str | None  # the parked validate decision answered, if any
 
 
 def activate(cfg: Config, req_id: str) -> ActivateResult:
@@ -105,3 +125,81 @@ def recover(ledger: Ledger, req_id: str) -> RecoverResult:
     ledger.save()
     ledger.append_event("step_recover", req=req_id, steps=failed)
     return RecoverResult(req_id, failed)
+
+
+def rework(cfg: Config, ledger: Ledger, req_id: str) -> ReworkResult:
+    """Return a red validation to develop for a fix-and-revalidate cycle (REQ-033).
+
+    On an in-flight REQ whose latest validation event is red (an artifact red or a
+    *declined* manual sign-off), flip ``REQ-NNN:develop`` to ``RECOVER`` and
+    ``REQ-NNN:validate`` to ``PENDING``, answer any open decision parked on the validate
+    step, and append a ``rework`` event carrying the red validation's evidence path and
+    failure brief. Touches neither git nor the REQ file (D5).
+
+    Refuses (:class:`LifecycleError`, mapped to a non-zero exit by the CLI) when there is
+    no red validation to rework: an unknown id, a ``done`` REQ (points at supersede — done
+    is never weakened, D3), a REQ with no validate step, or a validate step that is not
+    blocked on a red.
+    """
+    reqs = {r.id: r for r in load_reqs(cfg.req_dir)}
+    req = reqs.get(req_id)
+    if req is None:
+        raise LifecycleError(f"{req_id} is not a known requirement (no REQ file found).")
+    if req.status.lower() == "done":
+        raise LifecycleError(
+            f"{req_id} is done — a finished requirement's red re-validation is never "
+            f"reworked (done is never weakened). Change direction by superseding it with "
+            f"a new REQ (`supersedes: {req_id}`)."
+        )
+
+    develop = f"{req_id}:develop"
+    validate = f"{req_id}:validate"
+    # A validate step exists iff the REQ declares an artifact/manual AC (REQ-030) — read it
+    # from the REQ's own acceptance block, not the ledger overlay (an untouched validate
+    # step has no recorded status yet).
+    if not any(c.check in ("artifact", "manual") for c in req.acceptance):
+        raise LifecycleError(
+            f"{req_id} has no validate step to rework — it declares no artifact/manual "
+            f"acceptance criterion, so no validation can have gone red."
+        )
+
+    # The substantive test (D3, AC2): a *real* red — the latest validation event is
+    # ``ok: false`` and the step is parked. A manual park that only awaits its oracle
+    # records no validation event; a green/never-run validation records none or ok:true.
+    latest = ledger.latest_validation(req_id)
+    is_red = latest is not None and latest.get("ok") is False
+    if not (is_red and ledger.status_of(validate) is StepStatus.BLOCKED):
+        raise LifecycleError(
+            f"{req_id} has no red validation to rework — {validate} is not blocked on a "
+            f"red System-Test result. Run `steward validate {req_id}` to validate it, or "
+            f"`steward recover {req_id}` if a step actually failed."
+        )
+
+    brief = "\n".join(
+        r.get("detail", "") for r in latest.get("results", []) if not r.get("ok")
+    ) or "validation red"
+    evidence = latest.get("evidence")
+
+    # Answer the parked validate decision (D1) — this also unblocks validate -> PENDING.
+    decision_id: str | None = None
+    for dec in ledger.open_decisions():
+        if dec.step == validate:
+            ledger.answer_decision(
+                dec.id, "reworked: human returned the red validation to develop for a fix"
+            )
+            decision_id = dec.id
+            break
+
+    ledger.set_status(develop, StepStatus.RECOVER)
+    ledger.set_status(validate, StepStatus.PENDING)
+    ledger.save()
+    ledger.append_event(
+        "rework",
+        req=req_id,
+        develop=develop,
+        validate=validate,
+        evidence=evidence,
+        brief=brief[:2000],
+        decision=decision_id,
+    )
+    return ReworkResult(req_id, develop, validate, evidence, brief, decision_id)
