@@ -68,6 +68,14 @@ validation. Driven **interactively** (not by `steward run`) in this order — se
 
 ## Next
 
+- REQ-033 — **rework loop** (draft): `steward rework REQ-NNN` — the V-model's return edge.
+  A red validation parks (REQ-030 D8 stands; the engine never auto-loops), but today no verb
+  expresses the human's answer "the lab found a defect — fix and revalidate": `decision answer`
+  only re-runs the same red validation, `recover` refuses (no FAILED step). Rework flips
+  develop DONE→RECOVER and validate→PENDING, answers the parked fork, and hands the red
+  evidence (findings, brief) to the resuming `/advance` session via a `rework` ledger event;
+  fix happens on the still-open req branch, re-validation produces fresh evidence. First
+  case: FlowSteward REQ-012's live IMAP red (MODSEQ tuple decode) — the manual proof AC.
 - REQ-032 — **ledger always committed** (draft): every terminal step outcome — land+merge,
   deferred develop close, red validation, park — leaves a clean tree; the REQ-018
   `branch_merged` wart plus the two sibling leaks surfaced 2026-06-11. The explicit gate
@@ -151,6 +159,7 @@ REQ-001
  REQ-028 ── REQ-029 (draft, develop fusion + mechanical land + repair-on-red; with REQ-004, REQ-020, REQ-027)
  REQ-029 ──┬─ REQ-018 (draft, revised — see above)
            └─ REQ-030 (draft, System-Test phase + evidence events; with REQ-005, REQ-027) ── REQ-031 (draft, first lab: IMAP + FlowSteward re-drive)
+ REQ-030 ── REQ-033 (draft, rework loop: human-authorized red-validation → develop return edge; with REQ-026)
  REQ-011 (done, production-branch guard) ── REQ-019 (done, integration-branch guard) ── REQ-020 (draft, branch lifecycle automation)
  REQ-024 (draft, onboard skill) ── orchestrates REQ-007 + REQ-009 + REQ-010/023 + REQ-021 + REQ-022 (memzy onboarding)
 ```
