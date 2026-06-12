@@ -85,8 +85,8 @@ steps:
     status: done
     updated: '2026-06-12T13:04:50+00:00'
   REQ-033:validate:
-    status: running
-    updated: '2026-06-12T13:46:04+00:00'
+    status: done
+    updated: '2026-06-12T13:46:34+00:00'
 decisions:
 - id: DEC-001
   step: REQ-031:validate
