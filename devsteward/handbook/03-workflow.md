@@ -73,8 +73,18 @@ Mechanics around the gate:
   pending human oracle; attended, `steward validate REQ-NNN` presents the criterion and
   records the sign-off (date, reviewer, scope) as the evidence event.
 - **A red validation parks immediately — no repair loop.** A red here means the develop
-  was hollow or the lab is broken; both are human questions. Fix by hand, then
-  `steward validate` again.
+  was hollow or the lab is broken; both are human questions, so the engine never auto-loops
+  on red (REQ-030 Decision 8).
+- **`steward rework REQ-NNN` is the return edge (REQ-033).** When the red is a real defect
+  to fix — the lab found one, or the validation test itself is wrong — `rework` is the
+  recorded human verdict: it flips `REQ-NNN:develop` back to `RECOVER` and
+  `REQ-NNN:validate` to `PENDING`, answers the parked decision, and records a `rework`
+  event naming the red evidence dir (the `/advance` repair session reads it as context).
+  The fix runs on the *same* still-open req branch and re-validates through the unchanged
+  land topology — one explicit verb per fix-and-revalidate cycle is the bound (it amends
+  Decision 8 without repealing it). It refuses on a `done` REQ (supersede instead — done is
+  never weakened) and touches no git and no REQ file. (`steward recover` is for a step that
+  actually *failed*; a red validation leaves no failed step.)
 - **Lab availability is an eligibility dependency.** While any `process.lab` REQ is not
   `done` the validate step is simply ineligible — `steward status` names the lab REQ
   being waited on; no red event, no parked decision.

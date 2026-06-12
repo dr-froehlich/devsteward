@@ -41,6 +41,13 @@ Everything tagged *(batch)* or *(interactive)* below applies to that mode only.
   you are *resuming* a step that previously failed — its partial edits are already in the
   working tree (the failed attempt left them; the engine only commits on success). Read and
   assess what is there first: reconcile or fix the prior work, don't start clean.
+  - **Rework (a `rework` event for your step):** if the ledger's latest event for this
+    develop step is `rework`, a red System-Test validation was returned to you for a fix
+    (`steward rework`, REQ-033). The event names the red validation's `evidence` dir — read
+    it (the System Tester's `SYSTEM-TEST-FINDINGS.md`, the captured logs/artifacts) as your
+    repair context: the lab found a real defect (or the validation test itself is wrong).
+    Fix the cause on this same req branch so the next validation passes; the findings travel
+    through the ledger, never on the command line.
 - **Repair (`--repair` in your command):** a previous develop attempt left the acceptance
   gate **red**. Your prompt carries the failure brief (the failed test ids + verifier
   detail). Assess the partial work already in the tree, diagnose the named failures, and fix

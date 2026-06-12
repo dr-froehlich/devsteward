@@ -186,3 +186,17 @@ class Ledger:
                 if line:
                     out.append(json.loads(line))
         return out
+
+    def latest_validation(self, req_id: str) -> dict | None:
+        """The most recent ``validation`` event for ``req_id`` (or ``None``).
+
+        The rework verb (REQ-033) reads it to tell a real red — an artifact red or a
+        *declined* manual sign-off, both of which record a ``validation`` event with
+        ``ok: false`` then park — from an *awaiting-oracle* manual park (which records no
+        validation event) or a green/never-run validation.
+        """
+        latest: dict | None = None
+        for ev in self.events():
+            if ev.get("event") == "validation" and ev.get("req") == req_id:
+                latest = ev
+        return latest
