@@ -419,7 +419,9 @@ def validate(req_id: str, quiet: bool) -> None:
     Decision 5). A red validation parks with the failure brief — no repair loop.
     """
     cfg = _load_or_die()
-    ex = build_executor(cfg)
+    ctrl = StopController()
+    ctrl.install()
+    ex = build_executor(cfg, announce=_stderr_announcer, stop=ctrl)
     routine = ex.validate_runner
     if routine is None:
         raise click.ClickException("the generic profile has no validation phase")

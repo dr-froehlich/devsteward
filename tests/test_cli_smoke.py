@@ -84,3 +84,22 @@ def test_run_account_and_model_options(monkeypatch):
         # The graceful-stop controller and visibility sink are wired in too.
         assert captured["stop"] is not None
         assert callable(captured["announce"])
+
+
+def test_validate_wires_announce_and_stop(monkeypatch):
+    """REQ-025: `validate` must thread the visibility sink + graceful-stop controller into
+    build_executor like run/advance — otherwise a cswap quota wait sleeps with no output and
+    looks like a silent hang."""
+    monkeypatch.setattr(cli, "_load_or_die", lambda: SimpleNamespace())
+    captured: dict = {}
+
+    def fake_build(cfg, **kwargs):
+        captured.update(kwargs)
+        # validate_runner=None bails right after build_executor; we only assert the wiring.
+        return SimpleNamespace(validate_runner=None)
+
+    monkeypatch.setattr(cli, "build_executor", fake_build)
+    result = CliRunner().invoke(main, ["validate", "REQ-X"])
+    assert result.exit_code != 0, result.output
+    assert captured["stop"] is not None
+    assert callable(captured["announce"])
