@@ -63,6 +63,14 @@ System-Test phase (validation), which exists only if such a check exists. Decide
 - `manual` — system scope; **human** oracle; a decision stop inside the System-Test
   phase.
 
+**Writing a `manual` AC for a human oracle (2026-06-12 postmortem):** the human is the
+least-context reader in the system and cannot infer — so a `manual` AC must name its
+**observation surface** (where to look — the exact folder/page/file), its **operator
+entrypoint** (the command + account that brings that surface up), and an explicit
+**pass/fail** condition. Prefer "observe X in location Y" over "X works", and never assume a
+coding-agent-grade reader who can reconstruct a missing runbook or entrypoint. (REQ-034's
+guided validation session assists at runtime, but the criterion itself must still name these.)
+
 **Honest deferral:** when an `artifact`/`manual` check needs a lab that does not exist
 yet, record the follow-on REQ that owns the asset in `process.lab` — **never downgrade**
 the check to `regression` to make it runnable today, and never fake the lab with an
