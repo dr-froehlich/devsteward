@@ -1,15 +1,18 @@
-# Postmortem — three DevSteward frictions on the validate path of settled REQs
+# Postmortem — DevSteward frictions on the validate path of settled REQs
 
-- **Date:** 2026-06-12 (Findings 1–2); 2026-06-13 (Finding 3)
-- **Projects:** FlowSteward (`/home/peter/projects/flowsteward`) for Findings 1–2;
+- **Date:** 2026-06-12 (Findings 1–2); 2026-06-13 (Finding 2 third observation, Findings 3–4)
+- **Projects:** FlowSteward (`/home/peter/projects/flowsteward`) for Findings 1–2 and 4;
   DevSteward itself for Finding 3.
 - **Trigger:** Findings 1–2 — Peter went to record the deferred manual sign-off for
   REQ-013 AC5 (client-surface tag rendering) and hit two reproducible tool frictions.
   Finding 3 — the day after REQ-033 landed, a casual `steward validate REQ-033` on the
-  already-`done` REQ silently clobbered its `verified_by` provenance.
+  already-`done` REQ silently clobbered its `verified_by` provenance. Finding 4 — walking
+  the REQ-018 AC4 cutover sign-off, `steward validate` launched from inside a Claude Code
+  session hung with no output and never returned.
 - **Severity:** all low (workarounds exist; no data loss) — but all are *process* bugs in
   DevSteward itself, not in the consuming project. Findings 1–2 recur on every deferred
-  manual AC; Finding 3 recurs any time a `done` REQ is re-validated.
+  manual AC; Finding 3 recurs any time a `done` REQ is re-validated; Finding 4 recurs any
+  time `steward validate` is run from within a Claude Code session.
 - **Status of the consuming work:** REQ-013 AC5 was signed off with a reservation and the
   REQ landed; REQ-033 is done and its `verified_by` was restored. This postmortem is only
   about the tool.
@@ -194,6 +197,38 @@ Reinforced / added recommendations:
    The deferred-validate handoff should carry a built-from-scratch "how to exercise this"
    preamble, not just the AC sentence — the reader has been absent for the whole run.
 
+### Third observation (2026-06-13) — REQ-018 AC4: the runbook's first step assumed a deliverable nothing built
+
+The exact pattern of recommendation 5 recurred on FlowSteward **REQ-018 AC4** (the
+process-folder cutover sign-off). The AC's `test:` points at a README runbook
+(`README, 'Process folders'`); the human follows it on the first real account. Step 1 read
+*"confirm the folder names render on every surface (Thunderbird / FairEmail / webmail)."*
+Peter, correctly, was stuck: nothing in the runbook had **created** those folders on the
+account, so there was nothing to confirm — on a fresh account `Aktion` / `Warten` / `Termin`
+/ `Archive` simply weren't there.
+
+Investigation found the same missing-entrypoint shape as REQ-017 AC6:
+
+- The function that creates the process-folder set, `provision()`, existed — but was **only
+  ever called from the test harness** (`tests/test_req018_validation.py`). There was **no
+  operator-facing `flowsteward provision` command**. The runbook had no provisioning step
+  and silently presumed folders already on the server.
+- Why the gate never caught it: REQ-018's automated ACs each provision the folders **inside
+  their own fixtures** — AC1 (transitions over fakes), AC2 (freeze over a fake account), AC3
+  (lab choreography) all call `provision()` against a test/lab sink before exercising the
+  workflow. So every automated AC passed while the human-facing path to put the folders on a
+  *real* account did not exist. Nothing in the gate fails for a missing operator command when
+  every test brings its own folders.
+
+The fix (made in FlowSteward) was to add a `flowsteward provision --profile … [--live]`
+command (shadow by default, idempotent) mirroring `freeze`, and to insert it as step 1 of the
+runbook before "confirm the names render." This is recommendation 5 almost verbatim, now seen
+twice in two consecutive REQs: **when every automated AC carries its own setup, the operator
+entrypoint the manual AC depends on is exactly what slips through declaration.** It argues for
+making recommendation 5 a lint, not just guidance — a `manual` AC whose runbook names an
+action (`provision`, `freeze`, "bring up the page") should be cross-checked against an
+operator-invocable command of that name.
+
 ---
 
 ## Finding 3 — re-validating a `done` REQ silently clobbers its `verified_by` provenance
@@ -253,11 +288,96 @@ the operator believed was frozen.
 
 ---
 
+## Finding 4 — `steward validate` from inside a Claude Code session forks the live session and wedges
+
+### What happened
+
+Recording the REQ-018 AC4 sign-off, Peter ran `steward validate REQ-018` in a terminal that
+was **inside a Claude Code session** (`CLAUDECODE=1` in the environment). The command produced
+no output and never returned the shell prompt. It was not slow — it was wedged, and stayed
+wedged across re-runs ("now stale").
+
+The validate flow reached step 1 of `_validate` — the fresh System-Tester session that preps
+the lab and captures evidence for the one **artifact** AC (AC3, the live lab choreography). To
+run that session the engine spawned `claude`. But instead of a clean headless `claude -p`, the
+spawned process was:
+
+```
+claude --session-id <new> --fork-session \
+       --resume …/<ambient-session>.jsonl --effort medium --permission-mode default
+```
+
+— a **fork-and-resume of the ambient interactive session**, not a fresh one. That child
+daemonized (`claude daemon run`), grabbed the controlling terminal's pty (`--bg-pty-host`),
+did nothing (empty evidence dir; a 2-line `ai-title`/`agent-name` transcript stub), and was
+orphaned to `init` when the foreground `steward validate` exited. The dead command left a live
+background daemon holding the TTY — hence "no output, no prompt." Recovery required manually
+killing the orphan tree (`kill <daemon-pid> …`; one pty-host needed `kill -9`).
+
+### Why
+
+The System-Tester spawn does not isolate its child `claude` from an ambient Claude Code
+session. When `CLAUDECODE=1` / `CLAUDE_CODE_SESSION_ID` / `CLAUDE_CODE_*` are present in the
+environment, the `claude` the engine launches resolves to a **fork+resume of the current
+session** rather than a new headless run — so the System Tester is not the "fresh, diff-free"
+session Decision 2 promises; it is a clone of the operator's session that then detaches and
+dies. Two corroborating tells in the orphan's argv:
+
+- `--fork-session --resume <ambient>.jsonl` — it inherited the live session, the opposite of
+  a fresh tester.
+- `--permission-mode default` — the project's configured `claude.permission_mode:
+  dangerously-skip` (`.devsteward/config.yaml`) **did not reach the child**. A headless tester
+  with `default` permissions cannot act autonomously anyway, compounding the wedge.
+
+### The contradiction
+
+Decision 2 specifies the System Tester as a **fresh session that never sees the builder's
+diff**. Run from inside a Claude session, the spawn delivers the exact opposite — a fork of the
+operator's own loaded session — and on top of that drops the configured permission mode. The
+isolation the design depends on is silently lost precisely in the common case where an operator
+is already working inside Claude Code.
+
+### Workaround used
+
+Kill the orphaned daemon/session tree, then run `steward validate REQ-018` from a **plain login
+shell outside any Claude Code session** (`echo $CLAUDECODE` prints nothing). The System Tester
+then spawns clean, captures AC3 evidence, the engine re-runs AC3 green, and the AC4 sign-off
+prompt finally appears. AC3 was independently confirmed green by running its test directly
+(`pytest …::test_lab_workflow_choreography`, live lab, 6.85 s) — proving the wedge was purely
+the spawn, not the test or the product.
+
+### Recommendation (for a DevSteward session)
+
+1. **Scrub the ambient Claude env from the System-Tester child.** Before spawning, drop
+   `CLAUDECODE`, `CLAUDE_CODE_*`, `CLAUDE_CODE_SESSION_ID`, `CLAUDE_CODE_CHILD_SESSION` (and
+   any `--resume`/`--fork-session` inheritance) from the child environment so the tester is a
+   genuinely fresh `claude -p`, as Decision 2 requires — never a fork of the caller's session.
+2. **Guarantee the configured permission mode reaches the child.** The orphan ran
+   `--permission-mode default` despite `config.yaml` saying `dangerously-skip`; the spawn must
+   pass the resolved `claude.permission_mode` explicitly.
+3. **Fail fast on nesting instead of hanging.** At `steward validate` (and `run`) startup,
+   detect `CLAUDECODE=1` and either (a) auto-scrub per rec 1, or (b) refuse with an actionable
+   message — *"do not run `steward validate` from inside a Claude Code session; open a plain
+   shell"* — rather than silently spawning a session that daemonizes, captures the pty, and
+   dies. A wedged pty with no output is the worst possible failure mode for an interactive
+   command.
+
+This compounds Finding 2's lesson from the *tooling* side: even once a manual AC's runbook is
+human-precise, the operator still cannot reach the sign-off prompt if the validate entrypoint
+itself wedges. Both halves — the procedure and the machinery that presents it — have to work
+for a human oracle to function.
+
+---
+
 ## One-line summary for triage
 
 DevSteward should (1) treat a **deferred validate** as an engine-managed, fresh-branch path
 instead of erroring on a stale-but-merged feature branch, (2) hold **manual ACs** to the same
-precision bar as artifact ACs — observation-precise, idiot-safe procedures, surfaced as a
-structured checklist at sign-off time, and (3) stop a **done-REQ re-validation** from silently
-clobbering `verified_by` — honor the "status untouched" promise for provenance too (leave or
-append, never replace).
+precision bar as artifact ACs — observation-precise, idiot-safe procedures that name their
+operator entrypoint (and lint that a runbook action like `provision`/`freeze` maps to a real
+command — seen missing twice, REQ-017 AC6 and REQ-018 AC4), surfaced as a structured checklist
+at sign-off time, (3) stop a **done-REQ re-validation** from silently clobbering `verified_by`
+— honor the "status untouched" promise for provenance too (leave or append, never replace), and
+(4) **isolate the System-Tester spawn from an ambient Claude Code session** — scrub
+`CLAUDE_CODE_*`/`CLAUDECODE` and never fork+resume the caller's session, pass the configured
+permission mode through, and fail fast (not hang on a captured pty) when run from inside Claude.
