@@ -68,6 +68,12 @@ validation. Driven **interactively** (not by `steward run`) in this order — se
 
 ## Next
 
+- REQ-035 — **done re-validation freezes verified_by** (draft, fix): re-validating a `done`
+  REQ (`steward validate`, REQ-030 D5) silently overwrote its `verified_by`, clobbering the
+  landing provenance (postmortem Finding 3). The fix leaves `verified_by` and `status`
+  untouched on a done re-validation — the fresh re-check lives in the appended `events.jsonl`
+  event (REQ-030 D3), which is already the durable record — and makes the CLI message honest.
+  Clarifies REQ-030 D5; the in-flight landing write is unchanged. Regression-only, fused.
 - REQ-034 — **guided async human validation** (draft): reworks the `manual`-AC half of the
   System-Test phase (**amends REQ-030 D4**). Human validation becomes a fresh, diff-free but
   **interactive** guided session (prepare the lab/surfaces + operator entrypoint, walk the
@@ -170,7 +176,8 @@ REQ-001
  REQ-029 ──┬─ REQ-018 (draft, revised — see above)
            └─ REQ-030 (draft, System-Test phase + evidence events; with REQ-005, REQ-027) ── REQ-031 (draft, first lab: IMAP + FlowSteward re-drive)
  REQ-030 ──┬─ REQ-033 (rework loop: human-authorized red-validation → develop return edge; with REQ-026)
-           └─ REQ-034 (draft, guided async human validation + QA-ticket park + clean re-entry; with REQ-020, REQ-032, REQ-033)
+           ├─ REQ-034 (draft, guided async human validation + QA-ticket park + clean re-entry; with REQ-020, REQ-032, REQ-033)
+           └─ REQ-035 (draft, fix: done re-validation freezes verified_by — provenance not clobbered)
  REQ-011 (done, production-branch guard) ── REQ-019 (done, integration-branch guard) ── REQ-020 (draft, branch lifecycle automation)
  REQ-024 (draft, onboard skill) ── orchestrates REQ-007 + REQ-009 + REQ-010/023 + REQ-021 + REQ-022 (memzy onboarding)
 ```
