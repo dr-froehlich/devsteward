@@ -68,6 +68,16 @@ validation. Driven **interactively** (not by `steward run`) in this order — se
 
 ## Next
 
+- REQ-034 — **guided async human validation** (draft): reworks the `manual`-AC half of the
+  System-Test phase (**amends REQ-030 D4**). Human validation becomes a fresh, diff-free but
+  **interactive** guided session (prepare the lab/surfaces + operator entrypoint, walk the
+  procedure, answer questions) with the verdict engine-owned — not a bare `y/N`. A pending
+  human validation parks as an **async QA-ticket** (clean tree, HEAD back on the integration
+  branch, feature branch intact + unmerged) so a waiting human never freezes the pipeline,
+  and `steward validate` **cleanly re-enters** a parked validation later by reconciling the
+  branch from current `dev` (fixes postmortem Finding 1). Spawn isolated from any ambient
+  Claude Code session (Finding 4); declined verdict routes to `steward rework`. From the
+  2026-06-12 human-oracle postmortem.
 - REQ-033 — **rework loop** (draft): `steward rework REQ-NNN` — the V-model's return edge.
   A red validation parks (REQ-030 D8 stands; the engine never auto-loops), but today no verb
   expresses the human's answer "the lab found a defect — fix and revalidate": `decision answer`
@@ -159,7 +169,8 @@ REQ-001
  REQ-028 ── REQ-029 (draft, develop fusion + mechanical land + repair-on-red; with REQ-004, REQ-020, REQ-027)
  REQ-029 ──┬─ REQ-018 (draft, revised — see above)
            └─ REQ-030 (draft, System-Test phase + evidence events; with REQ-005, REQ-027) ── REQ-031 (draft, first lab: IMAP + FlowSteward re-drive)
- REQ-030 ── REQ-033 (draft, rework loop: human-authorized red-validation → develop return edge; with REQ-026)
+ REQ-030 ──┬─ REQ-033 (rework loop: human-authorized red-validation → develop return edge; with REQ-026)
+           └─ REQ-034 (draft, guided async human validation + QA-ticket park + clean re-entry; with REQ-020, REQ-032, REQ-033)
  REQ-011 (done, production-branch guard) ── REQ-019 (done, integration-branch guard) ── REQ-020 (draft, branch lifecycle automation)
  REQ-024 (draft, onboard skill) ── orchestrates REQ-007 + REQ-009 + REQ-010/023 + REQ-021 + REQ-022 (memzy onboarding)
 ```
