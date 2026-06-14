@@ -68,6 +68,28 @@ validation. Driven **interactively** (not by `steward run`) in this order — se
 
 ## Next
 
+- REQ-037 — **ledger on dev only + atomic topology** (draft): the root fix for the live
+  crash where `steward validate` died on a `git merge --no-ff` conflict in `.devsteward/`
+  and left the repo split (HEAD on `dev`, fix stranded on the feature branch, no verb to
+  recover). The ledger rides the feature branch and the feature→`dev` merge collides two
+  append-only histories the moment `dev` advanced since the cut (guaranteed in a
+  deferred-validate world). Plan 0021 moved only the *park* path to `dev` and assumed "the
+  green path is fine"; the crash disproves that. Moves **all** ledger writes to `dev` (the
+  ledger has the declaration's nature — serial, single-writer, registry), so a feature
+  branch carries pure code and the merge cannot conflict on `.devsteward/`; and wraps every
+  merge/reconcile/switch to be **atomic + recoverable** (fetch-first, abort-and-surface,
+  park when unattended) instead of crashing. Real-git ACs (the plan 0021 hollow-fake
+  lesson). **Unblocks honestly re-validating REQ-034.** With REQ-020, REQ-032, REQ-034.
+- REQ-038 — **cross-host validation deploy channel** (draft): Finding 90, the spun-out gap
+  from REQ-034's live AC6 (FlowSteward REQ-024's homelab cutover). A `manual` AC whose
+  surface is on another host has no sanctioned way to receive the build before land — the
+  artifact lives only on the local feature branch, and the clean channel (`git pull` of a
+  published ref) is a land-phase action that comes *after* validation. Resolves it with
+  **artifact-export (option A)**: validate emits a clean RC (`git archive`, tracked files
+  only) shipped cross-host as a thin one-commit repo; no ref hits `origin`. A live fix
+  returns as a true `git diff` **patch** through the evidence dir and lands via the rework
+  loop — full fidelity, deploy host never commits. Candidate frozen at the green verdict.
+  Depends on REQ-037 (pure-code branch + atomic merges). With REQ-030, REQ-033, REQ-034.
 - REQ-036 — **steward sync-skills** (draft): the spun-out fourth finding of REQ-034's live AC6
   (Finding 50). A consumer's stamped `.claude/skills/` is frozen at `steward new` time while the
   engine is upgraded independently, so they drift with no refresh path and no signal — and a
@@ -187,6 +209,8 @@ REQ-001
            └─ REQ-030 (draft, System-Test phase + evidence events; with REQ-005, REQ-027) ── REQ-031 (draft, first lab: IMAP + FlowSteward re-drive)
  REQ-030 ──┬─ REQ-033 (rework loop: human-authorized red-validation → develop return edge; with REQ-026)
            ├─ REQ-034 (draft, guided async human validation + QA-ticket park + clean re-entry; with REQ-020, REQ-032, REQ-033)
+           │   ├─ REQ-037 (draft, ledger on dev only + atomic recoverable topology — the live-crash root fix; unblocks REQ-034 re-validation; with REQ-020, REQ-032)
+           │   │   └─ REQ-038 (draft, cross-host validation deploy channel: artifact-export RC + patch-back via rework — Finding 90 opt A; with REQ-030, REQ-033)
            ├─ REQ-035 (draft, fix: done re-validation freezes verified_by — provenance not clobbered)
            └─ REQ-036 (draft, steward sync-skills: refresh stamped bundled skills + provenance manifest + drift signal; with REQ-007)
  REQ-011 (done, production-branch guard) ── REQ-019 (done, integration-branch guard) ── REQ-020 (draft, branch lifecycle automation)
