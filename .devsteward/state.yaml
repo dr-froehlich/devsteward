@@ -94,8 +94,8 @@ steps:
     status: blocked-on-decision
     updated: '2026-06-14T01:15:02+00:00'
   REQ-035:develop:
-    status: running
-    updated: '2026-06-14T01:15:02+00:00'
+    status: done
+    updated: '2026-06-14T01:20:46+00:00'
 decisions:
 - id: DEC-001
   step: REQ-031:validate
