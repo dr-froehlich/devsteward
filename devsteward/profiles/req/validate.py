@@ -169,9 +169,11 @@ class ReqValidateRoutine:
     ) -> StepResult:
         """Append a fresh evidence event for a **done** REQ (Decisions 5/9).
 
-        Runs the same session + engine gate + sign-off mechanics, records the event and
-        refreshes ``verified_by`` — but never touches the REQ's status, the index, the
-        ledger steps, or git. The release-gate human decides what to re-run.
+        Runs the same session + engine gate + sign-off mechanics and records the dated
+        evidence event — but leaves the REQ file untouched: status *and* ``verified_by``
+        stay the frozen landing provenance (REQ-035), and the index, ledger steps, and git
+        are never touched. The event log is the durable re-validation record; the
+        release-gate human decides what to re-run.
         """
         req = self._req(req_id)
         if req is None:
@@ -452,13 +454,16 @@ class ReqValidateRoutine:
         if not all_green:
             return self._park_red(ex, step, req, results, in_flight=in_flight)
 
-        # 5. Green: the engine composes the verified_by bookkeeping (the human supplied
-        #    only the verdict), then the in-flight REQ lands through the same mechanical
-        #    routine as batch; a done REQ keeps its status untouched (Decision 5).
-        self._write_verified_by(req, results, signoffs, evidence_rel, driver)
+        # 5. Green. A **done** re-validation (REQ-035) is non-mutating: the appended
+        #    evidence event (step 4 / REQ-030 D3) is the durable, dated re-validation
+        #    record, so the REQ file is left untouched — status *and* verified_by stay the
+        #    frozen landing provenance ("done is never weakened", REQ-001). Only the
+        #    in-flight landing path composes verified_by (the provenance being established)
+        #    and lands through the same mechanical routine as batch.
         detail = "; ".join(r["detail"].splitlines()[0] for r in results) or "validated"
         if not in_flight:
             return StepResult(step, RunOutcome.DONE, detail)
+        self._write_verified_by(req, results, signoffs, evidence_rel, driver)
         # A decision parked by an earlier unattended pass (the manual stop) is resolved
         # by this green validation — close it so the ledger does not surface a stale fork.
         for dec in led.open_decisions():

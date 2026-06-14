@@ -1,7 +1,7 @@
 version: 1
 profile: req
 cursor:
-  step: REQ-034:validate
+  step: REQ-035:develop
 steps:
   REQ-011:design:
     status: done
@@ -92,6 +92,9 @@ steps:
     updated: '2026-06-14T01:15:01+00:00'
   REQ-034:validate:
     status: blocked-on-decision
+    updated: '2026-06-14T01:15:02+00:00'
+  REQ-035:develop:
+    status: running
     updated: '2026-06-14T01:15:02+00:00'
 decisions:
 - id: DEC-001

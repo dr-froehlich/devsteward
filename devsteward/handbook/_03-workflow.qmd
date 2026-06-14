@@ -108,7 +108,8 @@ Mechanics around the gate:
   being waited on; no red event, no parked decision.
 - **`steward validate REQ-NNN` is the single entry point.** On an in-flight REQ it
   executes the pending validate step (green → the mechanical land + merge proceed); on a
-  `done` REQ it appends a fresh evidence event without disturbing the status. At the
+  `done` REQ it appends a fresh evidence event and leaves the REQ file untouched — status
+  *and* `verified_by` stay the frozen landing provenance (REQ-035). At the
   release gate (`dev → main` PR) a human decides which `artifact` REQs to re-run — there
   is deliberately no auto-staleness detection.
 

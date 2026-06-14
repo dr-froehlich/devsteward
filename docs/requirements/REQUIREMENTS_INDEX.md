@@ -40,6 +40,6 @@ commit** as its frontmatter and the code.
 | REQ-032 | Ledger always committed — every terminal step outcome leaves a clean tree | DONE | [REQ-032](REQ-032.md) | REQ-018, REQ-020, REQ-030 |
 | REQ-033 | Rework loop — steward rework returns a red validation to develop for a fix-and-revalidate cycle | DONE | [REQ-033](REQ-033.md) | REQ-026, REQ-030 |
 | REQ-034 | Human validation as a guided, asynchronous activity — interactive System-Tester session, QA-ticket parking, clean re-entry | OPEN | [REQ-034](REQ-034.md) | REQ-020, REQ-030, REQ-032, REQ-033 |
-| REQ-035 | Re-validating a done REQ leaves verified_by frozen — provenance is not clobbered | OPEN | [REQ-035](REQ-035.md) | REQ-030 |
+| REQ-035 | Re-validating a done REQ leaves verified_by frozen — provenance is not clobbered | DONE | [REQ-035](REQ-035.md) | REQ-030 |
 
 New requirement template: [`_templates/req.md`](../../devsteward/templates/docs/requirements/_templates/req.md)

@@ -425,8 +425,9 @@ def validate(req_id: str, quiet: bool) -> None:
     Tester session preps the lab and captures artifacts, the engine runs each
     ``artifact`` AC's named test itself, ``manual`` ACs take your sign-off here, and on
     green the REQ lands mechanically (flip, index, commit, merge). On a **done** REQ it
-    appends a fresh dated evidence event without disturbing the status (re-run policy,
-    Decision 5). A red validation parks with the failure brief — no repair loop.
+    appends a fresh dated evidence event and leaves the REQ file untouched — status *and*
+    ``verified_by`` stay the frozen landing provenance (re-run policy, REQ-030 Decision 5
+    as clarified by REQ-035). A red validation parks with the failure brief — no repair loop.
     """
     cfg = _load_or_die()
     ctrl = StopController()
@@ -450,7 +451,8 @@ def validate(req_id: str, quiet: bool) -> None:
         if res.outcome is not RunOutcome.DONE:
             raise click.ClickException(f"re-validation red:\n{res.detail}")
         click.echo(click.style(
-            f"fresh evidence recorded for {req_id} (status untouched).", fg="green"
+            f"fresh evidence recorded for {req_id} — the REQ file is unchanged "
+            f"(status and verified_by both frozen).", fg="green"
         ))
         return
 
