@@ -150,6 +150,51 @@ def _extract_text(lines: list[dict]) -> str:
     return "\n".join(c for c in chunks if c).strip()
 
 
+def in_claude_session() -> bool:
+    """True when this process is already running inside a Claude Code session.
+
+    The harness exports ``CLAUDECODE=1`` for every session it drives. REQ-034 Decision 6
+    forbids spawning Claude from within Claude, so the guided-validation **bring-up** path
+    consults this and refuses when set — pointing the human at a plain terminal tab or the
+    in-session skill instead. Forbidding the nested spawn dissolves the postmortem's
+    Finding 4 (an in-session spawn forks the ambient session and wedges a pty) at the root.
+    """
+    return bool(os.environ.get("CLAUDECODE"))
+
+
+def run_claude_interactive(
+    command: str,
+    *,
+    argv_prefix: list[str] | None = None,
+    cwd: str | None = None,
+    env: dict | None = None,
+    model: str | None = None,
+    effort: str | None = None,
+) -> int:
+    """Bring up an **interactive** ``claude`` session attached to the terminal and wait.
+
+    The *editor pattern* (REQ-034 Decision 6) — how ``git`` brings up ``$EDITOR``: inherit
+    the parent's TTY (no stdio redirection), run in the foreground, and ``wait`` for the
+    human to finish. Deliberately **not** ``claude -p`` (no ``--output-format
+    stream-json``), and **not** detached (no ``start_new_session``): the human drives this
+    session live, so it must own the terminal. ``command`` is the initial prompt (e.g. a
+    ``/system-test`` invocation); the session continues interactively from there.
+
+    Returns the child's exit code. Callers MUST guard :func:`in_claude_session` first —
+    Claude is never spawned from within Claude.
+    """
+    argv = list(argv_prefix or ["claude"]) + [command]
+    if model:
+        argv += ["--model", model]
+    if effort:
+        argv += ["--effort", effort]
+    run_env = dict(os.environ if env is None else env)
+    # Inherit the parent's stdin/stdout/stderr (the TTY) — the whole point of the editor
+    # pattern. subprocess.run with no stdio kwargs inherits by default.
+    completed = subprocess.run(argv, cwd=cwd, env=run_env)
+    return completed.returncode
+
+
 def run_claude(
     command: str,
     *,

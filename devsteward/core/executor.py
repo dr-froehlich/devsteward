@@ -102,6 +102,7 @@ class Executor:
         step_claude: dict[str, tuple[str | None, str | None]] | None = None,
         repair_budget: int = 0,
         validate_runner: Callable[..., "StepResult"] | None = None,
+        interactive_runner: Callable[..., int] = claude_mod.run_claude_interactive,
     ):
         self.root = Path(root)
         self.source = source
@@ -125,6 +126,10 @@ class Executor:
         # → StepResult. The REQ profile wires :func:`devsteward.profiles.req.validate
         # .run_validate_step`; None (generic) means no validate phase exists.
         self.validate_runner = validate_runner
+        # REQ-034 Decision 6: the foreground *interactive* bring-up for a guided human
+        # validation (the editor pattern — TTY inherited, no -p, no detach). Injectable so
+        # the tests drive shape A without a real claude / TTY.
+        self.interactive_runner = interactive_runner
         self.runner = runner
         self.committer = committer
         self.autocommit = autocommit
@@ -203,6 +208,75 @@ class Executor:
             self.git.create_and_switch(name)
             self.ledger.append_event("branch_created", step=step.id, branch=name)
         return None
+
+    def ready_validate_branch(self, step: Step) -> str | None:
+        """Ready the feature branch for a (possibly resumed) validate (REQ-034 Decision 5).
+
+        Unlike :meth:`prepare_branch`, a behind-but-merged feature branch is **reconciled**
+        (the integration branch merged into it), not refused as diverged: a deferred
+        validate is the *expected* path ("the end of the run guarantees the integration
+        branch advanced"), and the branch topology for it is the engine's to manage. Returns
+        a surface message only on a genuine failure, else ``None``.
+
+        - In-flight (already on the feature branch — develop left us there): no-op.
+        - Resumed (a pending park returned HEAD to the integration branch): switch to the
+          feature branch and, when it has fallen behind, reconcile it from the integration
+          branch (records ``branch_reconciled``).
+        """
+        if self.current_branch() != self.integration_branch:
+            return None  # in-flight: develop already put us on the feature branch
+        name = self.feature_branch_name(step)
+        if not self.git.branch_exists(name):
+            return None  # no branch to ready (e.g. a develop that ran on integration)
+        if self.git.integration_is_ancestor(self.integration_branch, name):
+            self.git.switch(name)
+            self.ledger.append_event("branch_reused", step=step.id, branch=name)
+        else:
+            self.git.reconcile_from_integration(
+                self.integration_branch,
+                name,
+                f"{step.req}: reconcile {name} from {self.integration_branch} "
+                f"for deferred validation\n\n{_TRAILER}",
+            )
+            self.ledger.append_event("branch_reconciled", step=step.id, branch=name)
+        return None
+
+    def return_to_integration(self) -> None:
+        """Return HEAD to the integration branch (REQ-034 Decision 3) — idempotent.
+
+        A pending/red human validation is async QA, not a project freeze: HEAD goes back to
+        the integration branch so a subsequent ``steward run`` advances other eligible REQs,
+        with the feature branch left intact and unmerged (Decision 4)."""
+        if self.current_branch() != self.integration_branch:
+            self.git.switch(self.integration_branch)
+
+    def bring_up_guided_session(
+        self, step: Step, evidence_rel: str, *, on_event=None
+    ) -> int | str:
+        """Bring up the interactive guided System-Tester session (REQ-034 Decision 6).
+
+        Refuses — returns a surface *string* — when already inside a Claude session
+        (``CLAUDECODE`` set): Claude is never spawned from within Claude. Otherwise spawns
+        the interactive session in the foreground (the editor pattern) and returns its exit
+        code. The verdict is taken afterward by the engine, so this session — however it
+        reports — cannot self-certify (Decision 2)."""
+        if claude_mod.in_claude_session():
+            return (
+                f"refusing to bring up a guided validation session from inside a Claude "
+                f"session (CLAUDECODE set) — Claude is never spawned from within Claude. "
+                f"Open a plain terminal tab and run `steward validate {step.req}` there, or "
+                f"drive the validation in this session via the /system-test skill's "
+                f"start/record steps."
+            )
+        model, effort = self._claude_for("validate")
+        command = f"/system-test {step.req} --evidence {evidence_rel} --guided"
+        return self.interactive_runner(
+            command,
+            argv_prefix=self.accounts.claude_argv(),
+            cwd=str(self.root),
+            model=model,
+            effort=effort,
+        )
 
     # -- planning --------------------------------------------------------------
 

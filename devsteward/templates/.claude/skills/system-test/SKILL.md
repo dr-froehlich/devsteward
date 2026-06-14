@@ -21,6 +21,33 @@ value of this phase.
   validate` records the human sign-off; unattended, the engine parks the step. Do not
   simulate, anticipate, or argue a sign-off.
 
+## Guided (attended) mode — `--guided` (REQ-034)
+
+When the engine brings you up **interactively** (a foreground session attached to the
+terminal — the editor pattern, `--guided` on the command, `manual` ACs in play), you are
+not just capturing artifacts: you are **guiding a human** through the validation. The human
+is the least-context reader in the system; pay them the same orientation tax the artifact
+path already gets.
+
+1. **Prepare the surfaces.** Bring up the lab/system *and* the operator entrypoint the
+   `manual` AC names (the page, the command, the observation surface) so the human is
+   looking at a live thing, not a runbook.
+2. **Walk them through the procedure**, step by step, against the real system — and **answer
+   their questions** as they go.
+3. **Capture artifacts** into `--evidence <dir>` as in the headless flow.
+4. **End the session** — then the **engine** takes the human's verdict (approve / decline /
+   defer-as-pending) and records it. You never collect, write, or assert the verdict; the
+   engine-run gate + the engine-recorded verdict are what stop a session from self-certifying.
+
+**Two-phase, mid-session (Claude never spawned from within Claude):** if a validation
+arises inside a running session, that session's skill drives it in place — call the engine's
+**start** half, do the guided work here, then call the **record** half. Do **not** spawn a
+new `claude`; `steward validate`'s bring-up refuses inside a Claude session (`CLAUDECODE`)
+and points at a plain terminal tab or this in-session path.
+
+A **deferred** (pending) validation is async QA, not a failure: it parks cleanly and the
+project keeps moving — resume it later from a plain shell with `steward validate REQ-NNN`.
+
 ## Do
 
 1. **Orient narrowly.** Read the target REQ (`docs/requirements/REQ-NNN.md`) — its

@@ -83,7 +83,12 @@ named-test list is acceptable here because the runnable gate lives at validation
 `REQ-NNN:validate` step follows — a fresh, diff-free System Tester session captures
 artifacts, the engine runs the `artifact` tests itself, manual criteria take a human
 sign-off, and on green the *same* mechanical land fires. A red validation parks with no
-repair loop. See @sec-workflow for the full phase.
+repair loop. A `manual` criterion is a **guided** human validation (REQ-034): `steward
+validate` runs a two-phase bookkeeping around a foreground *interactive* session attached
+to the terminal (the editor pattern — never `claude -p`, never spawned from within Claude),
+and a pending verdict parks as **async QA** — clean tree, HEAD back on the integration
+branch, the feature branch intact and unmerged — so the project keeps moving and the
+validation resumes (reconciling the branch) later. See @sec-workflow for the full phase.
 
 The gate's *green* is sharper than exit-0 (REQ-028): exit-0 cannot tell a pass from a
 skip or a zero-collection, so the gate reads pytest's per-test outcomes. A named acceptance

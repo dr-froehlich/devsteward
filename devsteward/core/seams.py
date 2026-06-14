@@ -79,3 +79,9 @@ class GitTopology(Protocol):
 
     def merge_no_ff(self, feature: str, message: str) -> None:
         ...
+
+    def reconcile_from_integration(
+        self, integration: str, feature: str, message: str
+    ) -> None:
+        """Switch to ``feature`` and merge ``integration`` into it (REQ-034 D5) — bring a
+        behind-but-merged feature branch current so a deferred validate-land can proceed."""

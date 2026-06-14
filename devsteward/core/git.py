@@ -66,3 +66,19 @@ class GitCli:
 
     def merge_no_ff(self, feature: str, message: str) -> None:
         self._run("merge", "--no-ff", "-m", message, feature, check=True)
+
+    def reconcile_from_integration(
+        self, integration: str, feature: str, message: str
+    ) -> None:
+        """Bring ``integration``'s commits into ``feature`` (REQ-034 Decision 5).
+
+        A deferred validation parks the feature branch unmerged while the integration
+        branch keeps advancing ("the end of the run guarantees ``dev`` advanced"); when the
+        human resumes, the branch is *behind* and ``integration`` is no longer one of its
+        ancestors. Rather than refuse it as diverged (Finding 1), switch to it and merge
+        ``integration`` ``--no-ff`` in, making the behind-but-merged branch current again so
+        the deferred land can proceed. The engine owns this topology, as it already owns the
+        build branch (REQ-020).
+        """
+        self.switch(feature)
+        self._run("merge", "--no-ff", "-m", message, integration, check=True)

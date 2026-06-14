@@ -13,6 +13,7 @@ import click
 from . import __version__
 from .build import build_executor
 from .config import Config, ProjectNotFound, load_config
+from .core import claude as claude_mod
 from .core.executor import RunOutcome, StepResult
 from .core.ledger import Ledger
 from .core.stop import StopController
@@ -384,23 +385,32 @@ def _git_user_name(root: Path) -> str:
 
 
 def _interactive_signoff(root: Path):
-    """The attended sign-off source (REQ-030 Decision 4): present the manual AC, take the
-    human's verdict + optional one-line scope — the engine composes everything else."""
+    """The attended sign-off source (REQ-030 D4 / REQ-034 D7): present the manual AC, take
+    the human's verdict — one of three terminal outcomes — and an optional one-line scope.
+    The engine composes everything else.
+
+    Taken *after* the guided session exits (the editor pattern), so the verdict is the
+    human's and engine-recorded; the session cannot self-certify (Decision 2)."""
     from .profiles.req.validate import Signoff
 
     def provider(ac) -> Signoff:
         click.echo(click.style(f"\nmanual {ac.id}:", bold=True) + f" {ac.text}")
         if ac.test:
             click.echo(f"  oracle: {ac.test}")
-        approved = click.confirm(f"Sign off {ac.id}?", default=False)
+        verdict = click.prompt(
+            "Verdict — [a]pprove / [d]ecline / [p]ending (defer as async QA)",
+            type=click.Choice(["a", "d", "p"]), default="p", show_choices=True,
+        )
+        if verdict == "p":
+            return Signoff(approved=False, reviewer="", deferred=True)
         reviewer = _git_user_name(root) or click.prompt("Reviewer")
         scope = ""
-        if approved:
+        if verdict == "a":
             scope = click.prompt(
                 "Scope (one line, e.g. what was reviewed; empty to skip)",
                 default="", show_default=False,
             ).strip()
-        return Signoff(approved=approved, reviewer=reviewer, scope=scope)
+        return Signoff(approved=(verdict == "a"), reviewer=reviewer, scope=scope)
 
     return provider
 
@@ -415,8 +425,9 @@ def validate(req_id: str, quiet: bool) -> None:
     Tester session preps the lab and captures artifacts, the engine runs each
     ``artifact`` AC's named test itself, ``manual`` ACs take your sign-off here, and on
     green the REQ lands mechanically (flip, index, commit, merge). On a **done** REQ it
-    appends a fresh dated evidence event without disturbing the status (re-run policy,
-    Decision 5). A red validation parks with the failure brief — no repair loop.
+    appends a fresh dated evidence event and leaves the REQ file untouched — status *and*
+    ``verified_by`` stay the frozen landing provenance (re-run policy, REQ-030 Decision 5
+    as clarified by REQ-035). A red validation parks with the failure brief — no repair loop.
     """
     cfg = _load_or_die()
     ctrl = StopController()
@@ -440,7 +451,8 @@ def validate(req_id: str, quiet: bool) -> None:
         if res.outcome is not RunOutcome.DONE:
             raise click.ClickException(f"re-validation red:\n{res.detail}")
         click.echo(click.style(
-            f"fresh evidence recorded for {req_id} (status untouched).", fg="green"
+            f"fresh evidence recorded for {req_id} — the REQ file is unchanged "
+            f"(status and verified_by both frozen).", fg="green"
         ))
         return
 
@@ -455,15 +467,22 @@ def validate(req_id: str, quiet: bool) -> None:
             f"{req_id}:develop is not closed yet — validation follows the develop "
             f"checkpoint (run `steward checkpoint {req_id} develop` first)"
         )
+    # REQ-034 Decision 6: the bring-up path never spawns Claude from within Claude — refuse
+    # early when already inside a Claude session, pointing at a plain terminal / the skill.
+    if claude_mod.in_claude_session():
+        raise click.ClickException(
+            f"refusing to bring up a guided validation session from inside a Claude "
+            f"session (CLAUDECODE set) — Claude is never spawned from within Claude. Open a "
+            f"plain terminal tab and run `steward validate {req_id}` there, or drive the "
+            f"validation in this session via the /system-test skill's start/record steps."
+        )
     refusal = ex.branch_guard()
     if refusal is not None:
         raise click.ClickException(refusal)
-    surfaced = ex.prepare_branch(step)
-    if surfaced is not None:
-        raise click.ClickException(surfaced)
-    res = routine(
-        ex, step, unattended=False, on_event=on_event, signoff=signoff,
-        driver="interactive",
+    # REQ-034 Decision 6 (shape A): start → interactive guided bring-up (editor pattern) →
+    # record. The routine readies/reconciles the branch (Decision 5) inside its start half.
+    res = routine.guided_validate(
+        ex, step, signoff=signoff, on_event=on_event, driver="interactive",
     )
     if res.outcome is RunOutcome.REFUSED:
         raise click.ClickException(res.detail)
