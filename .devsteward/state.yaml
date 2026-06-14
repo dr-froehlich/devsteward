@@ -92,7 +92,7 @@ steps:
     updated: '2026-06-14T01:15:01+00:00'
   REQ-034:validate:
     status: blocked-on-decision
-    updated: '2026-06-14T01:15:02+00:00'
+    updated: '2026-06-14T04:58:09+00:00'
   REQ-035:develop:
     status: done
     updated: '2026-06-14T01:20:46+00:00'
@@ -116,9 +116,24 @@ decisions:
   step: REQ-034:validate
   question: 'REQ-034 validation: manual AC AC6 awaits its human oracle — run `steward
     validate REQ-034` attended to record the sign-off.'
+  status: answered
+  options: []
+  answer: "Superseded by the recorded verdict: Peter attended `steward validate REQ-034`
+    and declined AC6 (red) on 2026-06-14. The placeholder's ask — attend and record the
+    sign-off — is fulfilled; the verdict is the red park DEC-003. (Reconciled onto dev's
+    ledger by hand after the two-phase validate handover crashed — see evidence
+    70-/80-FINDING.)"
+  req: REQ-034
+  raised_at: '2026-06-14T01:15:02+00:00'
+  answered_at: '2026-06-14T04:58:09+00:00'
+- id: DEC-003
+  step: REQ-034:validate
+  question: "REQ-034 validation red — needs a human:\ndeclined by Peter Froehlich\n\
+    \nReturn it to develop for a fix with `steward rework REQ-034` (the V-model return\
+    \ edge)."
   status: open
   options: []
   answer:
   req: REQ-034
-  raised_at: '2026-06-14T01:15:02+00:00'
+  raised_at: '2026-06-14T04:58:09+00:00'
   answered_at:
