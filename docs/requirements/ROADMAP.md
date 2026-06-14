@@ -68,6 +68,16 @@ validation. Driven **interactively** (not by `steward run`) in this order — se
 
 ## Next
 
+- REQ-036 — **steward sync-skills** (draft): the spun-out fourth finding of REQ-034's live AC6
+  (Finding 50). A consumer's stamped `.claude/skills/` is frozen at `steward new` time while the
+  engine is upgraded independently, so they drift with no refresh path and no signal — and a
+  stale stamped skill silently runs old behavior against a current engine (FlowSteward's
+  pre-REQ-034 system-test skill made `--guided` a no-op). Adds a provenance manifest
+  (`.devsteward/skills.lock`) so drift is tellable apart from intentional customization
+  (in-sync / stale / customized), a non-blocking `steward status` signal, and a
+  `steward sync-skills` verb that refreshes stale bundled skills (and won't clobber a
+  customized one without `--force`). Bundled skills only; fused; consumer-repo reality (no
+  DevSteward lab). With REQ-007 (stamping) + REQ-030 (bundled skills).
 - REQ-035 — **done re-validation freezes verified_by** (draft, fix): re-validating a `done`
   REQ (`steward validate`, REQ-030 D5) silently overwrote its `verified_by`, clobbering the
   landing provenance (postmortem Finding 3). The fix leaves `verified_by` and `status`
@@ -177,7 +187,8 @@ REQ-001
            └─ REQ-030 (draft, System-Test phase + evidence events; with REQ-005, REQ-027) ── REQ-031 (draft, first lab: IMAP + FlowSteward re-drive)
  REQ-030 ──┬─ REQ-033 (rework loop: human-authorized red-validation → develop return edge; with REQ-026)
            ├─ REQ-034 (draft, guided async human validation + QA-ticket park + clean re-entry; with REQ-020, REQ-032, REQ-033)
-           └─ REQ-035 (draft, fix: done re-validation freezes verified_by — provenance not clobbered)
+           ├─ REQ-035 (draft, fix: done re-validation freezes verified_by — provenance not clobbered)
+           └─ REQ-036 (draft, steward sync-skills: refresh stamped bundled skills + provenance manifest + drift signal; with REQ-007)
  REQ-011 (done, production-branch guard) ── REQ-019 (done, integration-branch guard) ── REQ-020 (draft, branch lifecycle automation)
  REQ-024 (draft, onboard skill) ── orchestrates REQ-007 + REQ-009 + REQ-010/023 + REQ-021 + REQ-022 (memzy onboarding)
 ```
