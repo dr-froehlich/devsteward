@@ -185,6 +185,20 @@ validation. Driven **interactively** (not by `steward run`) in this order — se
   (the false `done` was a hand-edit lint never checked). Complements REQ-027 (which shapes
   *which* ACs exist); neither blocks the other. Enforcement only — no System-Test phase,
   taxonomy, or intake shaping here.
+- REQ-039 — **concept phase** (draft): the left-arm counterpart of the System-Test
+  (validate) phase. Today `process.concept:true` is a bare batch-ineligibility flag with no
+  in-session semantics (mechanically identical to `develop: split`); FlowSteward's first
+  concept phase surfaced that `/advance` never reads it and produces no mockups-first /
+  sign-off behaviour. Adds a conditional **leading** `concept` step before develop — an
+  **interactive-only** `/concept` guided session (`steward concept REQ-NNN`, same two-phase
+  bring-up + `CLAUDECODE` guard as `steward validate`, but coupled-by-design: no decoupling,
+  no evidence dir, no artifact gate). Deliverable is a `docs/concepts/REQ-NNN.md` architecture
+  doc (recorded in `concept_refs`); spikes/prototypes are throwaway; the gate is an
+  engine-recorded human sign-off (approve unblocks develop, defer parks async, decline routes
+  to rework); runs on the integration branch. Concept is a higher altitude than `develop:
+  split` (architecture vs implementation-plan review) — orthogonal, split untouched. Machinery
+  + scratch `manual`-AC proof; FlowSteward's concept re-drive is the follow-on first real
+  consumer (≡ REQ-031 after REQ-030). With REQ-027, REQ-029, REQ-030, REQ-034.
 - Future REQs land here as `/intake` produces them.
 
 ## Dependency graph
@@ -212,7 +226,8 @@ REQ-001
            │   ├─ REQ-037 (draft, ledger on dev only + atomic recoverable topology — the live-crash root fix; unblocks REQ-034 re-validation; with REQ-020, REQ-032)
            │   │   └─ REQ-038 (draft, cross-host validation deploy channel: artifact-export RC + patch-back via rework — Finding 90 opt A; with REQ-030, REQ-033)
            ├─ REQ-035 (draft, fix: done re-validation freezes verified_by — provenance not clobbered)
-           └─ REQ-036 (draft, steward sync-skills: refresh stamped bundled skills + provenance manifest + drift signal; with REQ-007)
+           ├─ REQ-036 (draft, steward sync-skills: refresh stamped bundled skills + provenance manifest + drift signal; with REQ-007)
+           └─ REQ-039 (draft, concept phase: interactive leading architecture session that gates develop — left-arm counterpart of validate; with REQ-027, REQ-029, REQ-034)
  REQ-011 (done, production-branch guard) ── REQ-019 (done, integration-branch guard) ── REQ-020 (draft, branch lifecycle automation)
  REQ-024 (draft, onboard skill) ── orchestrates REQ-007 + REQ-009 + REQ-010/023 + REQ-021 + REQ-022 (memzy onboarding)
 ```
