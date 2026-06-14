@@ -105,6 +105,7 @@ class FakeGitTopology:
         self.switched: list[str] = []
         self.commits: list[tuple[str, str]] = []
         self.merged: list[tuple[str, str, str]] = []
+        self.reconciled: list[tuple[str, str]] = []
 
     def current_branch(self) -> str:
         return self.current
@@ -132,6 +133,14 @@ class FakeGitTopology:
 
     def merge_no_ff(self, feature: str, message: str) -> None:
         self.merged.append((feature, self.current, message))
+
+    def reconcile_from_integration(
+        self, integration: str, feature: str, message: str
+    ) -> None:
+        self.switch(feature)
+        self._diverged.discard(feature)  # behind-but-merged → current again (REQ-034 D5)
+        self.commits.append((self.current, message))
+        self.reconciled.append((integration, feature))
 
 
 @pytest.fixture

@@ -69,9 +69,27 @@ missing artifact is a hard red, never a pass.
 
 Mechanics around the gate:
 
-- **`manual` criteria are a decision stop.** Unattended, the step parks naming the
-  pending human oracle; attended, `steward validate REQ-NNN` presents the criterion and
-  records the sign-off (date, reviewer, scope) as the evidence event.
+- **`manual` criteria are a guided human validation (REQ-034).** Unattended, the step
+  parks naming the pending human oracle. Attended, `steward validate REQ-NNN` from a plain
+  shell runs a **two-phase bookkeeping around a guided interactive session**: it preps
+  (evidence dir, branch ready), brings up an interactive System Tester *attached to the
+  terminal* (the editor pattern — TTY inherited, not `claude -p`, never detached) that
+  prepares the surfaces and operator entrypoint, walks the human through the procedure, and
+  answers questions; then the engine takes the verdict and records the sign-off (date,
+  reviewer, scope) as the evidence event. The human got the *beginning* of validation
+  (preparation, guidance), not just the `y/N` at the end. **Claude is never spawned from
+  within Claude:** the bring-up refuses inside a Claude session (`CLAUDECODE`) and points at
+  a plain terminal tab or the in-session skill, which calls the discrete **start** and
+  **record** halves itself. The engine-run gate + engine-recorded verdict are what keep the
+  guided session from self-certifying, whatever it reports.
+- **A pending validation is async QA, not a project freeze (REQ-034).** When the human
+  defers, the validation parks cleanly — clean working tree, HEAD back on the integration
+  branch, the feature branch intact and **unmerged** (no merge gates the unvalidated work
+  onto `dev`) — and `steward run` advances other eligible REQs; the waiting human is a
+  standing work-item, not a blocked pipeline. `steward validate REQ-NNN` resumes it at any
+  later time, **reconciling** the feature branch from the (now-advanced) integration branch
+  rather than refusing it as diverged, and a green verdict fires the deferred land. A
+  declined verdict is a red validation that routes to `steward rework` (below).
 - **A red validation parks immediately — no repair loop.** A red here means the develop
   was hollow or the lab is broken; both are human questions, so the engine never auto-loops
   on red (REQ-030 Decision 8).
