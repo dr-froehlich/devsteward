@@ -1,7 +1,7 @@
 version: 1
 profile: req
 cursor:
-  step: REQ-034:develop
+  step: REQ-034:validate
 steps:
   REQ-011:design:
     status: done
@@ -90,6 +90,9 @@ steps:
   REQ-034:develop:
     status: done
     updated: '2026-06-14T01:15:01+00:00'
+  REQ-034:validate:
+    status: blocked-on-decision
+    updated: '2026-06-14T01:15:02+00:00'
 decisions:
 - id: DEC-001
   step: REQ-031:validate
@@ -106,3 +109,13 @@ decisions:
   req: REQ-031
   raised_at: '2026-06-11T14:38:54+00:00'
   answered_at: '2026-06-11T14:43:08+00:00'
+- id: DEC-002
+  step: REQ-034:validate
+  question: 'REQ-034 validation: manual AC AC6 awaits its human oracle — run `steward
+    validate REQ-034` attended to record the sign-off.'
+  status: open
+  options: []
+  answer:
+  req: REQ-034
+  raised_at: '2026-06-14T01:15:02+00:00'
+  answered_at:
