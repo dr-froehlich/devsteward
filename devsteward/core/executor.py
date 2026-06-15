@@ -179,6 +179,18 @@ class Executor:
         if Path(self.ledger.root) != home:
             self.ledger = Ledger(home)
 
+    def live_ledger(self) -> Ledger:
+        """Bind and return the live integration-branch ledger for a read-only command
+        (REQ-040 Decision 1).
+
+        REQ-037 bound only the *write* paths; an unbound read on a feature branch returns
+        the stale branch-cut snapshot — the orientation footgun behind the 2026-06-15
+        double-checkpoint. Read commands (``steward status``) resolve the cursor/status the
+        same way the write paths do, so the live ledger is the same from any branch.
+        """
+        self._bind_ledger()
+        return self.ledger
+
     def _commit_ledger(self, message: str) -> str | None:
         """Commit the pending ledger writes on the integration branch — in the worktree when
         the main tree is on a feature branch, else directly (REQ-037 Decision 1/3)."""
@@ -546,6 +558,19 @@ class Executor:
             return StepResult(step, RunOutcome.REFUSED, refusal)
         self._bind_ledger()  # REQ-037: ledger writes land on the integration branch
         led = self.ledger
+        if led.status_of(step.id) is StepStatus.DONE:
+            # REQ-040 Decision 3: the bookkeeper is idempotent. A re-checkpoint of an
+            # already-done step (the 2026-06-15 mis-diagnosed re-run) refuses with zero
+            # ledger writes — no verify event, no flip, no commit, no cursor move — so it
+            # cannot append a duplicate develop_committed (with `commit: null`) or a
+            # redundant ledger commit. Read the live cursor first: `steward status`.
+            return StepResult(
+                step,
+                RunOutcome.REFUSED,
+                f"{step.id} is already done — refusing to re-checkpoint it "
+                f"(steward checkpoint is idempotent: no flip, no commit, no ledger "
+                f"write). Run `steward status` for the live cursor and the next step.",
+            )
         verified, detail = self.verifier.verify(step)
         led.append_event("verify", step=step.id, ok=verified, detail=detail[:2000])
         if not verified:
