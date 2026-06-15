@@ -199,6 +199,16 @@ validation. Driven **interactively** (not by `steward run`) in this order — se
   split` (architecture vs implementation-plan review) — orthogonal, split untouched. Machinery
   + scratch `manual`-AC proof; FlowSteward's concept re-drive is the follow-on first real
   consumer (≡ REQ-031 after REQ-030). With REQ-027, REQ-029, REQ-030, REQ-034.
+- REQ-040 — **live-ledger reads + checkpoint idempotency** (draft): the read-side follow-up
+  to REQ-037. REQ-037 bound the ledger to the integration branch on the *write* paths but
+  not the *read* path: `steward status` reads unbound and `/advance`'s step-1 reads
+  `.devsteward/state.yaml` directly, so both return the stale branch-cut snapshot on a
+  feature branch. The 2026-06-15 dogfood incident (postmortem
+  `docs/reports/2026-06-15-req037-…-postmortem.md`) rode that into a mis-diagnosed re-run of
+  `steward checkpoint`, which — lacking any already-`done` guard — appended a duplicate
+  `develop_committed`. Binds the ledger on `steward status` (the one sanctioned orientation
+  read; `/advance` uses it), and makes `steward checkpoint` hard-refuse an already-`done`
+  step. Real-git ACs, no lab, no validate phase. With REQ-018, REQ-037.
 - Future REQs land here as `/intake` produces them.
 
 ## Dependency graph
@@ -224,7 +234,8 @@ REQ-001
  REQ-030 ──┬─ REQ-033 (rework loop: human-authorized red-validation → develop return edge; with REQ-026)
            ├─ REQ-034 (draft, guided async human validation + QA-ticket park + clean re-entry; with REQ-020, REQ-032, REQ-033)
            │   ├─ REQ-037 (draft, ledger on dev only + atomic recoverable topology — the live-crash root fix; unblocks REQ-034 re-validation; with REQ-020, REQ-032)
-           │   │   └─ REQ-038 (draft, cross-host validation deploy channel: artifact-export RC + patch-back via rework — Finding 90 opt A; with REQ-030, REQ-033)
+           │   │   ├─ REQ-038 (draft, cross-host validation deploy channel: artifact-export RC + patch-back via rework — Finding 90 opt A; with REQ-030, REQ-033)
+           │   │   └─ REQ-040 (draft, live-ledger reads + checkpoint idempotency — read-side follow-up to REQ-037; with REQ-018)
            ├─ REQ-035 (draft, fix: done re-validation freezes verified_by — provenance not clobbered)
            ├─ REQ-036 (draft, steward sync-skills: refresh stamped bundled skills + provenance manifest + drift signal; with REQ-007)
            └─ REQ-039 (draft, concept phase: interactive leading architecture session that gates develop — left-arm counterpart of validate; with REQ-027, REQ-029, REQ-034)

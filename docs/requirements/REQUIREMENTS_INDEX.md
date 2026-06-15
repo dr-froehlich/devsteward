@@ -45,5 +45,6 @@ commit** as its frontmatter and the code.
 | REQ-037 | The ledger lives on dev only — feature branches carry pure code, and topology operations are atomic and recoverable | DONE | [REQ-037](REQ-037.md) | REQ-020, REQ-032, REQ-034 |
 | REQ-038 | Cross-host validation deploy channel — validate exports a clean release-candidate artifact; live fixes return as a patch (artifact-export, Finding 90 option A) | DRAFT | [REQ-038](REQ-038.md) | REQ-030, REQ-033, REQ-034, REQ-037 |
 | REQ-039 | Concept phase — an interactive architecture/exploration session that gates develop (left-arm counterpart of the System-Test phase) | DRAFT | [REQ-039](REQ-039.md) | REQ-027, REQ-029, REQ-030, REQ-034 |
+| REQ-040 | Read commands resolve the live integration-branch ledger, and checkpoint refuses an already-done step | DRAFT | [REQ-040](REQ-040.md) | REQ-018, REQ-037 |
 
 New requirement template: [`_templates/req.md`](../../devsteward/templates/docs/requirements/_templates/req.md)
