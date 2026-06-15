@@ -34,8 +34,11 @@ Everything tagged *(batch)* or *(interactive)* below applies to that mode only.
 
 ## 1. Orient (always)
 
-- Read `.devsteward/state.yaml` for the cursor (`cursor.step`, e.g. `REQ-007:develop`) and
-  step statuses. If invoked as `/advance REQ-NNN develop`, that is your target.
+- Run **`steward status`** for the cursor (`cursor.step`, e.g. `REQ-007:develop`) and step
+  statuses — never hand-read `.devsteward/state.yaml`. On a feature branch the on-disk file
+  is the stale branch-cut snapshot; `steward status` binds the live integration-branch
+  ledger (REQ-040), so it is the one sanctioned read from anywhere. If invoked as
+  `/advance REQ-NNN develop`, that is your target.
 - Read the target REQ, `CLAUDE.md`, and anything the REQ's `depends_on` produced.
 - **Recovery (`--recover` in your command):** if the step command includes `--recover`,
   you are *resuming* a step that previously failed — its partial edits are already in the

@@ -1,7 +1,7 @@
 version: 1
 profile: req
 cursor:
-  step: REQ-037:develop
+  step: REQ-041:develop
 steps:
   REQ-011:design:
     status: done
@@ -99,6 +99,15 @@ steps:
   REQ-037:develop:
     status: done
     updated: '2026-06-15T06:30:16+00:00'
+  REQ-036:develop:
+    status: done
+    updated: '2026-06-15T20:50:52+00:00'
+  REQ-040:develop:
+    status: done
+    updated: '2026-06-15T20:44:21+00:00'
+  REQ-041:develop:
+    status: done
+    updated: '2026-06-15T21:26:15+00:00'
 decisions:
 - id: DEC-001
   step: REQ-031:validate
@@ -151,3 +160,13 @@ decisions:
   req: REQ-034
   raised_at: '2026-06-14T13:14:24+00:00'
   answered_at: '2026-06-14T13:14:48+00:00'
+- id: DEC-005
+  step: REQ-041:develop
+  question: refusing to land REQ-041 — no file in plans/ names REQ-041 
+    (plan-first discipline; write the plan before landing)
+  status: answered
+  options: []
+  answer: plan 0023 written (names REQ-041); re-driving the land
+  req: REQ-041
+  raised_at: '2026-06-15T21:15:56+00:00'
+  answered_at: '2026-06-15T21:25:18+00:00'
