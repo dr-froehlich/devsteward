@@ -41,7 +41,7 @@ commit** as its frontmatter and the code.
 | REQ-033 | Rework loop — steward rework returns a red validation to develop for a fix-and-revalidate cycle | DONE | [REQ-033](REQ-033.md) | REQ-026, REQ-030 |
 | REQ-034 | Human validation as a guided, asynchronous activity — interactive System-Tester session, QA-ticket parking, clean re-entry | OPEN | [REQ-034](REQ-034.md) | REQ-020, REQ-030, REQ-032, REQ-033 |
 | REQ-035 | Re-validating a done REQ leaves verified_by frozen — provenance is not clobbered | DONE | [REQ-035](REQ-035.md) | REQ-030 |
-| REQ-036 | steward sync-skills — refresh stamped bundled skills from the installed template, with a provenance manifest and a drift signal | DRAFT | [REQ-036](REQ-036.md) | REQ-007, REQ-030 |
+| REQ-036 | steward sync-skills — refresh stamped bundled skills from the installed template, with a provenance manifest and a drift signal | OPEN | [REQ-036](REQ-036.md) | REQ-007, REQ-030 |
 | REQ-037 | The ledger lives on dev only — feature branches carry pure code, and topology operations are atomic and recoverable | DONE | [REQ-037](REQ-037.md) | REQ-020, REQ-032, REQ-034 |
 | REQ-038 | Cross-host validation deploy channel — validate exports a clean release-candidate artifact; live fixes return as a patch (artifact-export, Finding 90 option A) | DRAFT | [REQ-038](REQ-038.md) | REQ-030, REQ-033, REQ-034, REQ-037 |
 | REQ-039 | Concept phase — an interactive architecture/exploration session that gates develop (left-arm counterpart of the System-Test phase) | DRAFT | [REQ-039](REQ-039.md) | REQ-027, REQ-029, REQ-030, REQ-034 |
