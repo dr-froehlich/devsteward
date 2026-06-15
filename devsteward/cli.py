@@ -344,7 +344,9 @@ def checkpoint(req_id: str | None, phase: str | None) -> None:
     cfg = _load_or_die()
     ex = build_executor(cfg)
     if req_id is None:
-        step_id = ex.ledger.cursor_step
+        # REQ-041: resolve the cursor from the live integration-branch ledger, not the
+        # unbound feature-branch snapshot (REQ-040 Decision 1, completed across read sites).
+        step_id = ex.live_ledger().cursor_step
         if not step_id:
             raise click.ClickException(
                 "no cursor step to checkpoint — pass the target explicitly: "
@@ -464,7 +466,10 @@ def validate(req_id: str, quiet: bool) -> None:
             f"{req_id} has no validate step — it declares no artifact/manual acceptance "
             f"criterion, or it is not active"
         )
-    if ex.ledger.status_of(f"{req_id}:develop") is not StepStatus.DONE:
+    # REQ-041: the develop-done pre-flight must read the live integration-branch ledger —
+    # an unbound read on a feature branch sees the stale branch-cut snapshot and falsely
+    # reports a checkpointed develop step as "not closed" (REQ-040 Decision 1, finished here).
+    if ex.live_ledger().status_of(f"{req_id}:develop") is not StepStatus.DONE:
         raise click.ClickException(
             f"{req_id}:develop is not closed yet — validation follows the develop "
             f"checkpoint (run `steward checkpoint {req_id} develop` first)"
@@ -564,10 +569,12 @@ def _print_report(ex, res: StepResult) -> None:
     click.echo(f"Did:       {res.step.id} — {res.outcome.value}")
     if res.commit:
         click.echo(f"           committed {res.commit[:8]}")
-    click.echo(f"Cursor:    {ex.ledger.cursor_step or '—'}")
+    # REQ-041: report the live integration-branch cursor/decisions (REQ-040 Decision 1).
+    led = ex.live_ledger()
+    click.echo(f"Cursor:    {led.cursor_step or '—'}")
     if res.detail:
         click.echo(f"Review:    {res.detail.splitlines()[0]}")
-    decisions = ex.ledger.open_decisions()
+    decisions = led.open_decisions()
     if decisions:
         click.echo("Decisions: " + ", ".join(f"{d.id} ({d.question})" for d in decisions))
     else:

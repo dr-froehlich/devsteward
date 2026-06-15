@@ -247,3 +247,43 @@ def test_incident_no_duplicate_checkpoint_realgit(tmp_path, monkeypatch):
         ln for ln in _dev_events_bytes(tmp_path).splitlines() if '"develop_committed"' in ln
     ]
     assert committed_after == committed  # byte-identical: no duplicate, no commit: null shadow
+
+
+# -- REQ-041: the read-side fix extends past `status` to `validate`'s pre-flight ----
+
+
+def test_validate_preflight_reads_live_ledger_from_feature_branch_realgit(tmp_path, monkeypatch):
+    """REQ-040 routed only `steward status` through the live ledger; `steward validate`'s
+    develop-done pre-flight still read the unbound feature-branch snapshot. On a real repo
+    with the ledger on dev, from a feature branch whose branch-cut snapshot lacks the develop
+    step (dev has it done), `steward validate REQ-001` must NOT fail with the stale
+    'is not closed yet' pre-flight error — it resolves the live done status and proceeds past
+    the pre-flight (here to the in-Claude bring-up refusal, which we force to isolate the read).
+    """
+    _scaffold(tmp_path, acs=[("AC1", "true", "artifact")])  # artifact ⇒ deferred develop + validate step
+    _init_git(tmp_path)
+    ex = _executor(tmp_path)
+
+    r1 = ex.advance_once()  # develop defers onto a feature branch; the ledger advances on dev
+    assert r1.outcome is RunOutcome.DONE
+    feature = _branch(tmp_path)
+    assert feature != "dev"
+
+    # Teeth: the on-disk (feature branch) snapshot has no record of the develop step, while
+    # dev's live ledger marks it done — the exact divergence that tripped the live symptom.
+    stale = (tmp_path / ".devsteward" / "state.yaml").read_text(encoding="utf-8")
+    assert "REQ-001:develop" not in stale
+    assert Ledger(_dev_worktree(tmp_path)).status_of("REQ-001:develop").value == "done"
+
+    # Short-circuit the guided bring-up so the assertion isolates the pre-flight read: with
+    # the bug, validate exits on "is not closed yet" before ever reaching this guard.
+    monkeypatch.setattr(cli.claude_mod, "in_claude_session", lambda: True)
+    monkeypatch.setattr(
+        cli, "_load_or_die",
+        lambda: SimpleNamespace(req_dir=tmp_path / "docs" / "requirements", root=tmp_path),
+    )
+    monkeypatch.setattr(cli, "build_executor", lambda cfg, **kw: _executor(tmp_path))
+    result = CliRunner().invoke(main, ["validate", "REQ-001"])
+
+    assert "is not closed yet" not in result.output  # the stale-read symptom must be gone
+    assert "from inside a Claude session" in result.output  # reached past the live pre-flight
