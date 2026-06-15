@@ -26,6 +26,7 @@ event records which one drove (``driver: headless | interactive``).
 
 from __future__ import annotations
 
+import shutil
 import subprocess
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -148,11 +149,69 @@ class Executor:
         else:
             self.git = GitCli(self.root)
         self.ledger = Ledger(self.root)
+        # REQ-037: while the main tree is on a feature branch the ledger's home is a worktree
+        # checked out on the integration branch (``None`` = the main tree itself is the home).
+        self._worktree: str | None = None
 
     # -- branch guard ----------------------------------------------------------
 
     def current_branch(self) -> str:
         return self.git.current_branch()
+
+    # -- REQ-037: bind the ledger to the integration branch --------------------
+
+    def _bind_ledger(self) -> None:
+        """Point the live :class:`Ledger` at the integration branch (REQ-037 Decision 1).
+
+        On the integration branch the home is the main tree (legacy). On a feature branch the
+        engine ensures a linked worktree checked out on the integration branch and binds the
+        ledger there, so every ledger write — and the ``.devsteward/`` commit — lands on the
+        integration branch while the feature tree stays pure code. Idempotent.
+        """
+        if self.committer is not None:
+            return  # a stubbed committer bypasses real git; the ledger stays on the main tree
+        try:
+            wt = self.git.integration_worktree(self.integration_branch)
+        except subprocess.CalledProcessError:
+            wt = None  # not a real git repo (test harness) — stay on the main tree
+        self._worktree = wt
+        home = Path(wt) if wt else self.root
+        if Path(self.ledger.root) != home:
+            self.ledger = Ledger(home)
+
+    def _commit_ledger(self, message: str) -> str | None:
+        """Commit the pending ledger writes on the integration branch — in the worktree when
+        the main tree is on a feature branch, else directly (REQ-037 Decision 1/3)."""
+        if self._worktree:
+            self._sync_evidence_to_worktree()
+            return self.git.commit_ledger_at(self._worktree, message)
+        try:
+            return self.git.commit_all(message)
+        except subprocess.CalledProcessError:
+            return None
+
+    def _sync_evidence_to_worktree(self) -> None:
+        """Copy session-captured evidence from the main tree into the integration worktree so
+        it is committed alongside the ledger on the integration branch (REQ-037). The session
+        runs in the main tree, so the artifacts land there first."""
+        if not self._worktree:
+            return
+        src = self.root / ".devsteward" / "evidence"
+        if not src.exists():
+            return
+        shutil.copytree(src, Path(self._worktree) / ".devsteward" / "evidence",
+                        dirs_exist_ok=True)
+
+    def _return_main_tree_to_integration(self) -> None:
+        """Bring the main tree back to the integration branch (REQ-037): drop session evidence
+        (now committed on the integration branch via the worktree) so the switch is
+        conflict-free, remove the ledger worktree (git forbids one branch in two worktrees),
+        switch, and rebind the ledger to the main tree."""
+        self.git.clean_untracked_ledger()
+        self.git.remove_integration_worktree(self.integration_branch)
+        self._worktree = None
+        self.git.switch(self.integration_branch)
+        self.ledger = Ledger(self.root)
 
     def branch_guard(self) -> str | None:
         """Refusal message if HEAD is the production branch, else ``None``.
@@ -203,9 +262,11 @@ class Executor:
                     f"the branch was cut). Reconcile it by hand, then re-run."
                 )
             self.git.switch(name)
+            self._bind_ledger()  # REQ-037: ledger now lands on the integration branch
             self.ledger.append_event("branch_reused", step=step.id, branch=name)
         else:
             self.git.create_and_switch(name)
+            self._bind_ledger()  # REQ-037: ledger now lands on the integration branch
             self.ledger.append_event("branch_created", step=step.id, branch=name)
         return None
 
@@ -230,14 +291,23 @@ class Executor:
             return None  # no branch to ready (e.g. a develop that ran on integration)
         if self.git.integration_is_ancestor(self.integration_branch, name):
             self.git.switch(name)
+            self._bind_ledger()  # REQ-037: ledger lands on the integration branch
             self.ledger.append_event("branch_reused", step=step.id, branch=name)
         else:
-            self.git.reconcile_from_integration(
+            # REQ-037 D2: atomic reconcile — on a conflict it aborts (repo intact) and
+            # surfaces a recovery instruction rather than crashing mid-merge. With the ledger
+            # off the feature branch (D1) a reconcile no longer collides on .devsteward/.
+            recovery = self.git.try_reconcile_from_integration(
                 self.integration_branch,
                 name,
                 f"{step.req}: reconcile {name} from {self.integration_branch} "
                 f"for deferred validation\n\n{_TRAILER}",
             )
+            self._bind_ledger()
+            if recovery is not None:
+                self.ledger.append_event("reconcile_aborted", step=step.id, branch=name,
+                                         detail=recovery)
+                return recovery
             self.ledger.append_event("branch_reconciled", step=step.id, branch=name)
         return None
 
@@ -248,7 +318,7 @@ class Executor:
         the integration branch so a subsequent ``steward run`` advances other eligible REQs,
         with the feature branch left intact and unmerged (Decision 4)."""
         if self.current_branch() != self.integration_branch:
-            self.git.switch(self.integration_branch)
+            self._return_main_tree_to_integration()
 
     def bring_up_guided_session(
         self, step: Step, evidence_rel: str, *, on_event=None
@@ -474,6 +544,7 @@ class Executor:
         refusal = self.branch_guard()
         if refusal is not None:  # never commit a checkpoint onto the production branch
             return StepResult(step, RunOutcome.REFUSED, refusal)
+        self._bind_ledger()  # REQ-037: ledger writes land on the integration branch
         led = self.ledger
         verified, detail = self.verifier.verify(step)
         led.append_event("verify", step=step.id, ok=verified, detail=detail[:2000])
@@ -719,26 +790,23 @@ class Executor:
         title = step.title or step.id
         message = f"{step.id}: {title}\n\n{_TRAILER}"
         try:
-            return self.git.commit_all(message)
+            # REQ-037 Decision 3: the feature-branch code commit never carries the ledger —
+            # exclude .devsteward/ whenever the ledger's home is a separate worktree.
+            return self.git.commit_all(message, exclude_ledger=bool(self._worktree))
         except subprocess.CalledProcessError:
             return None
 
     def _commit_ledger_close(self, step: Step, subject: str) -> str | None:
-        """Commit the trailing ledger write (and any captured evidence) on the active
-        branch as a follow-up, so a terminal step outcome leaves a clean tree (REQ-032).
+        """Commit the trailing ledger write (and any captured evidence) on the **integration
+        branch** as a follow-up, so a terminal step outcome leaves a clean tree (REQ-032) and
+        the ledger never rides a feature branch (REQ-037).
 
-        ``git.commit_all`` stages ``-A`` and returns ``None`` when the tree is already
-        clean, so a no-op path makes **no empty commit** (Decision 4). It rides the step's
-        own branch context — the feature branch when one exists, else the integration
-        branch (Decision 3); the drivers' up-front :meth:`branch_guard` keeps every caller
-        off the production branch, so no extra guard is needed here. Tolerant of a missing
-        repo / failed commit the same way :meth:`_commit` is, so a non-git test harness or
-        a committer-stubbed land does not crash on the trailing close.
+        Routes through :meth:`_commit_ledger`: the worktree on the integration branch when the
+        main tree is on a feature branch, else a direct commit. A clean ledger makes **no
+        empty commit** (Decision 4). Tolerant of a missing repo / failed commit so a non-git
+        test harness or a committer-stubbed land does not crash on the trailing close.
         """
-        try:
-            return self.git.commit_all(f"{step.req or step.id}: {subject}\n\n{_TRAILER}")
-        except subprocess.CalledProcessError:
-            return None
+        return self._commit_ledger(f"{step.req or step.id}: {subject}\n\n{_TRAILER}")
 
     # -- branch lifecycle ------------------------------------------------------
 
@@ -755,9 +823,12 @@ class Executor:
         if surfaced is not None:
             self.ledger.append_event("branch_surfaced", step=step.id, detail=surfaced)
             return StepResult(step, RunOutcome.REFUSED, surfaced)
+        # REQ-037: bind the ledger to the integration branch even when resuming on an
+        # already-checked-out feature branch (prepare_branch returns early in that case).
+        self._bind_ledger()
         res = self.run_step(step, unattended=unattended, on_event=on_event)
         if res.outcome is RunOutcome.DONE and self._merges_after(step):
-            self._merge_after_land(step)
+            self._merge_after_land(step, unattended=unattended)
         elif res.outcome is RunOutcome.PARKED:
             # REQ-032: a park is a terminal outcome — every park path (attended, skill,
             # land-gate refusal, repair-exhausted, in-flight validate red/manual) funnels
@@ -766,27 +837,51 @@ class Executor:
             # riding this step's ledger writes (the mixed-provenance leak). A REFUSED
             # (diverged branch) deliberately halts the run for a human and is left as-is.
             self._commit_ledger_close(step, "ledger close — parked")
+            # REQ-037: when the park was committed on the integration branch (the worktree),
+            # bring the main tree home so the decision is readable via the on-disk ledger and
+            # the next step branches off a clean integration tree (the worktree is dropped).
+            if self._worktree:
+                self.return_to_integration()
         return res
 
-    def _merge_after_land(self, step: Step) -> None:
-        """Reconcile the trailing ledger write and merge the feature branch (D4, D6).
+    def _merge_after_land(self, step: Step, *, unattended: bool = False) -> str | None:
+        """Land the trailing ledger write and merge the feature branch (D4, D6; REQ-037).
 
-        ``run_step`` writes the final cursor (``status: done`` + the ``checkpoint`` event)
-        *after* its land commit, leaving ``state.yaml``/``events.jsonl`` dirty on the
-        feature branch. Commit that as a **follow-up** (never ``--amend`` — amending would
-        change the land-commit hash the just-recorded ``checkpoint`` points at), then merge
-        ``--no-ff`` so the integration branch is clean at rest with an auditable boundary.
+        REQ-037: the trailing cursor/``checkpoint`` write lands on the **integration branch**
+        (the ledger worktree), not the feature branch, so the feature→integration merge
+        carries pure code and cannot conflict on ``.devsteward/``. The merge itself is
+        fetch-first and atomic (D2): a behind-remote feature is incorporated first, and a
+        residual conflict aborts (repo byte-identical) into a surfaced recovery instruction
+        (attended) or a parked decision (unattended) — never an uncaught error. Returns the
+        recovery instruction on an aborted merge, else ``None``.
         """
         feature = self.current_branch()
         if feature == self.integration_branch:
-            return  # nothing was branched (e.g. land ran on the integration branch)
+            return None  # nothing was branched (e.g. land ran on the integration branch)
         title = step.title or step.id
-        self.git.commit_all(f"{step.req}: ledger checkpoint\n\n{_TRAILER}")
-        self.git.switch(self.integration_branch)
-        self.git.merge_no_ff(
+        if self._worktree:
+            # The cursor/checkpoint write (made on the worktree by the land) is committed on
+            # the integration branch; then drop the worktree and bring the main tree home —
+            # its .devsteward/ was never touched, so the switch is clean.
+            self._commit_ledger(f"{step.req}: ledger checkpoint\n\n{_TRAILER}")
+            self._return_main_tree_to_integration()
+        else:
+            self.git.commit_all(f"{step.req}: ledger checkpoint\n\n{_TRAILER}")
+            self.git.switch(self.integration_branch)
+        # REQ-037 D2: fetch-first so a deploy host's pushed commit is a handled case, then an
+        # atomic --no-ff merge that aborts (not crashes) on a residual conflict.
+        self.git.fetch()
+        if self.git.feature_behind_remote(feature):
+            inc = self.git.incorporate_remote(feature)
+            self.git.switch(self.integration_branch)
+            if inc is not None:  # the deploy-host divergence conflicted — recover, don't crash
+                return self._record_aborted_merge(step, feature, inc, unattended)
+        recovery = self.git.try_merge_no_ff(
             feature,
             f"Merge {feature} into {self.integration_branch} — {step.req} {title}\n\n{_TRAILER}",
         )
+        if recovery is not None:
+            return self._record_aborted_merge(step, feature, recovery, unattended)
         self.ledger.append_event(
             "branch_merged", step=step.id, branch=feature, into=self.integration_branch
         )
@@ -795,6 +890,25 @@ class Executor:
         # move the hash the just-recorded events point at), so the integration branch is
         # actually clean at rest, as this method's docstring has always promised.
         self._commit_ledger_close(step, "ledger close — branch_merged event")
+        return None
+
+    def _record_aborted_merge(
+        self, step: Step, feature: str, recovery: str, unattended: bool
+    ) -> str:
+        """Record an atomically-aborted topology op (REQ-037 D2): the merge left the repo
+        byte-identical, so this only *records* the recovery — a ``merge_aborted`` event and,
+        unattended, a parked decision — then commits that record on the integration branch.
+        The feature branch stays unmerged for the human to resolve and re-run."""
+        self.ledger.append_event(
+            "merge_aborted", step=step.id, branch=feature, detail=recovery
+        )
+        if unattended:
+            self.ledger.park_decision(
+                Decision(id=self.ledger.next_decision_id(), step=step.id,
+                         question=recovery, req=step.req)
+            )
+        self._commit_ledger_close(step, "ledger close — merge aborted")
+        return recovery
 
     # -- drivers ---------------------------------------------------------------
 

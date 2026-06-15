@@ -32,7 +32,7 @@ from typing import Callable
 
 from ...core import claude as claude_mod
 from ...core.executor import RunOutcome, StepResult
-from ...core.ledger import Ledger
+from ...core.ledger import LEDGER_DIRNAME, Ledger
 from ...core.model import AcceptanceCheck, Decision, Step, StepStatus
 from ...core.verify import (
     NoUsableEnvError,
@@ -155,7 +155,9 @@ class ReqValidateRoutine:
         if res.outcome is RunOutcome.DONE and ex._merges_after(step):
             # Close the topology like a batch land (the second call from the batch
             # driver's own merge bracket is a no-op once we are back on integration).
-            ex._merge_after_land(step)
+            recovery = ex._merge_after_land(step, unattended=unattended)
+            if recovery is not None:  # REQ-037: an aborted merge surfaces as a recoverable park
+                return StepResult(step, RunOutcome.PARKED, recovery)
         return res
 
     def revalidate(
@@ -231,7 +233,10 @@ class ReqValidateRoutine:
         led.set_status(step.id, StepStatus.RUNNING)
         led.save()
         led.append_event("step_started", step=step.id, command=step.command)
-        evidence_dir = led.dir / EVIDENCE_DIRNAME / req.id / _now_stamp()
+        # REQ-037: the System-Tester session runs in the main tree (``ex.root``), so evidence
+        # is captured there; the ledger commit syncs it onto the integration branch. (``led``
+        # may be bound to an integration worktree, so anchor on ``ex.root``, not ``led.dir``.)
+        evidence_dir = ex.root / LEDGER_DIRNAME / EVIDENCE_DIRNAME / req.id / _now_stamp()
         evidence_dir.mkdir(parents=True, exist_ok=True)
         return StartContext(
             req=req,
@@ -336,7 +341,9 @@ class ReqValidateRoutine:
                 )
         res = ex.mechanical_land(step, detail, driver=driver)
         if res.outcome is RunOutcome.DONE and ex._merges_after(step):
-            ex._merge_after_land(step)
+            recovery = ex._merge_after_land(step, unattended=(driver == "headless"))
+            if recovery is not None:  # REQ-037: an aborted merge surfaces as a recoverable park
+                return StepResult(step, RunOutcome.PARKED, recovery)
         return res
 
     def guided_validate(
@@ -379,7 +386,7 @@ class ReqValidateRoutine:
         artifact_acs = [c for c in req.acceptance if c.check == "artifact"]
         manual_acs = [c for c in req.acceptance if c.check == "manual"]
         evidence_dir = (
-            led.dir / EVIDENCE_DIRNAME / req.id / _now_stamp()
+            ex.root / LEDGER_DIRNAME / EVIDENCE_DIRNAME / req.id / _now_stamp()
         )
         evidence_dir.mkdir(parents=True, exist_ok=True)
         evidence_rel = str(evidence_dir.relative_to(ex.root))

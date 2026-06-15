@@ -30,6 +30,7 @@ from pathlib import Path
 import jsonschema
 
 from .config import Config
+from .core.git import GitCli
 from .core.ledger import Ledger
 from .core.model import StepStatus
 from .profiles.req.index import read_statuses
@@ -183,5 +184,26 @@ def lint(cfg: Config) -> list[str]:
                     f"{r.id}: frontmatter status 'done' but ledger develop step is "
                     f"'{shown}' — the ledger contradicts the marker"
                 )
+
+    # 8. REQ-037: the ledger lives on the integration branch only. A feature branch (HEAD is
+    #    neither the integration nor the production branch) whose ``.devsteward/`` differs from
+    #    the integration branch has committed the ledger onto a feature branch — the exact
+    #    regression that shipped green before (a fake topology that never reverted the ledger
+    #    dir on a switch). A static, greppable failure turns that design regression loud.
+    git = GitCli(cfg.root)
+    branch = git.current_branch()
+    integration = cfg.integration_branch
+    if (
+        branch
+        and branch not in (integration, cfg.production_branch, "HEAD")
+        and git.branch_exists(integration)
+    ):
+        ledger_diff = git.ledger_diff_against(integration, branch)
+        if ledger_diff:
+            problems.append(
+                f"feature branch '{branch}' carries a ledger change — .devsteward/ differs "
+                f"from '{integration}', but the ledger lives on '{integration}' only "
+                f"(REQ-037). Offending paths:\n{ledger_diff}"
+            )
 
     return problems

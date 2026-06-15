@@ -127,7 +127,7 @@ class FakeGitTopology:
     def integration_is_ancestor(self, integration: str, feature: str) -> bool:
         return feature not in self._diverged
 
-    def commit_all(self, message: str) -> str | None:
+    def commit_all(self, message: str, *, exclude_ledger: bool = False) -> str | None:
         self.commits.append((self.current, message))
         return f"sha{len(self.commits):04d}"
 
@@ -141,6 +141,42 @@ class FakeGitTopology:
         self._diverged.discard(feature)  # behind-but-merged → current again (REQ-034 D5)
         self.commits.append((self.current, message))
         self.reconciled.append((integration, feature))
+
+    # -- REQ-037: the in-memory fake never models *which branch* the ledger lands on (that is
+    # exactly the blind spot the real-git ACs exist to cover), so it reports "no worktree"
+    # and the executor keeps its legacy single-tree path; the atomic merge/reconcile delegate
+    # to the conflict-free in-memory ops.
+    def integration_worktree(self, integration: str) -> str | None:
+        return None
+
+    def remove_integration_worktree(self, integration: str) -> None:
+        return None
+
+    def clean_untracked_ledger(self) -> None:
+        return None
+
+    def commit_ledger_at(self, worktree: str, message: str) -> str | None:
+        self.commits.append((self.current, message))
+        return f"sha{len(self.commits):04d}"
+
+    def fetch(self) -> bool:
+        return False
+
+    def feature_behind_remote(self, feature: str) -> bool:
+        return False
+
+    def incorporate_remote(self, feature: str) -> str | None:
+        return None
+
+    def try_merge_no_ff(self, feature: str, message: str) -> str | None:
+        self.merge_no_ff(feature, message)
+        return None
+
+    def try_reconcile_from_integration(
+        self, integration: str, feature: str, message: str
+    ) -> str | None:
+        self.reconcile_from_integration(integration, feature, message)
+        return None
 
 
 @pytest.fixture
