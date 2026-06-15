@@ -163,3 +163,4 @@
 {"ts": "2026-06-15T21:25:18+00:00", "event": "decision_answered", "decision": "DEC-005", "step": "REQ-041:develop", "answer": "plan 0023 written (names REQ-041); re-driving the land"}
 {"ts": "2026-06-15T21:26:15+00:00", "event": "verify", "step": "REQ-041:develop", "ok": true, "detail": "[0] python -m pytest tests/test_orientation.py::test_validate_preflight_reads_live_ledger_from_feature_branch_realgit\n    1 passed\n[0] full suite clean (python -m pytest)"}
 {"ts": "2026-06-15T21:26:15+00:00", "event": "checkpoint", "step": "REQ-041:develop", "commit": "088106b75ac1551569be5b3043a9056929273af5", "driver": "interactive"}
+{"ts": "2026-06-15T21:26:17+00:00", "event": "branch_merged", "step": "REQ-041:develop", "branch": "req-041-live-ledger-reads", "into": "dev"}
