@@ -160,3 +160,4 @@
 {"ts": "2026-06-15T21:15:56+00:00", "event": "verify", "step": "REQ-041:develop", "ok": true, "detail": "[0] python -m pytest tests/test_orientation.py::test_validate_preflight_reads_live_ledger_from_feature_branch_realgit\n    1 passed\n[0] full suite clean (python -m pytest)"}
 {"ts": "2026-06-15T21:15:56+00:00", "event": "decision_parked", "decision": "DEC-005", "step": "REQ-041:develop", "question": "refusing to land REQ-041 — no file in plans/ names REQ-041 (plan-first discipline; write the plan before landing)"}
 {"ts": "2026-06-15T21:15:56+00:00", "event": "land_refused", "step": "REQ-041:develop", "detail": "refusing to land REQ-041 — no file in plans/ names REQ-041 (plan-first discipline; write the plan before landing)"}
+{"ts": "2026-06-15T21:25:18+00:00", "event": "decision_answered", "decision": "DEC-005", "step": "REQ-041:develop", "answer": "plan 0023 written (names REQ-041); re-driving the land"}
