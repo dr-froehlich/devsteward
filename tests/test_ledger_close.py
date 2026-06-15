@@ -194,9 +194,10 @@ def test_branch_merged_event_committed_interactive(tmp_path):
 
 
 def test_deferred_develop_close_commits_trailing_ledger(tmp_path):
-    """A deferred develop close (``lands=False`` — a REQ with a validate sibling) leaves
-    the feature branch clean: the trailing ledger write is a follow-up to the
-    develop_committed work commit, not left dirty."""
+    """A deferred develop close (``lands=False`` — a REQ with a validate sibling) leaves the
+    feature branch clean and **carrying no ledger** (REQ-037): the develop_committed write
+    lands on the integration branch (via the worktree), so a later feature→dev merge cannot
+    conflict on ``.devsteward/``."""
     _scaffold(tmp_path, acs=[("AC1", "true", "artifact")])  # artifact ⇒ validate sibling
     _init_git(tmp_path)
     ex = _executor(tmp_path, with_validate=True)
@@ -206,14 +207,12 @@ def test_deferred_develop_close_commits_trailing_ledger(tmp_path):
 
     feature = _current_branch(tmp_path)
     assert feature != "dev"  # stayed on the feature branch, no merge
-    assert _porcelain(tmp_path) == ""
-    assert _tip_subject(tmp_path) == "REQ-001: ledger checkpoint"
-    led = Ledger(tmp_path)
-    assert any(e["event"] == "develop_committed" for e in led.events())
-    # the develop_committed work commit is the parent of the trailing-ledger follow-up
-    subjects = _subjects(tmp_path)
-    assert subjects[0] == "REQ-001: ledger checkpoint"
-    assert subjects[1].startswith("REQ-001:")  # the work commit beneath it
+    assert _porcelain(tmp_path) == ""  # clean at rest
+    # REQ-037: the feature branch carries pure code — no ledger commit rode it.
+    assert _git(tmp_path, "diff", f"dev...{feature}", "--", ".devsteward").strip() == ""
+    # the develop_committed event is on the integration branch's events.jsonl.
+    dev_events = _git(tmp_path, "show", "dev:.devsteward/events.jsonl")
+    assert "develop_committed" in dev_events
 
 
 # -- AC4 -----------------------------------------------------------------------

@@ -85,3 +85,43 @@ class GitTopology(Protocol):
     ) -> None:
         """Switch to ``feature`` and merge ``integration`` into it (REQ-034 D5) — bring a
         behind-but-merged feature branch current so a deferred validate-land can proceed."""
+
+    # -- REQ-037: ledger-on-integration + atomic, recoverable topology ---------
+
+    def commit_all(self, message: str, *, exclude_ledger: bool = False) -> str | None:
+        """Stage and commit; ``exclude_ledger`` omits ``.devsteward/`` (a feature-branch code
+        commit never carries the ledger)."""
+
+    def integration_worktree(self, integration: str) -> str | None:
+        """A linked worktree path checked out on ``integration`` (the ledger's home while the
+        main tree is on a feature branch), or ``None`` when already on ``integration``."""
+
+    def remove_integration_worktree(self, integration: str) -> None:
+        """Drop the managed integration worktree (idempotent)."""
+
+    def clean_untracked_ledger(self) -> None:
+        """Remove untracked ``.devsteward/`` files from the main tree (session-captured
+        evidence already committed on the integration branch)."""
+
+    def commit_ledger_at(self, worktree: str, message: str) -> str | None:
+        """Stage+commit only ``.devsteward/`` inside ``worktree`` (on the integration branch)."""
+
+    def fetch(self) -> bool:
+        """Fetch remotes; ``False`` when there is no remote."""
+
+    def feature_behind_remote(self, feature: str) -> bool:
+        """True iff ``origin/<feature>`` carries commits the local ``feature`` lacks."""
+
+    def incorporate_remote(self, feature: str) -> str | None:
+        """Bring ``origin/<feature>`` into local ``feature`` before merging; ``None`` on
+        success, a recovery instruction on an aborted conflict."""
+
+    def try_merge_no_ff(self, feature: str, message: str) -> str | None:
+        """Atomic ``--no-ff`` merge: ``None`` on success; on conflict abort (repo
+        byte-identical) and return a recovery instruction."""
+
+    def try_reconcile_from_integration(
+        self, integration: str, feature: str, message: str
+    ) -> str | None:
+        """Atomic reconcile: ``None`` on success; on conflict abort and return a recovery
+        instruction."""
