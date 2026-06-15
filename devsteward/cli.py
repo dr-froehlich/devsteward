@@ -195,7 +195,9 @@ def status() -> None:
     """Show the ledger cursor, eligible/blocked steps, and parked decisions."""
     cfg = _load_or_die()
     ex = build_executor(cfg)
-    led = ex.ledger
+    # REQ-040 Decision 1: bind the read path too — from a feature branch an unbound read
+    # returns the stale branch-cut snapshot, not the live integration-branch cursor.
+    led = ex.live_ledger()
     click.echo(f"profile: {led.profile}    cursor: {led.cursor_step or '—'}")
 
     steps = ex.steps()
