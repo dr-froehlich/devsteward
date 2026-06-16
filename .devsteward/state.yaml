@@ -100,8 +100,8 @@ steps:
     status: done
     updated: '2026-06-15T06:30:16+00:00'
   REQ-036:develop:
-    status: done
-    updated: '2026-06-15T20:50:52+00:00'
+    status: recover
+    updated: '2026-06-16T04:42:38+00:00'
   REQ-040:develop:
     status: done
     updated: '2026-06-15T20:44:21+00:00'
@@ -109,8 +109,8 @@ steps:
     status: done
     updated: '2026-06-15T21:26:15+00:00'
   REQ-036:validate:
-    status: blocked-on-decision
-    updated: '2026-06-16T04:42:20+00:00'
+    status: pending
+    updated: '2026-06-16T04:42:38+00:00'
 decisions:
 - id: DEC-001
   step: REQ-031:validate
@@ -178,9 +178,9 @@ decisions:
   question: "REQ-036 validation red — needs a human:\ndeclined by Peter Froehlich\n\
     \nReturn it to develop for a fix with `steward rework REQ-036` (the V-model return
     edge)."
-  status: open
+  status: answered
   options: []
-  answer:
+  answer: 'reworked: human returned the red validation to develop for a fix'
   req: REQ-036
   raised_at: '2026-06-16T04:42:20+00:00'
-  answered_at:
+  answered_at: '2026-06-16T04:42:38+00:00'
