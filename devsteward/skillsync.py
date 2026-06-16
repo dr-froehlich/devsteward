@@ -211,6 +211,15 @@ def sync(root: Path, templates_root: Path, *, force: bool = False) -> SyncResult
     for d in classify(root, templates_root):
         if d.bucket is Bucket.IN_SYNC:
             result.unchanged.append(d.name)
+            # Backfill provenance for an in-sync skill that has no (or a stale) lock
+            # baseline. A legacy consumer stamped before lock-seeding (or one synced
+            # while only some skills drifted) must end *fully* locked — otherwise these
+            # untouched skills carry no baseline and will later mis-bucket as
+            # ``customized`` (no lock) the moment the template advances, the very
+            # conflation Decision 2/5 records the lock to prevent. S == T here, so the
+            # template hash is the truthful record.
+            if (h := _sha256(template_skill_file(templates_root, d.name))) is not None:
+                lock[d.name] = h
             continue
         if d.is_customization and not force:
             result.refused.append(d.name)

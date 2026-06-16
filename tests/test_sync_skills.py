@@ -118,6 +118,53 @@ def test_customized_skill_not_clobbered_without_force(tmp_path, monkeypatch):
     assert skillsync.read_lock(target)[name] == skillsync._sha256(tpl)
 
 
+# -- AC5 regression (Finding 50 live closure) ---------------------------------
+
+
+def test_sync_backfills_full_lock_on_legacy_lockless_consumer(tmp_path, monkeypatch):
+    """A pre-lock consumer: syncing the one drifted skill must still leave the lock
+    fully populated, not a partial ``{drifted: ...}`` map.
+
+    The live FlowSteward closure of AC5 caught this: on a consumer stamped before
+    lock-seeding, ``sync-skills`` refreshed the one drifted skill but recorded a lock
+    entry *only* for it, leaving the already-in-sync skills with no provenance — so they
+    would later mis-bucket as ``customized`` the moment the template advanced. The lock
+    must be a complete baseline (Decision 2/5).
+
+    Note the lock-less reality: with no baseline a drifted skill can't be proven
+    untouched, so it buckets ``customized`` (the conservative no-clobber bucket) and
+    needs ``--force`` — the honest path on a legacy consumer.
+    """
+    target = _stamp_project(tmp_path)
+    templates = _templates_copy(tmp_path)
+    monkeypatch.setattr("devsteward.cli._package_templates", lambda: templates)
+
+    # Reproduce a legacy consumer: no provenance baseline at all.
+    skillsync.lock_path(target).unlink()
+    assert skillsync.read_lock(target) == {}
+
+    # Exactly one skill has drifted (template advanced); the rest are untouched.
+    drifted = "advance"
+    tpl = skillsync.template_skill_file(templates, drifted)
+    tpl.write_text(tpl.read_text(encoding="utf-8") + "\n<!-- engine upgraded -->\n",
+                   encoding="utf-8")
+    buckets = {d.name: d.bucket for d in skillsync.classify(target, templates)}
+    assert buckets[drifted] is Bucket.CUSTOMIZED  # no lock baseline → conservative bucket
+
+    monkeypatch.chdir(target)
+    res = CliRunner().invoke(main, ["sync-skills", "--force"])
+    assert res.exit_code == 0, res.output
+
+    # The lock now records *every* bundled skill, not just the one that was refreshed.
+    lock = skillsync.read_lock(target)
+    names = skillsync.bundled_skill_names(templates)
+    assert set(lock) == set(names), f"lock must be fully populated, got {sorted(lock)}"
+    # Each entry is the truthful template hash; nothing reports drift afterwards.
+    for name in names:
+        assert lock[name] == skillsync._sha256(skillsync.template_skill_file(templates, name))
+    assert skillsync.drift(target, templates) == []
+
+
 # -- AC4 ----------------------------------------------------------------------
 
 
