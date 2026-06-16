@@ -345,7 +345,39 @@ def _stream_printer():
 # -- advance (single step) ----------------------------------------------------
 
 
+def _resolve_target(req_id: str | None, only: str | None) -> str | None:
+    """The effective ``--only`` target from the positional REQ_ID and the ``--only`` flag.
+
+    REQ-042 D2/AC3: the two spellings are mutually exclusive — supplying both is ambiguous,
+    so fail loudly rather than silently prefer one. Otherwise the positional reuses the
+    ``--only`` resolution verbatim (D1), so just fold it onto ``only``.
+    """
+    if req_id is not None and only is not None:
+        raise click.ClickException(
+            "name the target REQ either positionally (`advance REQ-NNN`) or with `--only`, "
+            "not both."
+        )
+    return req_id or only
+
+
+def _print_steer_hint(ex, command: str) -> None:
+    """Surface the otherwise-silent lowest-id pick and teach the steer gesture (REQ-042
+    D4/AC4): when no REQ was named and more than one is eligible, list the eligible ids,
+    name the one being advanced, and show the ``steward <command> REQ-NNN`` steer syntax.
+    A no-op at ≤1 eligible REQ — the unattended auto-drive stays unchanged."""
+    req_ids = sorted({s.req for s in ex.eligible_steps()})
+    if len(req_ids) <= 1:
+        return
+    chosen = ex.next_eligible()
+    click.echo(
+        f"{len(req_ids)} REQs eligible: {', '.join(req_ids)}. "
+        f"Advancing {chosen.req} (lowest id) — "
+        f"steer another with `steward {command} REQ-NNN`."
+    )
+
+
 @main.command()
+@click.argument("req_id", required=False, default=None)
 @click.option("--use", type=int, default=None, help="Pin a claude-swap account index.")
 @click.option("--threshold", type=float, default=None, help="Quota gate (fraction or percent; default 70).")
 @click.option("--model", default=None, help="Claude model (default claude-opus-4-8).")
@@ -353,15 +385,20 @@ def _stream_printer():
 @click.option("--only", default=None, help="Restrict to one REQ's steps (fails if none eligible).")
 @click.option("--quiet", is_flag=True, help="Suppress live claude output; show only the report.")
 def advance(
+    req_id: str | None,
     use: int | None, threshold: float | None, model: str | None, effort: str | None,
     only: str | None, quiet: bool,
 ) -> None:
     """Do exactly one checkpoint headless, then print the fixed report.
 
+    Name a REQ positionally (``steward advance REQ-NNN``) to steer which eligible step runs;
+    it maps onto ``--only`` and the two may not both be given (REQ-042).
+
     Like ``run`` this drives ``claude -p`` (no interactive client), so forks
     park-and-surface — there is no human channel for ``AskUserQuestion`` here.
     Resolve any parked fork with ``steward decision answer`` and re-run.
     """
+    target = _resolve_target(req_id, only)
     cfg = _load_or_die()
     ctrl = StopController()
     ctrl.install()
@@ -369,11 +406,13 @@ def advance(
         cfg, use=use, threshold=threshold, model=model, effort=effort,
         announce=_stderr_announcer, stop=ctrl,
     )
+    if target is None:
+        _print_steer_hint(ex, "advance")
     on_event = None if quiet else _stream_printer()
-    res = ex.advance_once(only=only, unattended=True, on_event=on_event)
+    res = ex.advance_once(only=target, unattended=True, on_event=on_event)
     if res is None:
-        if only is not None:
-            raise click.ClickException(ex.only_ineligibility_reason(only))
+        if target is not None:
+            raise click.ClickException(ex.only_ineligibility_reason(target))
         click.echo("Nothing eligible — every step is done, blocked, or waiting on a dep.")
         return
     _print_report(ex, res)
@@ -558,6 +597,7 @@ def validate(req_id: str, quiet: bool) -> None:
 
 
 @main.command()
+@click.argument("req_id", required=False, default=None)
 @click.option("--use", type=int, default=None, help="Pin a claude-swap account index.")
 @click.option("--threshold", type=float, default=None, help="Quota gate (fraction or percent; default 70).")
 @click.option("--model", default=None, help="Claude model (default claude-opus-4-8).")
@@ -566,14 +606,19 @@ def validate(req_id: str, quiet: bool) -> None:
 @click.option("--max-steps", type=int, default=None, help="Stop after N steps.")
 @click.option("--quiet", is_flag=True, help="Suppress live claude output; show only results.")
 def run(
+    req_id: str | None,
     use: int | None, threshold: float | None, model: str | None, effort: str | None,
     only: str | None, max_steps: int | None, quiet: bool,
 ) -> None:
     """Unattended: march eligible steps headless; park on forks.
 
+    Name a REQ positionally (``steward run REQ-NNN``) to restrict the run to that REQ's
+    steps; it maps onto ``--only`` and the two may not both be given (REQ-042).
+
     A single Ctrl-C finishes the running step and then exits; a Ctrl-C during a quota wait
     ends it at once; a second Ctrl-C kills the running ``claude`` child (REQ-025).
     """
+    target = _resolve_target(req_id, only)
     cfg = _load_or_die()
     ctrl = StopController()
     ctrl.install()
@@ -581,11 +626,13 @@ def run(
         cfg, use=use, threshold=threshold, model=model, effort=effort,
         announce=_stderr_announcer, stop=ctrl,
     )
+    if target is None:
+        _print_steer_hint(ex, "run")
     on_event = None if quiet else _stream_printer()
-    results = ex.run(only=only, max_steps=max_steps, on_event=on_event)
+    results = ex.run(only=target, max_steps=max_steps, on_event=on_event)
     if not results:
-        if only is not None:
-            raise click.ClickException(ex.only_ineligibility_reason(only))
+        if target is not None:
+            raise click.ClickException(ex.only_ineligibility_reason(target))
         click.echo("Nothing eligible to run.")
         return
     for res in results:
