@@ -209,6 +209,15 @@ validation. Driven **interactively** (not by `steward run`) in this order — se
   `develop_committed`. Binds the ledger on `steward status` (the one sanctioned orientation
   read; `/advance` uses it), and makes `steward checkpoint` hard-refuse an already-`done`
   step. Real-git ACs, no lab, no validate phase. With REQ-018, REQ-037.
+- REQ-042 — **positional REQ target for advance/run** (draft): ergonomics on top of
+  REQ-026's `--only`. `steward advance REQ-027` (and `steward run REQ-027`) are rejected
+  today as "unexpected extra argument", so the natural gesture for steering which eligible
+  REQ advances is invisible behind the `--only` flag — and plain `advance` silently grabs
+  the lowest-id eligible step. Adds an optional positional `REQ_ID` mapping onto the existing
+  `eligible_steps(only=…)` resolution (mutually exclusive with `--only`; ineligible target
+  reuses `only_ineligibility_reason()`; no auto-activation of a draft), and makes the
+  multi-eligible no-target case print the eligible ids + steer syntax. Regression ACs, no
+  lab. With REQ-002, REQ-026.
 - Future REQs land here as `/intake` produces them.
 
 ## Dependency graph
@@ -226,7 +235,7 @@ REQ-001
               ├─ REQ-006 ── REQ-015 ── REQ-028 (draft, gating integrity: skip≠green, full-suite+venv gate, marker↔ledger lint; with REQ-002)
               ├─ REQ-008 ── REQ-012 ── REQ-025 (draft, account rotation + quota gate + graceful stop; with REQ-003)
               ├─ REQ-018 (draft, revised: checkpoint = verifying bookkeeper + close-out; with REQ-020, REQ-028, REQ-029)
-              ├─ REQ-026 (draft, lifecycle CLI: activate / recover / --only; with REQ-002)
+              ├─ REQ-026 (draft, lifecycle CLI: activate / recover / --only; with REQ-002) ── REQ-042 (draft, positional REQ target for advance/run — ergonomics over --only; with REQ-002)
               └─ REQ-004 ── REQ-027 (done, acceptance taxonomy + intake seeding; with REQ-002, REQ-009)
  REQ-028 ── REQ-029 (draft, develop fusion + mechanical land + repair-on-red; with REQ-004, REQ-020, REQ-027)
  REQ-029 ──┬─ REQ-018 (draft, revised — see above)

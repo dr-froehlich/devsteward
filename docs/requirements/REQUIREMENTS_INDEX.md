@@ -47,5 +47,6 @@ commit** as its frontmatter and the code.
 | REQ-039 | Concept phase — an interactive architecture/exploration session that gates develop (left-arm counterpart of the System-Test phase) | DRAFT | [REQ-039](REQ-039.md) | REQ-027, REQ-029, REQ-030, REQ-034 |
 | REQ-040 | Read commands resolve the live integration-branch ledger, and checkpoint refuses an already-done step | DONE | [REQ-040](REQ-040.md) | REQ-018, REQ-037 |
 | REQ-041 | Every read-side ledger access resolves the live integration-branch ledger — not just steward status | DONE | [REQ-041](REQ-041.md) | REQ-037, REQ-040 |
+| REQ-042 | Positional REQ target for advance/run — name the REQ to steer which eligible step runs | DRAFT | [REQ-042](REQ-042.md) | REQ-002, REQ-026 |
 
 New requirement template: [`_templates/req.md`](../../devsteward/templates/docs/requirements/_templates/req.md)
