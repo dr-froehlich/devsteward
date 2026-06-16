@@ -132,6 +132,21 @@ class GitCli:
         worktree) so the subsequent switch back to the integration branch is conflict-free."""
         self._run("clean", "-fdq", "--", ".devsteward")
 
+    def dirty_tracked_ledger(self) -> str:
+        """The tracked ``.devsteward/`` paths with an *uncommitted* change in the main tree
+        (newline-joined), or ``""`` when clean (REQ-043 Decision 2).
+
+        Untracked entries (porcelain ``??``) are excluded — they are swept by
+        :meth:`clean_untracked_ledger`; only a *tracked* modification makes ``git checkout``
+        refuse to switch and crash, which is the precondition the close-out must surface
+        rather than ride into an uncaught ``CalledProcessError``.
+        """
+        out = self._run("status", "--porcelain", "--", ".devsteward").stdout
+        return "\n".join(
+            line[3:] for line in out.splitlines()
+            if line.strip() and not line.startswith("??")
+        ).strip()
+
     def remove_integration_worktree(self, integration: str) -> None:
         """Drop the managed integration worktree if present (idempotent) — called before the
         main tree switches back to the integration branch, since git forbids the same branch
