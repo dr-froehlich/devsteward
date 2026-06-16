@@ -1,0 +1,20 @@
+# FlowSteward REQ-024 — parked state (captured before the live procedure)
+
+$ git branch --show-current
+req-024-production-cutover
+
+$ git status --short
+(clean)
+
+$ ledger cursor (working tree / feature branch)
+cursor:
+  step: REQ-024:validate
+steps:
+
+$ git log --oneline -6
+2b25f5c updated skills from devsteward repo
+c6b3edb REQ-024: ledger close — validation pending (async QA)
+f06d103 REQ-024: README — Production deploy runbook (AC6)
+a28018a REQ-024: ledger checkpoint
+65aa0e1 REQ-024:develop: Production cutover — multi-account triage, served web console, continuously-running worker, homelab deploy — develop
+9f1fa77 REQ-024: intake — production cutover (multi-account triage, served web, worker, homelab deploy)

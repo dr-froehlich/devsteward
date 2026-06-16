@@ -1,0 +1,43 @@
+REQ-034 — Human validation as a guided, asynchronous activity
+System-Tester session (guided / attended), 2026-06-14T03:42:01Z
+=================================================================
+
+WHAT THIS REQ CLAIMS (validated here against reality, not the builder's diff)
+  AC1  shell `steward validate` = two-phase bookkeeping around an interactive
+       Claude (TTY inherited, not `claude -p`), engine records the verdict   [engine-run regression]
+  AC2  two-phase start/record callable in-session; bring-up REFUSES inside a
+       Claude session (CLAUDECODE set) — Claude never spawned from Claude     [engine-run regression]
+  AC3  pending validation parks as async QA-ticket; pipeline not frozen       [engine-run regression]
+  AC4  parked validation resumes + reconciles branch from dev, lands on green [engine-run regression]
+  AC5  three terminal outcomes (green/declined/pending) each leave clean tree [engine-run regression]
+  AC6  LIVE e2e on FlowSteward's parked REQ-024 — guided session, engine-
+       recorded verdict, non-freezing pending, clean resume+land             [MANUAL — Peter's call]
+
+MY ROLE (guided mode): prepare the surfaces, walk Peter through AC6's procedure
+against the real system, answer questions, capture artifacts. The ENGINE runs the
+AC1-AC5 regression tests itself and records Peter's AC6 verdict. I never assert a
+verdict and never touch bookkeeping.
+
+WHAT I DEMONSTRATED FROM THIS (in-session) SHELL — safe, black-box
+  10-nesting-refusal.txt   `steward validate REQ-024` run inside this Claude
+                           session refused cleanly (exit 1, no wedge) and
+                           pointed at a plain terminal OR the in-session skill.
+                           This is Decision 6 / AC2 behaviour, live, and is also
+                           WHY AC6's procedure must be run "from a plain shell".
+  11-engine-surface.txt    steward is an editable pipx install pointing at this
+                           repo on branch req-034-human-validation-as-a-guided,
+                           so FlowSteward exercises the REQ-034 engine directly.
+  20-flowsteward-parked-state.txt
+                           FlowSteward REQ-024 is parked at :validate
+                           (blocked-on-decision DEC-017, AC6 declined 2026-06-13),
+                           branch req-024-production-cutover unmerged — exactly the
+                           parked-production-cutover AC6 names.
+
+WHAT PETER DRIVES (in a plain terminal — see 30-guided-procedure.txt)
+  The guided interactive `steward validate REQ-024`: prepare/guide/answer, an
+  engine-recorded verdict, a non-freezing pending park, then a clean later resume
+  that reconciles the branch and lands on green. AC6 is HIS sign-off against
+  Decisions 1-7; I guide, I do not decide.
+
+NOTE: AC6 is a manual criterion — a human decision stop. This session does not
+and cannot produce the AC6 verdict; the engine records Peter's verdict after I end.

@@ -1,0 +1,10 @@
+# Engine identity — which steward drives steward validate REQ-024
+
+$ which steward
+/home/peter/projects/devsteward/.venv/bin/steward
+
+$ python -c 'import devsteward; print(devsteward.__file__)'
+/home/peter/projects/devsteward/devsteward/__init__.py
+
+# devsteward working tree is on branch (the engine under test):
+req-034-human-validation-as-a-guided

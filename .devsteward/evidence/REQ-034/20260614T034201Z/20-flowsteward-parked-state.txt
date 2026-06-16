@@ -1,0 +1,18 @@
+=== FlowSteward REQ-024 — prepared validation surface ===
+current branch : req-024-production-cutover
+branch merged into dev? : 0
+(no dev ref)  [0 = unmerged, as Decision 4 requires on a park]
+REQ-024 status : status: open
+REQ-024 verified_by : verified_by: null
+ledger cursor : step:REQ-024:validate
+REQ-024:validate step status : blocked-on-decision (DEC-017 open)
+
+--- open decision parking this validation (DEC-017) ---
+DEC-017  step REQ-024:validate  req REQ-024  status open
+  question: REQ-024 validation red — needs a human: declined by Peter Froehlich (2026-06-13)
+  prior verdict event: AC6 manual declined; AC4/AC5 artifact gates passed
+
+--- the three manual/artifact ACs in play ---
+AC4 artifact: lab worker round  (engine-run)
+AC5 artifact: compose stack healthy (engine-run)
+AC6 MANUAL  : live homelab sign-off — the human decision stop
