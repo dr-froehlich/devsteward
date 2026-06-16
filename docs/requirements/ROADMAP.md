@@ -68,6 +68,18 @@ validation. Driven **interactively** (not by `steward run`) in this order — se
 
 ## Next
 
+- REQ-044 — **`steward supersede`** (draft): codifies the 2026-06-16 REQ-034 hand-recovery.
+  REQ-037's `try_merge_no_ff` aborts a feature→`dev` merge on a code conflict and tells the
+  operator to *"resolve by hand: `git merge --no-ff`"* — which bakes in "an aborted merge
+  means unlanded work." False for a **superseded** branch: REQ-034's branch held a stale
+  parallel implementation already delivered on `dev` via REQ-037/041/043, so following that
+  guidance would have spliced obsolete code back in and regressed `dev`. Adds a human-only
+  `steward supersede REQ-NNN` verb (append `branch_superseded` to the integration-branch
+  ledger capturing the abandoned unique-commit shas, delete the unmerged branch, clean tree —
+  never merge), and makes the abort recovery instruction **name** it as the alternative to
+  the hand-merge. Engine never auto-supersedes (the branch had *divergent*, not empty-delta,
+  code — "obsolete vs unlanded" is a human judgment). Regression-only, real-git ACs; fused.
+  With REQ-037, REQ-043.
 - REQ-037 — **ledger on dev only + atomic topology** (draft): the root fix for the live
   crash where `steward validate` died on a `git merge --no-ff` conflict in `.devsteward/`
   and left the repo split (HEAD on `dev`, fix stranded on the feature branch, no verb to
@@ -255,7 +267,7 @@ REQ-001
            ├─ REQ-034 (draft, guided async human validation + QA-ticket park + clean re-entry; with REQ-020, REQ-032, REQ-033)
            │   ├─ REQ-037 (draft, ledger on dev only + atomic recoverable topology — the live-crash root fix; unblocks REQ-034 re-validation; with REQ-020, REQ-032)
            │   │   ├─ REQ-038 (draft, cross-host validation deploy channel: artifact-export RC + patch-back via rework — Finding 90 opt A; with REQ-030, REQ-033)
-           │   │   ├─ REQ-043 (draft, fix: divergence surface + close-out switch crash-proof — finishes REQ-037 D2 for the two paths it missed; with REQ-032)
+           │   │   ├─ REQ-043 (draft, fix: divergence surface + close-out switch crash-proof — finishes REQ-037 D2 for the two paths it missed; with REQ-032) ── REQ-044 (draft, steward supersede: human-only close of a superseded branch + abort-recovery pointer — no false merge-by-hand; with REQ-037)
            │   │   └─ REQ-040 (done, live-ledger reads + checkpoint idempotency — read-side follow-up to REQ-037; with REQ-018)
            │   │       └─ REQ-041 (open, finish REQ-040 D1: route ALL read-side ledger access through live_ledger — validate pre-flight, no-arg checkpoint, report)
            ├─ REQ-035 (draft, fix: done re-validation freezes verified_by — provenance not clobbered)

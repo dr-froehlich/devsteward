@@ -49,5 +49,6 @@ commit** as its frontmatter and the code.
 | REQ-041 | Every read-side ledger access resolves the live integration-branch ledger — not just steward status | DONE | [REQ-041](REQ-041.md) | REQ-037, REQ-040 |
 | REQ-042 | Positional REQ target for advance/run — name the REQ to steer which eligible step runs | DONE | [REQ-042](REQ-042.md) | REQ-002, REQ-026 |
 | REQ-043 | A surfaced branch divergence leaves no uncommitted ledger write, and the topology close-out switch never crashes on a dirty tree | DONE | [REQ-043](REQ-043.md) | REQ-032, REQ-037 |
+| REQ-044 | steward supersede — close an already-superseded feature branch without a false merge-by-hand recovery | DRAFT | [REQ-044](REQ-044.md) | REQ-037, REQ-043 |
 
 New requirement template: [`_templates/req.md`](../../devsteward/templates/docs/requirements/_templates/req.md)
