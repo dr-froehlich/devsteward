@@ -214,16 +214,59 @@ class Executor:
         shutil.copytree(src, Path(self._worktree) / ".devsteward" / "evidence",
                         dirs_exist_ok=True)
 
-    def _return_main_tree_to_integration(self) -> None:
+    def _return_main_tree_to_integration(
+        self, step: Step | None = None, *, unattended: bool = False
+    ) -> str | None:
         """Bring the main tree back to the integration branch (REQ-037): drop session evidence
         (now committed on the integration branch via the worktree) so the switch is
         conflict-free, remove the ledger worktree (git forbids one branch in two worktrees),
-        switch, and rebind the ledger to the main tree."""
+        switch, and rebind the ledger to the main tree.
+
+        REQ-043 Decision 2 (defense-in-depth floor): if an *uncommitted tracked* ``.devsteward/``
+        change is present in the main tree, ``git checkout`` would refuse the switch and crash
+        uncaught in a half-state (worktree dropped, land already committed) — so detect it
+        *before* the destructive ops and abort-and-surface instead (parking when ``unattended``),
+        leaving the repo intact. Returns the recovery instruction on that abort, else ``None``.
+        Decision 1 removes the one known producer of pre-switch dirt; this is the floor so any
+        future producer surfaces as a recoverable precondition rather than re-opening the crash.
+        """
+        dirty = self.git.dirty_tracked_ledger()
+        if dirty:
+            return self._record_aborted_switch(step, dirty, unattended)
         self.git.clean_untracked_ledger()
         self.git.remove_integration_worktree(self.integration_branch)
         self._worktree = None
         self.git.switch(self.integration_branch)
         self.ledger = Ledger(self.root)
+        return None
+
+    def _record_aborted_switch(
+        self, step: Step | None, dirty: str, unattended: bool
+    ) -> str:
+        """Record an atomically-aborted close-out switch (REQ-043 Decision 2), mirroring
+        :meth:`_record_aborted_merge`: the switch never ran (the repo is intact, the dirty
+        tracked change preserved), so this only *records* the recovery — a ``switch_aborted``
+        event and, unattended, a parked decision — and commits that record on the integration
+        branch (the worktree is still present, so the record lands without touching the dirty
+        main-tree file)."""
+        recovery = (
+            f"refusing to switch back to '{self.integration_branch}': an uncommitted tracked "
+            f".devsteward/ change is present in the working tree ({dirty}) — git would refuse "
+            f"the checkout and crash. Commit it on the integration branch or discard it "
+            f"(`git checkout -- .devsteward`), then re-run."
+        )
+        self._bind_ledger()  # land the record on the integration branch (the worktree)
+        self.ledger.append_event(
+            "switch_aborted", step=step.id if step else None, detail=recovery
+        )
+        if unattended:
+            self.ledger.park_decision(
+                Decision(id=self.ledger.next_decision_id(),
+                         step=step.id if step else None, question=recovery,
+                         req=step.req if step else None)
+            )
+        self._commit_ledger_close(step, "ledger close — switch aborted")
+        return recovery
 
     def branch_guard(self) -> str | None:
         """Refusal message if HEAD is the production branch, else ``None``.
@@ -267,7 +310,15 @@ class Executor:
         name = self.feature_branch_name(step)
         if self.git.branch_exists(name):
             if not self.git.integration_is_ancestor(self.integration_branch, name):
+                # REQ-043 Decision 1: commit the divergence breadcrumb on the integration
+                # branch (we run only while HEAD is the integration branch — main tree, no
+                # worktree) so the surfaced refusal leaves a clean tree (REQ-032) and a
+                # durable record, like its committing REQ-037 siblings (reconcile_aborted,
+                # merge_aborted) — never an uncommitted tracked .devsteward/ write that a
+                # later land's close-out switch would crash on (Decision 2 / REQ-037 D2 gap).
+                self._bind_ledger()
                 self.ledger.append_event("branch_diverged", step=step.id, branch=name)
+                self._commit_ledger_close(step, "ledger close — branch diverged surfaced")
                 return (
                     f"refusing to reuse feature branch '{name}' — it has diverged from "
                     f"'{self.integration_branch}' (the integration branch advanced since "
@@ -821,7 +872,7 @@ class Executor:
         except subprocess.CalledProcessError:
             return None
 
-    def _commit_ledger_close(self, step: Step, subject: str) -> str | None:
+    def _commit_ledger_close(self, step: Step | None, subject: str) -> str | None:
         """Commit the trailing ledger write (and any captured evidence) on the **integration
         branch** as a follow-up, so a terminal step outcome leaves a clean tree (REQ-032) and
         the ledger never rides a feature branch (REQ-037).
@@ -831,7 +882,8 @@ class Executor:
         empty commit** (Decision 4). Tolerant of a missing repo / failed commit so a non-git
         test harness or a committer-stubbed land does not crash on the trailing close.
         """
-        return self._commit_ledger(f"{step.req or step.id}: {subject}\n\n{_TRAILER}")
+        ref = (step.req or step.id) if step is not None else "ledger"
+        return self._commit_ledger(f"{ref}: {subject}\n\n{_TRAILER}")
 
     # -- branch lifecycle ------------------------------------------------------
 
@@ -847,6 +899,11 @@ class Executor:
         surfaced = self.prepare_branch(step)
         if surfaced is not None:
             self.ledger.append_event("branch_surfaced", step=step.id, detail=surfaced)
+            # REQ-043 Decision 1: a surfaced (diverged) refusal is a terminal outcome — commit
+            # its trailing ledger write on the integration branch so the *whole* REFUSED path
+            # leaves a clean tree (REQ-032), with no uncommitted tracked .devsteward/ write left
+            # for a later land's close-out switch to crash on (Decision 2).
+            self._commit_ledger_close(step, "ledger close — branch surfaced")
             return StepResult(step, RunOutcome.REFUSED, surfaced)
         # REQ-037: bind the ledger to the integration branch even when resuming on an
         # already-checked-out feature branch (prepare_branch returns early in that case).
@@ -889,7 +946,13 @@ class Executor:
             # the integration branch; then drop the worktree and bring the main tree home —
             # its .devsteward/ was never touched, so the switch is clean.
             self._commit_ledger(f"{step.req}: ledger checkpoint\n\n{_TRAILER}")
-            self._return_main_tree_to_integration()
+            # REQ-043 Decision 2: the close-out switch is atomic — a dirty tracked .devsteward/
+            # change is surfaced (parked, unattended) and the repo left intact, never an
+            # uncaught git-checkout crash. On that abort, return the recovery so the caller
+            # (the validate routine / develop merge path) reports a recoverable park.
+            recovery = self._return_main_tree_to_integration(step, unattended=unattended)
+            if recovery is not None:
+                return recovery
         else:
             self.git.commit_all(f"{step.req}: ledger checkpoint\n\n{_TRAILER}")
             self.git.switch(self.integration_branch)

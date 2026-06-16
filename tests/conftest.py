@@ -155,6 +155,11 @@ class FakeGitTopology:
     def clean_untracked_ledger(self) -> None:
         return None
 
+    def dirty_tracked_ledger(self) -> str:
+        # The in-memory fake never models a dirty tracked working file (the very blind spot
+        # REQ-043's real-git ACs exist to cover) — it is always clean (REQ-043 Decision 2).
+        return ""
+
     def commit_ledger_at(self, worktree: str, message: str) -> str | None:
         self.commits.append((self.current, message))
         return f"sha{len(self.commits):04d}"

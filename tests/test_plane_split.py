@@ -297,6 +297,123 @@ def test_fetch_first_incorporates_remote_feature_commit_realgit(tmp_path):
     assert (tmp_path / "live_fix.txt").exists()
 
 
+# -- REQ-043: divergence surface + close-out switch are crash-proof ------------
+
+
+def test_diverged_surface_commits_diagnostic_clean_tree_realgit(tmp_path):
+    """REQ-043 Seam 1 (Decision 1): when ``prepare_branch`` refuses a *diverged* feature
+    branch it commits the ``branch_diverged`` breadcrumb on the integration branch, so the
+    surfaced refusal leaves a clean tree (no uncommitted tracked ``.devsteward/`` write) —
+    the lone append-but-never-commit abort path that fed the unrecoverable split."""
+    _scaffold(tmp_path, acs=[("AC1", "true", "regression")])
+    _init_git(tmp_path)
+    ex = _executor(tmp_path)
+
+    step = ex.step_by_id("REQ-001:develop")
+    name = ex.feature_branch_name(step)
+    # Build a genuinely DIVERGED branch: cut it, commit on it, then advance dev past the cut —
+    # dev is no longer an ancestor of the branch, so prepare_branch must surface, not reuse.
+    _git(tmp_path, "branch", name)
+    _git(tmp_path, "checkout", "-q", name)
+    (tmp_path / "feature_only.txt").write_text("on the feature branch\n", encoding="utf-8")
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-q", "-m", "feature-only commit")
+    _git(tmp_path, "checkout", "-q", "dev")
+    (tmp_path / "dev_only.txt").write_text("dev advanced past the cut\n", encoding="utf-8")
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-q", "-m", "dev advanced past the cut")
+
+    surfaced = ex.prepare_branch(step)
+    assert surfaced is not None and "diverged" in surfaced
+    # Seam 1: a clean tree at the surface, and the diagnostic committed on dev (not left dirty).
+    assert _git(tmp_path, "status", "--porcelain", "--", ".devsteward").strip() == ""
+    assert "branch_diverged" in _dev_events(tmp_path)
+
+
+def test_diverged_surface_then_later_land_no_crash_realgit(tmp_path):
+    """REQ-043 AC1: the exact crash sequence now completes. A run surfaces REQ-001's diverged
+    feature branch (REFUSED, clean tree) and a LATER step (REQ-002) then develops + lands;
+    the close-out switch completes without raising CalledProcessError, REQ-002's merge lands,
+    and dev is clean at rest. Without Seam 1 the surface's uncommitted ``events.jsonl`` would
+    ride REQ-002's feature branch and make ``git checkout dev`` refuse → CalledProcessError."""
+    req_dir = tmp_path / "docs" / "requirements"
+    _write_req(req_dir, "REQ-001", [("AC1", "true", "regression")])
+    _write_req(req_dir, "REQ-002", [("AC1", "true", "regression")])
+    _index(req_dir, ("REQ-001", "OPEN"), ("REQ-002", "OPEN"))
+    _plan(tmp_path, "REQ-001", "REQ-002")
+    (tmp_path / "app.py").write_text("base\n", encoding="utf-8")
+    Ledger.init(tmp_path, profile="req")
+    _init_git(tmp_path)
+    ex = _executor(tmp_path, runner=_Runner(tmp_path, "REQ-002 code\n"))
+
+    # Pre-create a diverged feature branch for REQ-001 (dev advanced past the cut).
+    step1 = ex.step_by_id("REQ-001:develop")
+    name = ex.feature_branch_name(step1)
+    _git(tmp_path, "branch", name)
+    _git(tmp_path, "checkout", "-q", name)
+    (tmp_path / "feature_only.txt").write_text("feature-only\n", encoding="utf-8")
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-q", "-m", "feature-only commit")
+    _git(tmp_path, "checkout", "-q", "dev")
+    (tmp_path / "dev_only.txt").write_text("dev advanced\n", encoding="utf-8")
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-q", "-m", "dev advanced past the cut")
+
+    r1 = ex.advance_once(only="REQ-001")  # surfaces the divergence — Seam 1: clean tree
+    assert r1.outcome is RunOutcome.REFUSED
+    assert _porcelain(tmp_path) == ""  # no uncommitted ledger write left behind
+    assert "branch_diverged" in _dev_events(tmp_path)
+
+    r2 = ex.advance_once(only="REQ-002")  # a later step lands: close-out must NOT crash
+    assert r2.outcome is RunOutcome.DONE
+    assert _branch(tmp_path) == "dev"
+    assert _porcelain(tmp_path) == ""  # dev clean at rest — no half/aborted switch
+    led = Ledger(tmp_path)
+    assert any(e["event"] == "branch_merged" and e["branch"] != "dev" for e in led.events())
+    assert led.status_of("REQ-002:develop").value == "done"
+    assert any("REQ-002" in s and s.startswith("Merge ") for s in _subjects(tmp_path))
+
+
+def test_close_out_switch_dirty_tree_surfaces_not_crash_realgit(tmp_path):
+    """REQ-043 AC3 (Seam 2 / Decision 2): the close-out switch is atomic on a dirty tree.
+    With an uncommitted *tracked* ``.devsteward/`` change present in the main tree before the
+    close-out, ``_return_main_tree_to_integration`` detects it and surfaces an actionable
+    recovery instruction (parks a decision, unattended) leaving the repo intact — same HEAD,
+    no lost data, still on the feature branch — and never raises an uncaught
+    CalledProcessError (git checkout would refuse to clobber the tracked modification)."""
+    _scaffold(tmp_path, acs=[("AC1", "true", "artifact")])  # artifact ⇒ defers to a validate sibling
+    _init_git(tmp_path)
+    ex = _executor(tmp_path, runner=_Runner(tmp_path), with_validate=True)
+
+    r1 = ex.advance_once()  # develop defers onto a feature branch; the worktree sits on dev
+    assert r1.outcome is RunOutcome.DONE
+    feature = _branch(tmp_path)
+    assert feature != "dev"
+
+    # Inject an uncommitted *tracked* .devsteward/ change into the main tree — a stand-in for
+    # any future producer of pre-switch dirt (the defense-in-depth floor). git checkout dev
+    # would refuse to overwrite it.
+    led_file = tmp_path / ".devsteward" / "events.jsonl"
+    led_file.write_text(led_file.read_text() + '{"event": "stray"}\n', encoding="utf-8")
+    assert _git(tmp_path, "status", "--porcelain", "--", ".devsteward").strip() != ""
+    stray_before = led_file.read_text()
+
+    r2 = ex.advance_once()  # validate green → land → close-out detects dirt → surface/park
+    assert r2.outcome is RunOutcome.PARKED  # surfaced, not crashed
+
+    # The repo is intact: the close-out switch never ran (the merge never applied), the main
+    # tree is still on the feature branch, and the stray change is preserved byte-for-byte —
+    # no lost data, never an uncaught CalledProcessError.
+    assert _branch(tmp_path) == feature
+    assert led_file.read_text() == stray_before
+    # The abort is recorded on dev and a decision is parked (unattended); no merge happened.
+    assert "switch_aborted" in _dev_events(tmp_path)
+    assert "branch_merged" not in _dev_events(tmp_path)
+    assert not any(s.startswith("Merge ") for s in _subjects(tmp_path))
+    dev_led = Ledger(_dev_worktree(tmp_path))
+    assert dev_led.open_decisions() and "switch back" in dev_led.open_decisions()[-1].question
+
+
 # -- AC5 -----------------------------------------------------------------------
 
 
