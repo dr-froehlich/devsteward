@@ -1,7 +1,7 @@
 version: 1
 profile: req
 cursor:
-  step: REQ-036:validate
+  step: REQ-043:develop
 steps:
   REQ-011:design:
     status: done
@@ -111,6 +111,9 @@ steps:
   REQ-036:validate:
     status: done
     updated: '2026-06-16T05:09:00+00:00'
+  REQ-043:develop:
+    status: done
+    updated: '2026-06-16T05:41:43+00:00'
 decisions:
 - id: DEC-001
   step: REQ-031:validate
