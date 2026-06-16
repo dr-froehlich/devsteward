@@ -1,0 +1,20 @@
+profile: req    cursor: REQ-027:validate
+
+steps:
+  • REQ-019:develop        pending (eligible)
+  • REQ-019:validate       pending
+  • REQ-022:develop        pending (eligible)
+  • REQ-022:validate       pending
+  • REQ-023:develop        pending
+  • REQ-023:validate       pending
+  • REQ-025:develop        pending (eligible)
+  • REQ-025:validate       pending
+  ✓ REQ-027:develop        done
+  … REQ-027:validate       running
+
+parked decisions:
+  DEC-102 [REQ-015:intake] Post-shadow consequence for alias/sender mismatches: stay tag-only (fs_phish) or quarantine-move? Decide on the evidence of the first shadow reports (false-positive rate, e.g. stores mailing via third-party ESPs).
+  DEC-107 [REQ-019:intake] Retention class/TTL table sign-off — the deletion policy. Draft ships with REQ-019 (werbung 30d, existing keep-1-year classes, personal correspondence never); Peter signs the table at the first-live-run gate (REQ-019 AC5).
+
+skills:
+  ⚠ advance        customized  — run `steward sync-skills`

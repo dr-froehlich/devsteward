@@ -1,7 +1,7 @@
 version: 1
 profile: req
 cursor:
-  step: REQ-041:develop
+  step: REQ-036:validate
 steps:
   REQ-011:design:
     status: done
@@ -108,6 +108,9 @@ steps:
   REQ-041:develop:
     status: done
     updated: '2026-06-15T21:26:15+00:00'
+  REQ-036:validate:
+    status: blocked-on-decision
+    updated: '2026-06-16T04:42:20+00:00'
 decisions:
 - id: DEC-001
   step: REQ-031:validate
@@ -170,3 +173,14 @@ decisions:
   req: REQ-041
   raised_at: '2026-06-15T21:15:56+00:00'
   answered_at: '2026-06-15T21:25:18+00:00'
+- id: DEC-006
+  step: REQ-036:validate
+  question: "REQ-036 validation red — needs a human:\ndeclined by Peter Froehlich\n\
+    \nReturn it to develop for a fix with `steward rework REQ-036` (the V-model return
+    edge)."
+  status: open
+  options: []
+  answer:
+  req: REQ-036
+  raised_at: '2026-06-16T04:42:20+00:00'
+  answered_at:

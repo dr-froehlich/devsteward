@@ -1,0 +1,11 @@
+=== AFTER: advance hash, .orig backup present?, lock present? ===
+advance stamped hash AFTER:
+5670a7e28e221770cde2b0f95b9b84966452f8d6187b8091573b2bde33a73728  .claude/skills/advance/SKILL.md
+template advance hash:
+5670a7e28e221770cde2b0f95b9b84966452f8d6187b8091573b2bde33a73728  /home/peter/projects/devsteward/devsteward/templates/.claude/skills/advance/SKILL.md
+byte-match vs template:
+  IDENTICAL ✓
+.orig backup:
+-rw-r--r-- 1 peter peter 7599 Jun 16 06:38 .claude/skills/advance/SKILL.md.orig
+skills.lock now present?
+-rw-r--r-- 1 peter peter 84 Jun 16 06:38 .devsteward/skills.lock

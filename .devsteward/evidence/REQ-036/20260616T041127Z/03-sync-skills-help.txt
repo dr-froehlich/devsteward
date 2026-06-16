@@ -1,0 +1,16 @@
+=== steward sync-skills --help ===
+Usage: steward sync-skills [OPTIONS]
+
+  Refresh stale bundled skills from the installed template; re-record the lock
+  (REQ-036).
+
+  A *stale* bundled skill (untouched since stamp, template advanced) is
+  refreshed to byte-match the installed engine and the provenance lock
+  updated. A *customized* skill (edited locally) is left untouched and
+  reported unless ``--force`` is given, in which case its current bytes are
+  backed up to ``SKILL.md.orig`` before the refresh.
+
+Options:
+  --force  Refresh a *customized* skill too, backing the local copy up (.orig)
+           first.
+  --help   Show this message and exit.

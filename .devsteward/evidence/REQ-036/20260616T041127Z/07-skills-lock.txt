@@ -1,0 +1,4 @@
+=== skills.lock content ===
+{
+  "advance": "5670a7e28e221770cde2b0f95b9b84966452f8d6187b8091573b2bde33a73728"
+}

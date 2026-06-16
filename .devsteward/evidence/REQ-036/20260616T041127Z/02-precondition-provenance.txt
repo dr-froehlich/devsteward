@@ -1,0 +1,9 @@
+## FlowSteward bundled-skill provenance state — 2026-06-16T04:13:53Z
+
+skills.lock present? NO (pre-REQ-036 stamp, no provenance baseline)
+
+Per-skill: FlowSteward stamped vs installed template (devsteward/templates/.claude/skills):
+  advance      DIFFERS  (tpl=5670a7e28e22 fs=189202c11820)
+  bootstrap    IDENTICAL  (tpl=7412ddc0b9eb fs=7412ddc0b9eb)
+  intake       IDENTICAL  (tpl=d2f8cd0af50a fs=d2f8cd0af50a)
+  system-test  IDENTICAL  (tpl=aa40763b97d4 fs=aa40763b97d4)
