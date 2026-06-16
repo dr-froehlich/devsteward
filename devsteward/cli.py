@@ -10,7 +10,7 @@ from pathlib import Path
 
 import click
 
-from . import __version__
+from . import __version__, skillsync
 from .build import build_executor
 from .config import Config, ProjectNotFound, load_config
 from .core import claude as claude_mod
@@ -62,6 +62,9 @@ def new(target: Path, profile: str, force: bool) -> None:
 
     stamped = _stamp(src, target)
     Ledger.init(target, profile=profile)
+    # REQ-036 Decision 5: seed the provenance manifest so drift is measured from the
+    # honest baseline — the template hash each bundled skill was actually stamped from.
+    skillsync.seed_lock(target, src)
     click.echo(f"Stamped {stamped} files into {target}")
     click.echo("Next: cd in, run `/bootstrap` (interview) or edit REQ-001 and `steward lint`.")
 
@@ -85,6 +88,15 @@ def _stamp(src: Path, dst: Path) -> int:
             out = out.with_name(out.name[: -len(".tmpl")])
         out.parent.mkdir(parents=True, exist_ok=True)
         data = path.read_bytes()
+        # REQ-036: bundled skills are pure engine *behavior* and must byte-match the
+        # template they were stamped from (the drift model's whole premise) — copy them
+        # verbatim, never substituting. A skill like bootstrap carries `{{TODAY}}` as
+        # literal instruction text, so substituting there would both corrupt the
+        # instruction and break every drift comparison.
+        if rel.parts[: len(skillsync.SKILLS_RELDIR.parts)] == skillsync.SKILLS_RELDIR.parts:
+            out.write_bytes(data)
+            count += 1
+            continue
         try:
             text = data.decode("utf-8")
         except UnicodeDecodeError:
@@ -227,6 +239,49 @@ def status() -> None:
         click.echo(click.style("\nparked decisions:", fg="yellow"))
         for d in decisions:
             click.echo(f"  {d.id} [{d.step}] {d.question}")
+
+    # REQ-036 Decision 3: stamped bundled skills drifting from the installed engine is an
+    # informational warning — visible (the fix for "silent"), never a blocking gate.
+    drifted = skillsync.drift(cfg.root, _package_templates())
+    if drifted:
+        click.echo(click.style("\nskills:", fg="yellow"))
+        for d in drifted:
+            click.echo(
+                click.style(f"  ⚠ {d.name:<14} {d.bucket.value}", fg="yellow")
+                + "  — run `steward sync-skills`"
+            )
+
+
+# -- sync-skills (bundled-skill drift) ----------------------------------------
+
+
+@main.command("sync-skills")
+@click.option(
+    "--force", is_flag=True,
+    help="Refresh a *customized* skill too, backing the local copy up (.orig) first.",
+)
+def sync_skills(force: bool) -> None:
+    """Refresh stale bundled skills from the installed template; re-record the lock (REQ-036).
+
+    A *stale* bundled skill (untouched since stamp, template advanced) is refreshed to
+    byte-match the installed engine and the provenance lock updated. A *customized* skill
+    (edited locally) is left untouched and reported unless ``--force`` is given, in which
+    case its current bytes are backed up to ``SKILL.md.orig`` before the refresh.
+    """
+    cfg = _load_or_die()
+    res = skillsync.sync(cfg.root, _package_templates(), force=force)
+    for name in res.synced:
+        click.echo(click.style(f"  ✓ {name}: refreshed (was stale)", fg="green"))
+    for name in res.forced:
+        click.echo(click.style(
+            f"  ✓ {name}: refreshed (--force; backup {res.backups[name]})", fg="green"
+        ))
+    for name in res.refused:
+        click.echo(click.style(
+            f"  ⚠ {name}: customized — left untouched (use --force to overwrite)", fg="yellow"
+        ))
+    if not res.changed and not res.refused:
+        click.echo(click.style("all bundled skills in-sync.", fg="green"))
 
 
 # -- live progress ------------------------------------------------------------
