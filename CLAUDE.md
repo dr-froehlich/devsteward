@@ -46,8 +46,24 @@ lives at `devsteward/templates/CLAUDE.md.tmpl` and uses placeholders only).
 ```sh
 python -m pytest            # run the package's own tests
 steward lint                # validate the dogfooded REQs (run from repo root)
-pipx install --editable .   # prove the install path
+pipx install --editable .   # prove the install path — pipx ONLY (see below)
 ```
+
+**Install path: pipx editable, and nothing else.** The `steward` command is the **pipx**
+editable install (`~/.local/bin/steward` → the pipx venv), which tracks the repo live and is
+what consumers (e.g. FlowSteward) also use. Do **not** `pip install -e .` (or
+`pip install -e`) into a project `.venv`: it is redundant (the pipx command already exists,
+and `python -m pytest` resolves `devsteward` via `sys.path` without any install), it creates a
+*second* console script that shadows pipx on PATH when the venv is active, and it is a known
+footgun. A `.venv` is fine **only** for isolated dev tooling (pytest/click); never install the
+package itself into it.
+
+**Never run `pip install -e .` from inside the engine's managed worktree**
+(`<repo>.parent/.devsteward.<integration>-wt`, the transient linked worktree REQ-037 spins up
+to write the ledger). pip binds the editable mapping to that ephemeral path; when the engine
+prunes the worktree, every `steward` from that install breaks with `ModuleNotFoundError`.
+Always install from the canonical repo root (`git rev-parse --show-toplevel`). To repair a
+poisoned editable: `pip uninstall -y devsteward` then reinstall from the repo root.
 
 ## The ledger contract
 
