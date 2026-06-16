@@ -218,6 +218,17 @@ validation. Driven **interactively** (not by `steward run`) in this order — se
   reuses `only_ineligibility_reason()`; no auto-activation of a draft), and makes the
   multi-eligible no-target case print the eligible ids + steer syntax. Regression ACs, no
   lab. With REQ-002, REQ-026.
+- REQ-043 — **divergence surface + close-out switch are crash-proof** (draft, fix): the two
+  paths REQ-037 D2 did not reach. `prepare_branch`'s diverged-branch refusal appends
+  `branch_diverged` but never commits, dirtying the integration tree's tracked
+  `events.jsonl`; a *later* step's green land then drives `_return_main_tree_to_integration`,
+  whose `clean_untracked_ledger` (`git clean`, untracked only) leaves that dirt and whose
+  `switch` = `git checkout` (check=True) → git refuses → uncaught `CalledProcessError`, with
+  the worktree already gone and the checkpoint already committed (an unrecoverable half-state
+  no verb targets). Commits the divergence diagnostic on the integration branch (matching the
+  `reconcile_aborted`/`merge_aborted` siblings, satisfying REQ-032) and makes the close-out
+  switch treat a dirty tree as a surfaced/parked precondition, not a crash. Prevention only —
+  no `recover --resume-merge`; real-git ACs in `test_plane_split.py`. With REQ-032, REQ-037.
 - Future REQs land here as `/intake` produces them.
 
 ## Dependency graph
@@ -244,6 +255,7 @@ REQ-001
            ├─ REQ-034 (draft, guided async human validation + QA-ticket park + clean re-entry; with REQ-020, REQ-032, REQ-033)
            │   ├─ REQ-037 (draft, ledger on dev only + atomic recoverable topology — the live-crash root fix; unblocks REQ-034 re-validation; with REQ-020, REQ-032)
            │   │   ├─ REQ-038 (draft, cross-host validation deploy channel: artifact-export RC + patch-back via rework — Finding 90 opt A; with REQ-030, REQ-033)
+           │   │   ├─ REQ-043 (draft, fix: divergence surface + close-out switch crash-proof — finishes REQ-037 D2 for the two paths it missed; with REQ-032)
            │   │   └─ REQ-040 (done, live-ledger reads + checkpoint idempotency — read-side follow-up to REQ-037; with REQ-018)
            │   │       └─ REQ-041 (open, finish REQ-040 D1: route ALL read-side ledger access through live_ledger — validate pre-flight, no-arg checkpoint, report)
            ├─ REQ-035 (draft, fix: done re-validation freezes verified_by — provenance not clobbered)
