@@ -1,0 +1,11 @@
+profile: req    cursor: REQ-027:validate
+
+steps:
+  • REQ-019:develop        pending (eligible)
+  • REQ-019:validate       pending
+  • REQ-022:develop        pending (eligible)
+  • REQ-022:validate       pending
+  • REQ-023:develop        pending
+  • REQ-023:validate       pending
+  • REQ-025:develop        pending (eligible)
+  • REQ-025:validate       pending

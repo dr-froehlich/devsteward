@@ -1,0 +1,17 @@
+=== lock-honesty matrix (stamped | template | lock) ===
+advance      IN-SYNC (all three equal)
+   stamped=5670a7e28e221770cde2b0f95b9b84966452f8d6187b8091573b2bde33a73728
+   tpl    =5670a7e28e221770cde2b0f95b9b84966452f8d6187b8091573b2bde33a73728
+   lock   =5670a7e28e221770cde2b0f95b9b84966452f8d6187b8091573b2bde33a73728
+bootstrap    IN-SYNC (all three equal)
+   stamped=7412ddc0b9eb7b209f24310a675b662d2b8648749c0317e2567eac092174f18d
+   tpl    =7412ddc0b9eb7b209f24310a675b662d2b8648749c0317e2567eac092174f18d
+   lock   =7412ddc0b9eb7b209f24310a675b662d2b8648749c0317e2567eac092174f18d
+intake       IN-SYNC (all three equal)
+   stamped=d2f8cd0af50a1b1cdc1539fb65b3240f808f110ab45b27cb43bde1cd5d81ec99
+   tpl    =d2f8cd0af50a1b1cdc1539fb65b3240f808f110ab45b27cb43bde1cd5d81ec99
+   lock   =d2f8cd0af50a1b1cdc1539fb65b3240f808f110ab45b27cb43bde1cd5d81ec99
+system-test  IN-SYNC (all three equal)
+   stamped=aa40763b97d4093f0d3cc46e0b264960999ac21a40a39ce457aef54d666f1aac
+   tpl    =aa40763b97d4093f0d3cc46e0b264960999ac21a40a39ce457aef54d666f1aac
+   lock   =aa40763b97d4093f0d3cc46e0b264960999ac21a40a39ce457aef54d666f1aac
