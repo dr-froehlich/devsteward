@@ -42,6 +42,9 @@ class _FakeExecutor:
     def next_eligible(self, only=None):
         return None
 
+    def eligible_steps(self, only=None):
+        return []
+
     def only_ineligibility_reason(self, req_id):
         return f"{req_id} has no eligible step — it is not active."
 
@@ -84,6 +87,83 @@ def test_run_account_and_model_options(monkeypatch):
         # The graceful-stop controller and visibility sink are wired in too.
         assert captured["stop"] is not None
         assert callable(captured["announce"])
+
+
+def test_positional_target_scopes_like_only(monkeypatch):
+    """REQ-042 AC1: `advance REQ-X` / `run REQ-X` are accepted (no 'unexpected extra
+    argument') and thread `only="REQ-X"` into the executor exactly like `--only REQ-X`."""
+    monkeypatch.setattr(cli, "_load_or_die", lambda: SimpleNamespace())
+
+    for command in ("advance", "run"):
+        seen: list[str | None] = []
+
+        class _Cap(_FakeExecutor):
+            def advance_once(self, *, only=None, unattended=True, on_event=None):
+                seen.append(only)
+                return None
+
+            def run(self, *, only=None, max_steps=None, on_event=None):
+                seen.append(only)
+                return []
+
+        monkeypatch.setattr(cli, "build_executor", lambda cfg, **kw: _Cap())
+        positional = CliRunner().invoke(main, [command, "REQ-X", "--quiet"])
+        # The positional is accepted — click does not reject it as an extra argument.
+        assert "unexpected extra argument" not in positional.output
+        flagged = CliRunner().invoke(main, [command, "--only", "REQ-X", "--quiet"])
+        assert "unexpected extra argument" not in flagged.output
+        # Both spellings resolve to the same `only` target threaded into the executor.
+        assert seen == ["REQ-X", "REQ-X"]
+
+
+def test_positional_ineligible_errors(monkeypatch):
+    """REQ-042 AC2: naming a REQ with no eligible step exits non-zero with the same
+    activate-first/why message `--only` produces (and never auto-activates a draft)."""
+    monkeypatch.setattr(cli, "_load_or_die", lambda: SimpleNamespace())
+    monkeypatch.setattr(cli, "build_executor", lambda cfg, **kw: _FakeExecutor())
+
+    for command in ("advance", "run"):
+        result = CliRunner().invoke(main, [command, "REQ-X", "--quiet"])
+        assert result.exit_code != 0, result.output
+        assert "REQ-X" in result.output and "no eligible step" in result.output
+        # The message points at explicit activation; nothing was activated for us.
+        assert "activate" not in result.output or "activate it first" in result.output
+
+
+def test_positional_and_only_conflict(monkeypatch):
+    """REQ-042 AC3: a positional REQ_ID and `--only` together are mutually exclusive."""
+    monkeypatch.setattr(cli, "_load_or_die", lambda: SimpleNamespace())
+    monkeypatch.setattr(cli, "build_executor", lambda cfg, **kw: _FakeExecutor())
+
+    for command in ("advance", "run"):
+        result = CliRunner().invoke(main, [command, "REQ-X", "--only", "REQ-Y", "--quiet"])
+        assert result.exit_code != 0, result.output
+        assert "not both" in result.output
+
+
+def test_multi_eligible_prints_steer_hint(monkeypatch):
+    """REQ-042 AC4: plain `advance`/`run` with >1 eligible REQ still picks the lowest id,
+    but now lists the eligible ids and the `steward <command> REQ-NNN` steer syntax."""
+    monkeypatch.setattr(cli, "_load_or_die", lambda: SimpleNamespace())
+    low = SimpleNamespace(req="REQ-007", id="REQ-007:develop")
+    high = SimpleNamespace(req="REQ-019", id="REQ-019:develop")
+
+    class _Multi(_FakeExecutor):
+        def eligible_steps(self, only=None):
+            return [low, high]
+
+        def next_eligible(self, only=None):
+            return low
+
+    monkeypatch.setattr(cli, "build_executor", lambda cfg, **kw: _Multi())
+
+    for command in ("advance", "run"):
+        result = CliRunner().invoke(main, [command, "--quiet"])
+        assert result.exit_code == 0, result.output
+        assert "REQ-007" in result.output and "REQ-019" in result.output
+        # The lowest id is the one chosen, and the steer syntax is taught.
+        assert "Advancing REQ-007" in result.output
+        assert f"steward {command} REQ-NNN" in result.output
 
 
 def test_validate_wires_announce_and_stop(monkeypatch):
