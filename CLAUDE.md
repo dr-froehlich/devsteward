@@ -5,13 +5,42 @@ scaffolding `steward new` stamps into consumer projects. This file is for develo
 *DevSteward itself* — it is **not** the `CLAUDE.md.tmpl` that ships to consumers (that
 lives at `devsteward/templates/CLAUDE.md.tmpl` and uses placeholders only).
 
+## Design principles (read before proposing structure)
+
+These exist because the engine accreted team-scale git topology (feature branches +
+worktrees + switching) that the owner never asked for and could not audit — six
+firefighting REQs traced to that one un-chosen default (see REQ-047, `[[trunk-based-pivot-req047]]`).
+When you design or change anything here, hold to these:
+
+- **Trunk-based, linear history by default.** Work on one branch (`dev`); do not introduce
+  feature branches, worktrees, or engine-initiated branch switching. The reference projects
+  are ExamEngineer, Memzy, and scaleup — single linear trace, no switching back and forth.
+  If you think branching is warranted, *say so and ask first* — never assume it.
+- **Minimal topology / prefer subtraction.** Add machinery only when a concrete, present
+  need demands it. A string of fixes that each *add* structure is a smell that the premise
+  is wrong — stop and question the premise, don't patch it.
+- **Don't solve information-flow constraints with git topology.** "A session must not read
+  the diff" (the System-Test decoupling) is enforced by the session not reading it — not by
+  a separate branch. Keep isolation in the layer that actually owns it.
+- **Surface unnecessary complexity, especially in the owner's blind spots.** The owner's git
+  competence is limited and trusts the AI here; that is exactly where over-engineering hides.
+  Volunteer the simplest alternative in terms the owner can judge, and justify any complexity
+  before building it.
+- **Match the owner's stated references; fill silence with the *simplest* option, not the
+  most conventional one.** Unspecified ≠ "do it the impressive way."
+
 ## House conventions (first-class, enforced)
 
 - **English everywhere** in code and technical docs. German UI strings are allowed but
   must be isolated/translatable — never inline in logic.
 - **Same-commit discipline:** a REQ's frontmatter, its row in `REQUIREMENTS_INDEX.md`,
   and the code that satisfies it move in the *same* commit.
-- **Branching model:** `main` = production / released (release tags like `v0.1.0` cut
+- **Branching model:** ⚠️ **Under replacement by REQ-047 — do not extend.** This
+  feature-branch topology is the un-chosen default the Design principles above retire; once
+  REQ-047 lands this becomes trunk-based (all work on `dev`, no feature branches) and this
+  bullet is rewritten. Until then it still nominally describes the engine's behaviour, but
+  add **no** new branching/worktree/switch machinery.
+  `main` = production / released (release tags like `v0.1.0` cut
   here; consumers pin them). `dev` = integration / beta — the default working and merge
   target. **Declaration lives on `dev`; only implementation branches.** Intake (REQ
   frontmatter, index row, roadmap), plans, and the ledger are committed directly on `dev` —
