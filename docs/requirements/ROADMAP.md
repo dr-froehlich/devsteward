@@ -241,6 +241,23 @@ validation. Driven **interactively** (not by `steward run`) in this order — se
   `reconcile_aborted`/`merge_aborted` siblings, satisfying REQ-032) and makes the close-out
   switch treat a dirty tree as a surfaced/parked precondition, not a crash. Prevention only —
   no `recover --resume-merge`; real-git ACs in `test_plane_split.py`. With REQ-032, REQ-037.
+- REQ-052 — **post-REQ-047 cleanup: code + skill review** (draft): the disciplined sweep
+  after the trunk-based pivot (REQ-048…051). A migration that size leaves residue — stale code
+  paths and architecture still bent toward the removed feature-branch/worktree topology, and
+  shipped skills still re-justifying a governance ("commit to dev not a feature branch") that
+  is now a single stable invariant. Produces a sign-off review report in `docs/reports/`
+  covering both reviews, fixes the feasible low-risk findings inline, and spins the rest out as
+  recommendations / follow-on REQs. Manual sign-off + regression (suite stays green). With
+  REQ-047.
+- REQ-053 — **process resilience: forward-path audit + rework/repeat model** (draft, design):
+  the third strand of REQ-052's idea stub, split out as a process redesign. Audits whether,
+  post-REQ-047 (state can no longer diverge), every red/failed/parked state has a clear,
+  *available* forward path — and whether the `recover`/`rework` verbs map onto the real two
+  options: **repeat** (external root cause — rate limit, API timeout, a setup the human fixed;
+  the work was sound) vs **rework** (the work was insufficient). Covers the out-of-tool
+  root-cause case (a stable path to adopt an external fix and continue) and recommends whether
+  `recover` should become `repeat`. Audit-and-recommend: a `manual` report; implementation
+  spins out. With REQ-047.
 - Future REQs land here as `/intake` produces them.
 
 ## Dependency graph
@@ -273,6 +290,8 @@ REQ-001
            ├─ REQ-035 (draft, fix: done re-validation freezes verified_by — provenance not clobbered)
            ├─ REQ-036 (draft, steward sync-skills: refresh stamped bundled skills + provenance manifest + drift signal; with REQ-007)
            └─ REQ-039 (draft, concept phase: interactive leading architecture session that gates develop — left-arm counterpart of validate; with REQ-027, REQ-029, REQ-034)
+ REQ-047 (done, trunk-based pivot) ──┬─ REQ-052 (draft, post-pivot code + skill review → sign-off report)
+                                     └─ REQ-053 (draft, design: process-resilience forward-path audit + rework/repeat model)
  REQ-011 (done, production-branch guard) ── REQ-019 (done, integration-branch guard) ── REQ-020 (draft, branch lifecycle automation)
  REQ-024 (draft, onboard skill) ── orchestrates REQ-007 + REQ-009 + REQ-010/023 + REQ-021 + REQ-022 (memzy onboarding)
 ```
