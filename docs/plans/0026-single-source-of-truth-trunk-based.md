@@ -232,6 +232,39 @@ green whose passing state the recorded commit does not capture.
   `.gitignore`d / never-staged file is refused at land with the gap named; the REQ does **not**
   flip `done`.
 
+### Stage C — as built (REQ-050, landed on `dev`)
+
+Built the **tightest form** (re-run the named gate against a clean extract of the commit),
+with two faithful refinements forced by the Stage-B boundary:
+
+- **Placement & rollback (the critical Stage-B interaction).** The plan's literal "raise
+  `PreconditionError` after the work commit" would *strand* the commit: a `PreconditionError`
+  passes **through** `transaction(...)` without a rollback (REQ-049), so the boundary won't
+  undo the work commit for it — the exact half-state Stage C forbids. Resolution (the plan's
+  "tightest form needs (b)"): `Executor._assert_green_captured` snapshots `HEAD` *before* the
+  work commit, and on a gap does the `git reset --hard <snapshot>` **itself**, *then* raises
+  the (now pass-through) `PreconditionError`. That buys both a clean tree (work commit undone,
+  REQ flip reverted, the RUNNING/step_started ledger writes wiped) **and** the gap-specific
+  recovery line — a non-typed exception would roll back via the boundary but lose the precise
+  recovery; a bare pass-through precondition would keep the recovery but strand the commit.
+- **Tightest, not cheapest — no path heuristic, no worktree.** The extract is
+  `git archive <sha> | tar -x` into a tempdir (only the commit's tracked content). This avoids
+  the cheapest form's "source/test paths" heuristic (which would false-positive on
+  `__pycache__`/`.venv`) and avoids `git worktree add` (forbidden by trunk-based; INV-1
+  actively refuses a stray linked worktree). The interpreter is resolved against the **real**
+  repo (the venv is environment, not commit content); only `step.verify` re-runs (not the full
+  suite). Real-git only and **fail-open**: no-op with no repo (the in-memory fake), no named
+  tests, an unusable env, or no extraction tooling — a safety net must not brick a legit land.
+- **Caveat flagged:** the archive re-run imports the package-under-test from the extract
+  *unless* an editable install shadows it on `sys.path` (`[[req-test-command-python-m]]`).
+  That only bites a project testing its own editable-installed code (DevSteward dogfooding
+  itself); consumer projects (FlowSteward) aren't editable-installed, so the extract is
+  authoritative there, and AC4's synthetic repo isn't editable-installed either.
+
+Wiring: the check sits in **both** `mechanical_land` (the landing path) and `commit_deferred`
+(the deferred-develop path), immediately after the work commit and before any ledger write,
+so a refusal's rollback also discards the not-yet-committed ledger mutations.
+
 ---
 
 ## Stage D — REQ-051: lab fixtures upstream; the tester never improvises (absorbs REQ-045)

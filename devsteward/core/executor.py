@@ -26,18 +26,28 @@ event records which one drove (``driver: headless | interactive``).
 
 from __future__ import annotations
 
+import subprocess
+import tempfile
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 from typing import Callable
 
 from . import claude as claude_mod
+from .errors import PreconditionError
 from .git import GitCli
 from .invariants import check_invariants
 from .ledger import Ledger
 from .model import Decision, Step, StepStatus
 from .seams import AccountProvider, GitTopology, StepSource, Verifier
 from .transaction import transaction
+from .verify import (
+    NoUsableEnvError,
+    _is_pytest_command,
+    _pytest_outcome,
+    _rebind_python,
+    resolve_test_interpreter,
+)
 
 PARK_SENTINEL = "[[DEVSTEWARD_PARK]]"
 
@@ -438,7 +448,9 @@ class Executor:
                 return StepResult(step, RunOutcome.PARKED, refusal)
         if self.on_verified is not None:
             self.on_verified(step)
+        snapshot = self.git.head_sha()
         sha = self._commit(step)
+        self._assert_green_captured(step, sha, snapshot)  # REQ-050: roll back + refuse on a gap
         led.set_cursor(step.id)
         led.set_status(step.id, StepStatus.DONE)
         led.save()
@@ -456,7 +468,9 @@ class Executor:
         ``validate`` step's green (:meth:`mechanical_land`).
         """
         led = self.ledger
+        snapshot = self.git.head_sha()
         sha = self._commit(step)
+        self._assert_green_captured(step, sha, snapshot)  # REQ-050: roll back + refuse on a gap
         led.set_cursor(step.id)
         led.set_status(step.id, StepStatus.DONE)
         led.save()
@@ -641,6 +655,122 @@ class Executor:
         """
         ref = (step.req or step.id) if step is not None else "ledger"
         return self.git.commit_ledger(f"{ref}: {subject}\n\n{_TRAILER}")
+
+    # -- commit integrity (REQ-050) --------------------------------------------
+
+    def _assert_green_captured(self, step: Step, sha: str | None, snapshot: str) -> None:
+        """Refuse a land whose green the recorded commit does not reproduce (REQ-050).
+
+        After the work commit, re-run the step's named acceptance gate against a *clean
+        extract of the commit* (``git archive`` — only its tracked content, with no
+        ``.gitignore``d or never-staged working-tree state). If a named test no longer
+        passes, the green the verifier just certified depended on files the commit did not
+        capture; roll the work commit back to ``snapshot`` and refuse with a typed
+        :class:`PreconditionError` naming the gap — nothing certified, nothing advanced.
+
+        The rollback is **explicit**: a ``PreconditionError`` passes *through* the
+        transaction boundary without one (REQ-049), so relying on the boundary would strand
+        the work commit — the half-state Stage C exists to forbid. We restore the snapshot
+        ourselves, *then* raise the (now pass-through) precondition with its precise recovery.
+
+        Real-git only and a safety net: with no repo (the in-memory fake), no named tests,
+        or no usable extraction, there is nothing to reproduce, so it is a no-op.
+        """
+        if sha is None or not step.verify:
+            return
+        if not (self.root / ".git").is_dir():
+            return  # the in-memory fake / no repo — nothing to extract
+        gap = self._green_gap_at(step, sha)
+        if gap is None:
+            return
+        if snapshot:
+            self.git.reset_hard(snapshot)
+        raise PreconditionError(
+            f"the commit recorded for {step.req or step.id} does not reproduce its "
+            f"green — {gap}",
+            recovery=(
+                "the green depends on uncaptured files (gitignored or never staged) — "
+                "commit them, or fix .gitignore so they are tracked, then re-run. The work "
+                "commit was rolled back; nothing was certified."
+            ),
+        )
+
+    def _green_gap_at(self, step: Step, sha: str) -> str | None:
+        """Run the step's named acceptance tests against a clean extract of commit ``sha``;
+        return a one-line gap description if any no longer passes, else ``None``.
+
+        The interpreter is resolved against the *real* repo: the environment (the venv) is
+        never part of a commit's self-sufficiency — only its source/test files are — so the
+        tests run under the same interpreter, in a throwaway dir holding only what the commit
+        captured. An unusable env or an unavailable extraction is the verifier's / operator's
+        concern, not a capture gap, so it fails open (returns ``None``)."""
+        try:
+            interpreter = resolve_test_interpreter(str(self.root), self._verify_python())
+        except NoUsableEnvError:
+            return None
+        timeout = float(getattr(self.verifier, "timeout", 1800.0))
+        with tempfile.TemporaryDirectory(prefix="devsteward-selfcheck-") as tmp:
+            if not self._extract_commit(sha, tmp):
+                return None
+            for cmd in step.verify:
+                resolved = _rebind_python(cmd, interpreter)
+                gap = self._reproduces_green(cmd, resolved, tmp, timeout)
+                if gap is not None:
+                    return gap
+        return None
+
+    def _verify_python(self) -> str | None:
+        """The configured test interpreter the verifier resolves under (``verify.python``),
+        if the verifier exposes one (the REQ profile's :class:`ReqVerifier` does)."""
+        return getattr(self.verifier, "python", None)
+
+    def _extract_commit(self, sha: str, dest: str) -> bool:
+        """Extract only the tracked content of ``sha`` into ``dest`` — no gitignored or
+        untracked working-tree state — via ``git archive`` piped to ``tar``. Returns
+        ``False`` (fail-open) if the extraction tooling is unavailable."""
+        try:
+            archive = subprocess.run(
+                ["git", "-C", str(self.root), "archive", sha],
+                capture_output=True,
+                check=True,
+            )
+            subprocess.run(
+                ["tar", "-x", "-C", dest],
+                input=archive.stdout,
+                capture_output=True,
+                check=True,
+            )
+        except (OSError, subprocess.CalledProcessError):
+            return False
+        return True
+
+    def _reproduces_green(
+        self, cmd: str, resolved: str, cwd: str, timeout: float
+    ) -> str | None:
+        """Return a gap description if ``resolved`` does not *pass* from ``cwd`` (the commit
+        extract), else ``None``. A pytest command is judged by its per-test outcome (a
+        zero-collection, skip, failure, or error is a gap, mirroring the land gate's
+        ``skip ≠ green``); a non-pytest command by exit code."""
+        if _is_pytest_command(resolved):
+            o = _pytest_outcome(resolved, cwd, timeout)
+            if o.collected == 0:
+                return f"{cmd!r} collects nothing from the recorded commit ({o.tail})"
+            if o.skipped or o.failed or o.errors:
+                return (
+                    f"{cmd!r} no longer passes from the recorded commit "
+                    f"({o.failed} failed, {o.errors} errors, {o.skipped} skipped of "
+                    f"{o.collected})"
+                )
+            return None
+        try:
+            proc = subprocess.run(
+                resolved, shell=True, cwd=cwd, capture_output=True, text=True, timeout=timeout
+            )
+        except subprocess.TimeoutExpired:
+            return f"{cmd!r} timed out running against the recorded commit"
+        if proc.returncode != 0:
+            return f"{cmd!r} exits {proc.returncode} from the recorded commit"
+        return None
 
     # -- step driver -----------------------------------------------------------
 
