@@ -675,8 +675,21 @@ class Executor:
 
         Real-git only and a safety net: with no repo (the in-memory fake), no named tests,
         or no usable extraction, there is nothing to reproduce, so it is a no-op.
+
+        **Not the validate land.** This is a *develop*-land invariant: a regression AC's green
+        is pure tracked source/test content, so re-running it from a clean commit extract is a
+        faithful capture check. A *validate* step's ``verify`` is the ``artifact`` AC tests
+        (``check: artifact``), whose green is established once against the **live lab** and
+        recorded as captured evidence — it legitimately does *not* live in ``git archive``
+        content, so a bare-extract re-run can only skip-or-worse. Applying the tracked-content
+        gate there is a category error (it contradicts the REQ-030 artifact model and would
+        reject every lab-backed validation), so the validate phase is exempt — its integrity
+        contract (the evidence was captured and committed) is owned by the validate profile and
+        its ledger close, not by this commit-extract reproduction.
         """
         if sha is None or not step.verify:
+            return
+        if step.phase == "validate":
             return
         if not (self.root / ".git").is_dir():
             return  # the in-memory fake / no repo — nothing to extract

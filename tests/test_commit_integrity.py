@@ -25,7 +25,7 @@ from devsteward.core.errors import PreconditionError
 from devsteward.core.executor import Executor, RunOutcome
 from devsteward.core.git import GitCli
 from devsteward.core.ledger import Ledger
-from devsteward.core.model import StepStatus
+from devsteward.core.model import Step, StepStatus
 from devsteward.profiles.req import ReqStepSource
 from devsteward.profiles.req.checkpoint import PlanArtifactGate, ReqDoneFlipper
 from devsteward.profiles.req.verify import ReqVerifier
@@ -205,3 +205,82 @@ def test_land_certifies_a_self_sufficient_green(tmp_path):
     led = Ledger(tmp_path)
     assert led.status_of("REQ-001:develop") is StepStatus.DONE
     assert any(e["event"] == "checkpoint" for e in led.events())
+
+
+# -- the validate land is exempt: artifact green lives in the live lab, not the commit --------
+
+# An artifact AC test as the real ones are shaped: it skips when the live lab artifact is absent
+# (REQ-037's ``test_..._membership_over_lab_corpus`` is skip-if-absent without lab credentials).
+# From a bare ``git archive`` extract the lab flag is never present, so it skips.
+_LIVE_LAB_TEST = (
+    "from pathlib import Path\n"
+    "import pytest\n"
+    "def test_over_live_lab_corpus():\n"
+    "    if not Path('lab_present.flag').exists():\n"
+    "        pytest.skip('live lab absent')\n"
+    "    assert True\n"
+)
+
+
+def _validate_step(verify: str) -> Step:
+    return Step(
+        id="REQ-001:validate",
+        command="/system-test REQ-001",
+        verify=(verify,),
+        title="REQ-001 — validate",
+        req="REQ-001",
+        phase="validate",
+    )
+
+
+def test_validate_land_certifies_despite_live_lab_skip(tmp_path):
+    """The commit-integrity gate is a develop-land invariant and must **not** fire on the
+    validate land. A validate step's ``verify`` is the ``artifact`` AC test, whose green was
+    established against the *live lab* during the session — it skips from a bare commit extract
+    by design (the lab is never in ``git archive``). Re-running it there would wrongly read the
+    skip as an uncaptured-green gap and roll a legitimately-validated REQ back. Assert the
+    validate land certifies ``DONE`` instead (REQ-050 × REQ-030: the validate phase is exempt)."""
+    _scaffold(tmp_path, test="python -m pytest tests/test_lab.py")
+    tests = tmp_path / "tests"
+    tests.mkdir()
+    (tests / "test_lab.py").write_text(_LIVE_LAB_TEST, encoding="utf-8")
+    (tmp_path / ".gitignore").write_text("lab_present.flag\n", encoding="utf-8")
+    _init_git(tmp_path)  # commits the test — but never the lab flag (ignored)
+
+    # The live-lab artifact is present in the working tree during the session (so the green is
+    # real) yet is not, and cannot be, captured by the commit.
+    (tmp_path / "lab_present.flag").write_text("up\n", encoding="utf-8")
+
+    ex = _executor(tmp_path)
+    res = ex.mechanical_land(_validate_step("python -m pytest tests/test_lab.py"))
+
+    assert res.outcome is RunOutcome.DONE
+    assert _porcelain(tmp_path) == ""
+    led = Ledger(tmp_path)
+    assert led.status_of("REQ-001:validate") is StepStatus.DONE
+    assert any(e["event"] == "checkpoint" for e in led.events())
+
+
+def test_develop_land_still_refuses_a_skip_gap(tmp_path):
+    """The exemption is phase-scoped, not a blanket softening: the *develop* land still treats
+    ``skip ≠ green``. The identical skip-if-absent test on a develop step is refused with the
+    gap named and rolled back — proving only the validate phase is exempt."""
+    _scaffold(tmp_path, test="python -m pytest tests/test_lab.py")
+    tests = tmp_path / "tests"
+    tests.mkdir()
+    (tests / "test_lab.py").write_text(_LIVE_LAB_TEST, encoding="utf-8")
+    (tmp_path / ".gitignore").write_text("lab_present.flag\n", encoding="utf-8")
+    _init_git(tmp_path)
+    (tmp_path / "lab_present.flag").write_text("up\n", encoding="utf-8")
+
+    before_head = _head(tmp_path)
+    ex = _executor(tmp_path)
+
+    with pytest.raises(PreconditionError) as exc:
+        ex.advance_once()  # the develop step — gate still bites
+
+    assert "does not reproduce its green" in str(exc.value)
+    assert _head(tmp_path) == before_head
+    assert _porcelain(tmp_path) == ""
+    led = Ledger(tmp_path)
+    assert led.status_of("REQ-001:develop") is not StepStatus.DONE
