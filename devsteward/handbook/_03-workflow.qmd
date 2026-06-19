@@ -136,6 +136,15 @@ FlowSteward's IMAP lab):
 - **The corpus is reality-derived and versioned.** Seed data is captured from real
   traffic and sanitized (provenance notes document source and transformations), with a
   manifest recording the golden expectation; version, manifest, and docs move together.
+- **Fixtures are committed upstream; the System Tester never improvises (REQ-051).** A REQ
+  names the fixtures its validation needs in `process.fixtures` (repo-relative paths). The
+  oracle is git cleanliness: before certifying, the engine refuses if a declared fixture is
+  **missing** (not committed — a hard red naming the gap) or if **untracked** files sit
+  under a declared fixtures path (the tester improvised — refused, and the improvised file
+  is discarded so no uncommitted fixture is left in the tree). A missing fixture is a human
+  question — commit it upstream — never something the Tester fills in. This is the same
+  single-source-of-truth discipline as trunk-based commits: an uncommitted improvised
+  fixture is precisely the divergence the model forbids.
 
 ## Sequencing whole requirements
 

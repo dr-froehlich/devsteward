@@ -50,9 +50,11 @@ commit** as its frontmatter and the code.
 | REQ-042 | Positional REQ target for advance/run — name the REQ to steer which eligible step runs | DONE | [REQ-042](REQ-042.md) | REQ-002, REQ-026 |
 | REQ-043 | A surfaced branch divergence leaves no uncommitted ledger write, and the topology close-out switch never crashes on a dirty tree | SUPERSEDED | [REQ-043](REQ-043.md) | REQ-032, REQ-037 |
 | REQ-044 | steward supersede — close an already-superseded feature branch without a false merge-by-hand recovery | SUPERSEDED | [REQ-044](REQ-044.md) | REQ-037, REQ-043 |
-| REQ-047 | Single-source-of-truth state model — trunk-based on dev with a universal transaction boundary, so engine state cannot diverge or strand | DRAFT | [REQ-047](REQ-047.md) | REQ-002, REQ-018, REQ-020, REQ-032 |
+| REQ-047 | Single-source-of-truth state model — trunk-based on dev with a universal transaction boundary, so engine state cannot diverge or strand | DONE | [REQ-047](REQ-047.md) | REQ-002, REQ-018, REQ-020, REQ-032 |
 | REQ-048 | Trunk-based model — all work on dev, deleting the worktree/switch/branch machinery | DONE | [REQ-048](REQ-048.md) | REQ-047 |
 | REQ-049 | Universal transaction boundary + central invariants — no mutation can diverge or strand | DONE | [REQ-049](REQ-049.md) | REQ-047, REQ-048 |
 | REQ-050 | Commit integrity — land refuses a green the recorded commit does not capture | DONE | [REQ-050](REQ-050.md) | REQ-047, REQ-048, REQ-049 |
+| REQ-051 | Lab fixtures upstream — a missing fixture is a hard red and the System Tester never improvises | DONE | [REQ-051](REQ-051.md) | REQ-047, REQ-048 |
+| REQ-052 | Review after the REQ-047 migration — code review + skill review for stale/bent legacy | DRAFT | [REQ-052](REQ-052.md) | REQ-047 |
 
 New requirement template: [`_templates/req.md`](../../devsteward/templates/docs/requirements/_templates/req.md)

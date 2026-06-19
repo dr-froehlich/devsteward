@@ -32,9 +32,13 @@ def test_process_block_schema_and_lab_resolution(tmp_path):
     assert lint(_cfg(tmp_path)) == []
 
     declared = parse_req(req_dir / "REQ-001.md")
-    assert declared.process == {"develop": "split", "concept": True, "lab": ["REQ-002"]}
+    assert declared.process == {
+        "develop": "split", "concept": True, "lab": ["REQ-002"], "fixtures": []
+    }
     defaulted = parse_req(req_dir / "REQ-002.md")
-    assert defaulted.process == {"develop": "fused", "concept": False, "lab": []}
+    assert defaulted.process == {
+        "develop": "fused", "concept": False, "lab": [], "fixtures": []
+    }
 
     # (c) out-of-enum develop → schema problem (lint rule 1).
     write_req(req_dir, "REQ-003", status="open", process={"develop": "turbo"})
@@ -61,4 +65,6 @@ def test_process_block_partial_merges_over_defaults(tmp_path):
 
     write_req(tmp_path, "REQ-001", process={"develop": "split"})
     req = parse_req(tmp_path / "REQ-001.md")
-    assert req.process == {"develop": "split", "concept": False, "lab": []}
+    assert req.process == {
+        "develop": "split", "concept": False, "lab": [], "fixtures": []
+    }

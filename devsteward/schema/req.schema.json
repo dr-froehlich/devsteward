@@ -88,6 +88,12 @@
           "items": { "type": "string", "pattern": "^REQ-[0-9]{3}[a-z]?$" },
           "uniqueItems": true,
           "description": "REQs owning the lab assets the System-Test phase requires; references are lint-resolved like depends_on."
+        },
+        "fixtures": {
+          "type": "array",
+          "items": { "type": "string" },
+          "uniqueItems": true,
+          "description": "Repo-relative paths to lab fixtures that must be committed upstream before validation (REQ-051). A missing one is a hard red; an untracked one under such a path means the System Tester improvised and is refused."
         }
       }
     }

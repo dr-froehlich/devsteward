@@ -25,6 +25,7 @@ append through :meth:`ReqValidateRoutine.revalidate` without its status being di
 from __future__ import annotations
 
 import hashlib
+import subprocess
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -538,17 +539,24 @@ class ReqValidateRoutine:
         """Engine-run artifact ACs; only this pass/fail signal feeds the gate (D2/D3)."""
         results: list[dict] = []
         all_green = True
+        # REQ-051: lab fixtures must be committed upstream and the System Tester must never
+        # improvise one. A missing/improvised fixture is a hard red captured in the evidence
+        # event — extends the "no artifact captured → hard red" teeth below.
+        fixture_results, fixtures_ok = self._check_fixtures(ex, req)
+        results.extend(fixture_results)
+        if not fixtures_ok:
+            all_green = False
         if not artifact_acs:
             return results, all_green
         gate = ReqVerifier(cwd=str(ex.root), full_suite=None, python=self.python)
         try:
             interpreter = resolve_test_interpreter(str(ex.root), self.python)
         except NoUsableEnvError as exc:
-            return (
-                [{"ac": "-", "check": "artifact", "ok": False,
-                  "detail": f"no usable test environment: {exc}"}],
-                False,
+            results.append(
+                {"ac": "-", "check": "artifact", "ok": False,
+                 "detail": f"no usable test environment: {exc}"}
             )
+            return results, False  # keep any fixture-gap rows already recorded
         for ac in artifact_acs:
             ok, detail = gate._gate_named(ac.test, interpreter)
             results.append({"ac": ac.id, "check": "artifact", "ok": ok, "detail": detail})
@@ -570,6 +578,86 @@ class ReqValidateRoutine:
             )
             all_green = False
         return results, all_green
+
+    def _check_fixtures(self, ex, req: ReqFile) -> tuple[list[dict], bool]:
+        """REQ-051 (REQ-047 Decision 6): every declared lab fixture must be committed
+        upstream, and the System Tester must never improvise one.
+
+        For each ``process.fixtures`` path the System-Test phase needs, the oracle is *git
+        cleanliness* (real git, not the session's word):
+
+        * **untracked files under the path → the tester improvised.** An uncommitted fixture
+          is exactly the divergence REQ-047 forbids, so it is a hard red — and the improvised
+          file is discarded so no uncommitted fixture is left in the tree.
+        * **no tracked files under the path → the fixture is missing.** A hard red naming the
+          gap; the tester must commit it upstream, never create-and-don't-commit.
+
+        Real-git only and fail-open: a no-op when there are no declared fixtures or no repo
+        (the in-memory fake), mirroring the REQ-050 self-check — a safety net must not brick a
+        legitimate validation. The returned result rows ride into the dated evidence event, so
+        the gap is captured durably."""
+        fixtures = req.process.get("fixtures", [])
+        if not fixtures:
+            return [], True
+        if not (ex.root / ".git").is_dir():
+            return [], True  # the in-memory fake / no repo — nothing to enforce
+        results: list[dict] = []
+        all_green = True
+        for rel in fixtures:
+            tracked = self._git_lines(ex.root, "ls-files", "--", rel)
+            untracked = self._git_lines(
+                ex.root, "ls-files", "--others", "--exclude-standard", "--", rel
+            )
+            if untracked:
+                # The tester improvised — discard it so the tree carries no uncommitted fixture.
+                for u in untracked:
+                    p = ex.root / u
+                    if p.is_file():
+                        p.unlink()
+                results.append(
+                    {
+                        "ac": "-",
+                        "check": "artifact",
+                        "ok": False,
+                        "detail": (
+                            f"the System Tester improvised an uncommitted fixture under "
+                            f"{rel} ({', '.join(untracked)}) — lab fixtures must be committed "
+                            f"upstream; the improvised file was discarded, commit the fixture "
+                            f"instead"
+                        ),
+                    }
+                )
+                all_green = False
+            elif not tracked:
+                results.append(
+                    {
+                        "ac": "-",
+                        "check": "artifact",
+                        "ok": False,
+                        "detail": (
+                            f"required lab fixture {rel} is missing (not committed) — a "
+                            f"missing fixture is a hard red; commit it upstream before "
+                            f"validating"
+                        ),
+                    }
+                )
+                all_green = False
+        return results, all_green
+
+    @staticmethod
+    def _git_lines(root: Path, *args: str) -> list[str]:
+        """Run a read-only ``git`` query against ``root``; return its non-blank output lines,
+        or ``[]`` on any failure (fail-open — the fixture gate is a safety net)."""
+        try:
+            out = subprocess.run(
+                ["git", "-C", str(root), *args],
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout
+        except (OSError, subprocess.CalledProcessError):
+            return []
+        return [ln for ln in out.splitlines() if ln.strip()]
 
     def _park_manual(
         self, ex, step: Step, req: ReqFile, manual_acs, *, in_flight: bool

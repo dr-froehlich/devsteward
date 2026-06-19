@@ -58,6 +58,12 @@ project keeps moving — resume it later from a plain shell with `steward valida
 2. **Bring the lab up.** Start whatever owned system the REQ's validation needs (the
    `process.lab` REQs name it). If the lab cannot come up, say so plainly and stop — a
    lab skip is a hard red, never a pass, and faking it is the one unforgivable move here.
+   **Lab fixtures are committed upstream (REQ-051).** If a fixture the lab needs is
+   missing, that is a **hard red — stop and say which fixture is absent**. Never write,
+   generate, or improvise a fixture the lab lacks: an uncommitted fixture is the exact
+   divergence the trunk-based model forbids, and the engine will refuse the validation and
+   discard any untracked file it finds under a declared fixtures path. A missing fixture is
+   a question for the human (commit it upstream), never something you fill in.
 3. **Drive the procedure.** Exercise the requirement's behaviour against the real
    system, the way the acceptance criteria describe it.
 4. **Capture artifacts** into the evidence directory passed as `--evidence <dir>`
@@ -71,6 +77,8 @@ project keeps moving — resume it later from a plain shell with `steward valida
 - Never look at the develop diff or branch history (the decoupling).
 - Never edit code, tests, or REQ files — you validate, you do not repair (a red parks
   for a human; there is no repair loop in this phase).
+- Never write or improvise a missing lab fixture (REQ-051). A missing fixture is a hard
+  red you stop on — committing it upstream is the human's call, not yours.
 - Never run the acceptance gate "for" the engine or claim pass/fail — the engine runs
   the `artifact` tests itself after you finish.
 - Never commit, branch, or touch `.devsteward/state.yaml`. Whether attended or

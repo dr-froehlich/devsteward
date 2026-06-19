@@ -285,6 +285,31 @@ improvised fixture is exactly the divergence this whole REQ forbids).
   missing stops as a hard red with the gap captured; the tree carries no uncommitted fixture
   afterwards.
 
+### Stage D — as built (REQ-051, landed on `dev`)
+
+Built as the plan specifies; three faithful refinements:
+
+- **The fixtures path is a declaration, not a convention.** The engine is generic and cannot
+  know a consumer's `labs/imap/` by name, so a REQ names the committed inputs its validation
+  rests on in **`process.fixtures`** (repo-relative paths), alongside `process.lab` — schema
+  widened (defaulting `[]`, so every existing REQ is untouched), `ReqFile.process` defaults it.
+  References are paths, not REQ ids, so the linter needs no new resolution rule.
+- **The improvised file is discarded by the engine, not left for the operator.** REQ-049's
+  rollback (`reset --hard`) restores *tracked* state only — an untracked improvised fixture
+  would survive it. So `_check_fixtures` unlinks the untracked file itself (scoped to the
+  declared fixtures pathspec) before recording the red, so "no uncommitted fixture is left in
+  the tree" holds by construction. The check folds into `_artifact_gate` (the existing
+  "no artifact captured → hard red" teeth, which already record into the evidence event) and is
+  real-git, fail-open (a no-op with no declared fixtures or no repo), like the REQ-050
+  self-check. It covers both faces: *untracked under the path* → improvised; *no tracked file*
+  → missing.
+- **Id collision resolved by renumbering the later stub, not this stage.** The plan reserved
+  REQ-051 for Stage D and the landed REQ-049/050 already reference "REQ-051 (lab fixtures)" as
+  the remaining stage; a raw "review after migration" stub had since taken the REQ-051 id. To
+  keep those cross-refs honest, the stub was renumbered to **REQ-052** (draft, given valid
+  frontmatter + an index row) and this stage keeps REQ-051. **REQ-047 flips `done`** with this
+  stage (Stages A–D all landed).
+
 ---
 
 ## Cross-cutting (land with the stage that first contradicts the old text)
