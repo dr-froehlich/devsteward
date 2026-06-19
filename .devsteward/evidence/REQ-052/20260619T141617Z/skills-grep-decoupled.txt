@@ -1,0 +1,11 @@
+# Decoupled check: production skills re-justification of removed topology
+# REQ-052 AC1 — System Tester independent grep, 2026-06-19T14:17:49Z
+# Hardlink confirmed: .claude/skills/advance == templates/.../advance (inode 886903)
+
+## grep -rniE 'feature.?branch|worktree|merge.?back|--no-ff|branch.?switch|forking|slug' .claude/skills/
+(exit 1 — 1 = no matches)
+
+## grep -rniE 'not (a|to a) feature|because the governance|not always commit' .claude/skills/
+(exit 1 — 1 = no matches)
+
+VERDICT: zero hits. No production skill re-justifies the gone feature-branch/worktree topology.
