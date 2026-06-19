@@ -124,7 +124,7 @@ def test_green_checkpoint_verifies_and_advances(tmp_path, monkeypatch):
 def test_red_gate_no_land_writes(tmp_path):
     """A red gate records the red verify event and marks the step FAILED, but performs zero
     land-side writes — no flip, no index touch, no commit, no cursor move, no checkpoint
-    event — and a later re-run after a fix lands without `recover`."""
+    event — and a later re-run after a fix lands without `repeat`."""
     _project_with_req(tmp_path)
     _index(tmp_path, ("REQ-001", "REQ-001 title", "OPEN", "–"))
     Ledger.init(tmp_path)
@@ -151,7 +151,7 @@ def test_red_gate_no_land_writes(tmp_path):
     assert led.cursor_step is None
     assert not any(e["event"] == "checkpoint" for e in _events(tmp_path))
 
-    # the re-run after the fix lands — no `recover` needed
+    # the re-run after the fix lands — no `repeat` needed
     res2 = ex.checkpoint(step)
     assert res2.outcome is RunOutcome.DONE
     assert Ledger(tmp_path).status_of("REQ-001:develop") is StepStatus.DONE

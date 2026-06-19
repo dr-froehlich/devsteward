@@ -188,8 +188,9 @@ def test_dependencies_gate_eligibility(project):
 
 
 def test_recover_status_eligible_and_signalled(project):
-    """REQ-026 AC4: a RECOVER step is eligible; the executor drives it with `--recover` in the
-    command (so the skill knows it is resuming); a clean run advances it to DONE."""
+    """REQ-026 AC4: a RECOVER step is eligible; the executor drives it with `--repeat` in the
+    command (the resume signal, renamed from `--recover` by REQ-054, so the skill knows it is
+    resuming); a clean run advances it to DONE."""
     step = Step(id="REQ-9:land", command="/advance REQ-9 land", verify=("true",), req="REQ-9")
     runner = FakeRunner(default=ok_result())
     ex = _executor(project, [step], runner)
@@ -200,7 +201,7 @@ def test_recover_status_eligible_and_signalled(project):
 
     res = ex.run_step(step)
     assert res.outcome is RunOutcome.DONE
-    assert "--recover" in runner.calls[-1]["command"]  # recovery signalled to the skill
+    assert "--repeat" in runner.calls[-1]["command"]  # recovery signalled to the skill
     assert Ledger(project).status_of("REQ-9:land") is StepStatus.DONE
 
 

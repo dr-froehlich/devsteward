@@ -1,5 +1,5 @@
-"""Operator verbs that shape the queue: ``activate``, ``recover`` (REQ-026), ``rework``
-(REQ-033).
+"""Operator verbs that shape the queue: ``activate``, ``repeat`` (REQ-026, renamed from
+``recover`` by REQ-054), ``rework`` (REQ-033).
 
 Pure status mutations, kept out of the content-agnostic core:
 
@@ -7,22 +7,24 @@ Pure status mutations, kept out of the content-agnostic core:
   frontmatter **and** its ``REQUIREMENTS_INDEX.md`` row in lockstep so the index↔REQ
   same-commit invariant stays green (REQ-002, D1). It leaves both files *uncommitted*
   (D3) — declaration is committed deliberately by the operator/skill.
-* :func:`recover` flips a REQ's ``FAILED`` ledger step(s) to the new ``RECOVER`` status
+* :func:`repeat` flips a REQ's ``FAILED`` ledger step(s) to the ``RECOVER`` status
   (a :class:`StepStatus`, not a REQ-frontmatter status — D4) so the executor re-attempts
   them. It does not touch the working tree (D6): the failed attempt's partial edits are
-  left for the resuming skill to assess.
+  left for the resuming skill to assess. The verb is named for its dominant use — the
+  work was sound and an external cause failed the step, so the action is *run it again*
+  (REQ-054); the internal ``RECOVER`` status symbol keeps its name (REQ-054 D4).
 * :func:`rework` is the human-authorized return edge from a red validation (REQ-033): on
   an in-flight REQ whose latest validation is red, it flips ``REQ-NNN:develop``
   ``DONE → RECOVER`` and ``REQ-NNN:validate`` ``BLOCKED → PENDING``, answers any open
   decision parked on the validate step, and appends a ``rework`` event carrying the red
   validation's evidence path and failure brief. It amends REQ-030 Decision 8 without
   repealing it (the engine still never auto-loops on red — this is the *recorded human
-  answer* to the parked question) and, like ``recover``, touches neither git nor the REQ
+  answer* to the parked question) and, like ``repeat``, touches neither git nor the REQ
   file (D5).
 
 No verb introduces a new ``claude`` invocation or skill — the reopened work is picked up
 by the existing ``/advance`` skill via the status flip (``rework`` reopens develop as
-``RECOVER``, so the executor carries its usual ``--recover`` resume signal).
+``RECOVER``, so the executor carries its usual ``--repeat`` resume signal).
 """
 
 from __future__ import annotations
@@ -57,7 +59,7 @@ class ActivateResult:
 
 
 @dataclass
-class RecoverResult:
+class RepeatResult:
     req_id: str
     steps: list[str]  # the step ids flipped FAILED -> RECOVER
 
@@ -105,11 +107,12 @@ def activate(cfg: Config, req_id: str) -> ActivateResult:
     )
 
 
-def recover(ledger: Ledger, req_id: str) -> RecoverResult:
+def repeat(ledger: Ledger, req_id: str) -> RepeatResult:
     """Flip ``req_id``'s ``FAILED`` ledger step(s) to ``RECOVER`` and record an event (D4).
 
     Refuses (``LifecycleError``) when the REQ has no failed step. Leaves the working tree
-    as the failed attempt left it (D6) — no git is touched.
+    as the failed attempt left it (D6) — no git is touched. The internal status symbol and
+    the ``step_recover`` event name are unchanged (REQ-054 D4); only the operator verb is.
     """
     failed = sorted(
         sid for sid, st in ledger.all_statuses().items()
@@ -117,14 +120,14 @@ def recover(ledger: Ledger, req_id: str) -> RecoverResult:
     )
     if not failed:
         raise LifecycleError(
-            f"{req_id} has no failed step to recover "
-            f"(recover only re-arms a step the executor marked failed)."
+            f"{req_id} has no failed step to repeat "
+            f"(repeat only re-arms a step the executor marked failed)."
         )
     for sid in failed:
         ledger.set_status(sid, StepStatus.RECOVER)
     ledger.save()
     ledger.append_event("step_recover", req=req_id, steps=failed)
-    return RecoverResult(req_id, failed)
+    return RepeatResult(req_id, failed)
 
 
 def rework(cfg: Config, ledger: Ledger, req_id: str) -> ReworkResult:
@@ -172,7 +175,7 @@ def rework(cfg: Config, ledger: Ledger, req_id: str) -> ReworkResult:
         raise LifecycleError(
             f"{req_id} has no red validation to rework — {validate} is not blocked on a "
             f"red System-Test result. Run `steward validate {req_id}` to validate it, or "
-            f"`steward recover {req_id}` if a step actually failed."
+            f"`steward repeat {req_id}` if a step actually failed."
         )
 
     brief = "\n".join(

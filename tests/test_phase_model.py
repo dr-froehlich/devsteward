@@ -296,3 +296,33 @@ def test_old_ledger_reinterpreted_not_rewritten(tmp_path):
     events_after = (tmp_path / ".devsteward" / "events.jsonl").read_text()
     assert events_after.startswith(events_before)  # never rewritten, only appended
     assert "legacy_marker" in events_after
+
+
+# -- REQ-054 AC3 --------------------------------------------------------------
+
+
+def test_repeat_resume_flag(tmp_path):
+    """REQ-054 AC3 — the resume-signal contract under the renamed verb. A step re-armed for
+    a repeat (RECOVER status) is launched with `--repeat` appended to its command (not the
+    old `--recover`), and the shipped `advance` skill's functional flag reference — the side
+    that branches on the signal — reads `--repeat`."""
+    _project_with_req(tmp_path)
+    Ledger.init(tmp_path)
+    led = Ledger(tmp_path)
+    led.set_status("REQ-001:develop", StepStatus.RECOVER)  # re-armed by `steward repeat`
+    led.save()
+    runner = FakeRunner(default=ok_result())
+    ex = _executor(tmp_path, runner=runner)
+
+    ex.advance_once(only="REQ-001")
+
+    cmd = runner.calls[-1]["command"]
+    assert "--repeat" in cmd and "--recover" not in cmd
+
+    # The other side of the contract: the shipped skill branches on `--repeat`.
+    from importlib.resources import files
+    skill = (
+        files("devsteward") / "templates" / ".claude" / "skills" / "advance" / "SKILL.md"
+    ).read_text(encoding="utf-8")
+    flag_line = next(line for line in skill.splitlines() if "in your command" in line)
+    assert "--repeat" in flag_line and "--recover" not in flag_line

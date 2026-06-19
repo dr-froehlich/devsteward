@@ -209,7 +209,7 @@ def test_context_independence(tmp_path):
     assert len(session) == 1
     cmd = session[0]["command"]
     assert cmd.startswith("/system-test REQ-001 --evidence ")
-    assert "--recover" not in cmd and "diff" not in cmd  # nothing of develop leaks in
+    assert "--repeat" not in cmd and "diff" not in cmd  # nothing of develop leaks in
     assert session[0]["model"] == "claude-opus-4-8"  # per-step-kind config (D2)
 
     # red artifact test + a glowing session report → still red, REQ does not land

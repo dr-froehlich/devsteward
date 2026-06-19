@@ -219,11 +219,12 @@ def test_invariants_exempt_recovery_verbs_from_branch_gate(tmp_path):
     check_invariants(ex, allow_any_head=True)  # still does not raise
 
 
-def test_decision_and_recover_succeed_on_production_branch(tmp_path, monkeypatch):
+def test_decision_and_repeat_succeed_on_production_branch(tmp_path, monkeypatch):
     """AC3 (end to end): a decision parked on ``dev``, then HEAD moved to the production
-    branch, is answered by ``steward decision answer`` — and ``steward recover`` re-arms a
-    failed step — both with exit 0, regardless of HEAD. The historical stalemate (a parked
-    decision no command could recover) is unreachable."""
+    branch, is answered by ``steward decision answer`` — and ``steward repeat`` (the
+    recovery verb renamed from ``recover`` by REQ-054) re-arms a failed step — both with
+    exit 0, regardless of HEAD. The historical stalemate (a parked decision no command
+    could recover) is unreachable."""
     _scaffold(tmp_path)
     _init_git(tmp_path)
 
@@ -252,12 +253,17 @@ def test_decision_and_recover_succeed_on_production_branch(tmp_path, monkeypatch
     assert dec.status.value == "answered"
     assert led2.status_of("REQ-001:develop") is StepStatus.PENDING  # decision unblocked it
 
-    # `steward recover` re-arms a failed step on the production branch too. Re-fail it first.
+    # `steward repeat` re-arms a failed step on the production branch too. Re-fail it first.
     led2.set_status("REQ-001:develop", StepStatus.FAILED)
     led2.save()
-    rec = runner.invoke(cli_main, ["recover", "REQ-001"], catch_exceptions=False)
+    rec = runner.invoke(cli_main, ["repeat", "REQ-001"], catch_exceptions=False)
     assert rec.exit_code == 0, rec.output
     assert Ledger(tmp_path).status_of("REQ-001:develop") is StepStatus.RECOVER
+
+    # REQ-054 D2 (hard rename, no alias): `steward recover` is no longer a registered command.
+    gone = runner.invoke(cli_main, ["recover", "REQ-001"])
+    assert gone.exit_code != 0
+    assert "No such command" in gone.output or "no such command" in gone.output.lower()
 
     # Contrast: an *advancing* command (checkpoint) refuses on production — the single
     # top-level handler turns the PreconditionError into a non-zero exit + the recovery line.

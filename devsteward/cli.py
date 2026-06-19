@@ -24,7 +24,7 @@ from .core.transaction import transaction
 from .lifecycle import (
     LifecycleError,
     activate as lifecycle_activate,
-    recover as lifecycle_recover,
+    repeat as lifecycle_repeat,
     rework as lifecycle_rework,
 )
 from .lint import lint as run_lint
@@ -157,7 +157,7 @@ def lint() -> None:
     raise click.ClickException(f"{len(problems)} problem(s)")
 
 
-# -- lifecycle (activate / recover) -------------------------------------------
+# -- lifecycle (activate / repeat) --------------------------------------------
 
 
 @main.command()
@@ -185,13 +185,16 @@ def activate(req_id: str) -> None:
 
 @main.command()
 @click.argument("req_id")
-def recover(req_id: str) -> None:
-    """Re-arm REQ_ID's failed step so the next run re-attempts it (its partial work intact).
+def repeat(req_id: str) -> None:
+    """Re-arm REQ_ID's failed step so the next run runs it again (its partial work intact).
 
-    Flips the REQ's FAILED ledger step(s) to RECOVER and records an event; the working tree
-    is left exactly as the failed attempt left it, for the resuming skill to assess. Fails
-    (non-zero) when the REQ has no failed step — a *red validation* leaves no failed step,
-    so return it to develop with `steward rework REQ_ID` instead.
+    The run-it-again recovery verb (REQ-026, renamed from `recover` by REQ-054): the common
+    case is sound work failed by an external cause (claude crashed, an API timed out, an
+    account swap), so the honest action is *repeat the step*. Flips the REQ's FAILED ledger
+    step(s) to RECOVER and records an event; the working tree is left exactly as the failed
+    attempt left it, for the resuming skill to assess. Fails (non-zero) when the REQ has no
+    failed step — a *red validation* leaves no failed step, so return it to develop with
+    `steward rework REQ_ID` instead.
     """
     cfg = _load_or_die()
     ex = build_executor(cfg)
@@ -200,14 +203,14 @@ def recover(req_id: str) -> None:
     # before any mutation, so it passes through the boundary untouched (no rollback).
     check_invariants(ex, allow_any_head=True)
     try:
-        with transaction(ex.git, label=f"recover {req_id}", pass_through=(LifecycleError,)):
-            res = lifecycle_recover(ex.ledger, req_id)
+        with transaction(ex.git, label=f"repeat {req_id}", pass_through=(LifecycleError,)):
+            res = lifecycle_repeat(ex.ledger, req_id)
     except LifecycleError as exc:
         raise click.ClickException(str(exc)) from exc
     flipped = ", ".join(res.steps)
     click.echo(
         click.style(
-            f"recovered {req_id}: {flipped} -> recover. Re-run `steward run` to re-attempt.",
+            f"repeating {req_id}: {flipped} -> recover. Re-run `steward run` to re-attempt.",
             fg="green",
         )
     )

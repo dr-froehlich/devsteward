@@ -17,7 +17,7 @@ def test_version_string():
 def test_cli_exposes_documented_commands():
     result = CliRunner().invoke(main, ["--help"])
     assert result.exit_code == 0
-    for cmd in ("new", "advance", "run", "lint", "status", "decision", "activate", "recover"):
+    for cmd in ("new", "advance", "run", "lint", "status", "decision", "activate", "repeat"):
         assert cmd in result.output
 
 

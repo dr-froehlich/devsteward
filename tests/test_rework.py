@@ -187,20 +187,20 @@ def test_rework_refusals(tmp_path):
 
 
 class ReworkRunner(SystemTesterRunner):
-    """The System Tester fake, plus: a develop ``--recover`` session writes the ``FIXED``
+    """The System Tester fake, plus: a develop ``--repeat`` session writes the ``FIXED``
     marker the artifact AC checks — modelling the builder's fix landing on the open branch
     so the previously-red acceptance command now passes."""
 
     def __call__(self, command, **kw):
         result = super().__call__(command, **kw)
-        if "--recover" in command:
+        if "--repeat" in command:
             (self.root / "FIXED").write_text("yes\n", encoding="utf-8")
         return result
 
 
 def test_rework_cycle_to_green_land(tmp_path):
     """The full chain on the real executor: develop (deferred) → red validation park →
-    rework → develop --recover fixes on the open branch → green re-validation → mechanical
+    rework → develop --repeat fixes on the open branch → green re-validation → mechanical
     land + merge. The whole red→rework→fix→revalidate→land chain is in events.jsonl."""
     req_dir = tmp_path / "docs" / "requirements"
     _write_req(req_dir, "REQ-001",
@@ -223,7 +223,7 @@ def test_rework_cycle_to_green_land(tmp_path):
     assert ex.ledger.status_of("REQ-001:develop") is StepStatus.RECOVER
     assert "REQ-001:develop" in [s.id for s in ex.eligible_steps()]
 
-    ex.advance_once(only="REQ-001")  # develop --recover — writes FIXED, deferred commit
+    ex.advance_once(only="REQ-001")  # develop --repeat — writes FIXED, deferred commit
     green = ex.advance_once(only="REQ-001")  # validate — now green → land
     assert green.outcome is RunOutcome.DONE
     assert parse_req(req_dir / "REQ-001.md").status == "done"

@@ -262,10 +262,10 @@ class Executor:
         if step.attended and unattended:
             return self._park_attended(step)
         # Capture the recovery signal *before* flipping to RUNNING (REQ-026 D5/AC4): if the
-        # step was re-armed via `steward recover`, tell the resuming skill so it assesses
+        # step was re-armed via `steward repeat`, tell the resuming skill so it assesses
         # the failed attempt's partial edits (already in the tree) instead of starting clean.
         recovering = led.status_of(step.id) is StepStatus.RECOVER
-        command = step.command + (" --recover" if recovering else "")
+        command = step.command + (" --repeat" if recovering else "")
         led.set_cursor(step.id)
         led.set_status(step.id, StepStatus.RUNNING)
         led.save()

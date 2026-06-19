@@ -1,17 +1,21 @@
-"""REQ-026 AC1–AC3 — the operator verbs `steward activate` and `steward recover`."""
+"""REQ-026 AC1–AC3 — the operator verbs `steward activate` and `steward repeat` (the
+recovery verb renamed from `recover` by REQ-054). REQ-054 AC1/AC4 also live here."""
 
 from __future__ import annotations
 
 import pytest
+from click.testing import CliRunner
+from devsteward.cli import main as cli_main
 from devsteward.config import Config
 from devsteward.core.ledger import Ledger
 from devsteward.core.model import StepStatus
-from devsteward.lifecycle import LifecycleError, activate, recover
+from devsteward.lifecycle import LifecycleError, activate, repeat, rework
 from devsteward.lint import lint
 from devsteward.profiles.req.index import read_statuses
 from devsteward.profiles.req.reqfile import parse_req
 
 from conftest import write_index, write_req
+from test_transaction_boundary import _init_git, _scaffold  # proven git+config scaffold
 
 
 def _cfg(tmp_path) -> Config:
@@ -71,16 +75,18 @@ def test_activate_guards(tmp_path):
     assert parse_req(req_dir / "REQ-001.md").status == "open"
 
 
-def test_recover_flips_failed_step(project):
-    """AC3: recover flips a REQ's FAILED ledger step to RECOVER and records an event; with
-    no failed step it raises (the CLI maps that to a non-zero exit)."""
+def test_repeat_flips_failed_step(project):
+    """REQ-026 AC3 / REQ-054 AC1: `repeat` (renamed from `recover`) flips a REQ's FAILED
+    ledger step to RECOVER and records the `step_recover` event (the internal symbol and
+    event name are unchanged — REQ-054 D4); with no failed step it raises (the CLI maps
+    that to a non-zero exit)."""
     led = Ledger(project)
     led.set_status("REQ-007:design", StepStatus.DONE)
     led.set_status("REQ-007:build", StepStatus.DONE)
     led.set_status("REQ-007:land", StepStatus.FAILED)
     led.save()
 
-    res = recover(led, "REQ-007")
+    res = repeat(led, "REQ-007")
 
     assert res.steps == ["REQ-007:land"]
     reloaded = Ledger(project)
@@ -91,4 +97,29 @@ def test_recover_flips_failed_step(project):
 
     # No failed step left -> refusal.
     with pytest.raises(LifecycleError, match="no failed step"):
-        recover(reloaded, "REQ-007")
+        repeat(reloaded, "REQ-007")
+
+
+def test_messages_name_repeat_not_recover(tmp_path, monkeypatch):
+    """REQ-054 AC4: operator-facing messages name `steward repeat`, not `steward recover`.
+    The `repeat` success line uses the new verb, and the `rework` refusal's cross-reference
+    points at `steward repeat`; no operator-facing string still reads `steward recover`."""
+    # An artifact AC gives the REQ a validate step, so `rework` reaches the cross-reference.
+    _scaffold(tmp_path, acs=(("AC1", "true", "artifact"),))
+    _init_git(tmp_path)
+    monkeypatch.chdir(tmp_path)
+
+    # (a) the `repeat` success line names the new verb (not `steward recover`).
+    led = Ledger(tmp_path)
+    led.set_status("REQ-001:develop", StepStatus.FAILED)
+    led.save()
+    out = CliRunner().invoke(cli_main, ["repeat", "REQ-001"], catch_exceptions=False)
+    assert out.exit_code == 0, out.output
+    assert "repeat" in out.output and "steward recover" not in out.output
+
+    # (b) the `rework` refusal's cross-reference points at `steward repeat`, not `recover`.
+    with pytest.raises(LifecycleError) as exc:
+        rework(Config(root=tmp_path), Ledger(tmp_path), "REQ-001")
+    msg = str(exc.value)
+    assert "steward repeat REQ-001" in msg
+    assert "steward recover" not in msg

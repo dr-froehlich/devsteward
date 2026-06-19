@@ -39,7 +39,7 @@ Everything tagged *(batch)* or *(interactive)* below applies to that mode only.
   read of the live ledger (there is a single ledger on `dev`). If invoked as
   `/advance REQ-NNN develop`, that is your target.
 - Read the target REQ, `CLAUDE.md`, and anything the REQ's `depends_on` produced.
-- **Recovery (`--recover` in your command):** if the step command includes `--recover`,
+- **Recovery (`--repeat` in your command):** if the step command includes `--repeat`,
   you are *resuming* a step that previously failed — its partial edits are already in the
   working tree (the failed attempt left them; the engine only commits on success). Read and
   assess what is there first: reconcile or fix the prior work, don't start clean.
