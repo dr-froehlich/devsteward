@@ -23,6 +23,7 @@ from devsteward.profiles.req.validate import ReqValidateRoutine
 
 from conftest import FakeGitTopology, write_index
 from test_system_test_phase import (
+    _events,
     _executor,
     _project,
     _validation_events,
@@ -80,7 +81,8 @@ def test_done_revalidation_leaves_verified_by_and_status_frozen(tmp_path):
     assert fresh["rerun"] is True
     assert fresh["results"]  # per-AC results carried
     assert fresh["artifacts"] and all("sha256" in a for a in fresh["artifacts"])
-    assert len(git.merged) == 1  # no second land
+    # REQ-048: a done re-validation lands nothing — the checkpoint count is unchanged.
+    assert len([e for e in _events(tmp_path) if e["event"] == "checkpoint"]) == 1
 
 
 # -- AC2 ------------------------------------------------------------------------

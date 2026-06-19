@@ -123,7 +123,6 @@ def build_executor(
         stop=stop,
         production_branch=cfg.production_branch,
         integration_branch=cfg.integration_branch,
-        feature_branch_template=cfg.feature_branch_template,
         git=GitCli(cfg.root),
         on_verified=build_on_verified(cfg),
         land_gate=build_land_gate(cfg),

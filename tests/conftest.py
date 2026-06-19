@@ -89,99 +89,31 @@ class RecordingCommitter:
 
 
 class FakeGitTopology:
-    """In-memory :class:`devsteward.core.seams.GitTopology` (REQ-020).
+    """In-memory :class:`devsteward.core.seams.GitTopology` (REQ-048: trunk-based).
 
-    Models the checked-out branch, the set of existing branches, and a minimal divergence
-    relation, so create→run→merge is exercised and assertable without a real checkout
-    (``conftest``'s no-git goal). Records the op sequence: ``created``, ``switched``,
-    ``commits`` (``(branch, message)``), ``merged`` (``(feature, into, message)``).
+    The engine works on one branch and makes two commits per landed step (code, then
+    ledger) — there is no branch/switch/merge to model. Records the checked-out branch and
+    the commit sequence as ``commits`` (``(branch, message)``) so the loop is exercised and
+    assertable without a real checkout (``conftest``'s no-git goal).
     """
 
-    def __init__(self, current: str = "dev", branches=None, diverged=()):
+    def __init__(self, current: str = "dev"):
         self.current = current
-        self.branches = set(branches or [current])
-        self._diverged = set(diverged)
-        self.created: list[str] = []
-        self.switched: list[str] = []
         self.commits: list[tuple[str, str]] = []
-        self.merged: list[tuple[str, str, str]] = []
-        self.reconciled: list[tuple[str, str]] = []
 
     def current_branch(self) -> str:
         return self.current
 
-    def branch_exists(self, name: str) -> bool:
-        return name in self.branches
+    def head_sha(self) -> str:
+        return f"sha{len(self.commits):04d}"
 
-    def create_and_switch(self, name: str) -> None:
-        self.branches.add(name)
-        self.current = name
-        self.created.append(name)
-        self.switched.append(name)
-
-    def switch(self, name: str) -> None:
-        self.branches.add(name)
-        self.current = name
-        self.switched.append(name)
-
-    def integration_is_ancestor(self, integration: str, feature: str) -> bool:
-        return feature not in self._diverged
-
-    def commit_all(self, message: str, *, exclude_ledger: bool = False) -> str | None:
+    def commit_code(self, message: str) -> str | None:
         self.commits.append((self.current, message))
         return f"sha{len(self.commits):04d}"
 
-    def merge_no_ff(self, feature: str, message: str) -> None:
-        self.merged.append((feature, self.current, message))
-
-    def reconcile_from_integration(
-        self, integration: str, feature: str, message: str
-    ) -> None:
-        self.switch(feature)
-        self._diverged.discard(feature)  # behind-but-merged → current again (REQ-034 D5)
-        self.commits.append((self.current, message))
-        self.reconciled.append((integration, feature))
-
-    # -- REQ-037: the in-memory fake never models *which branch* the ledger lands on (that is
-    # exactly the blind spot the real-git ACs exist to cover), so it reports "no worktree"
-    # and the executor keeps its legacy single-tree path; the atomic merge/reconcile delegate
-    # to the conflict-free in-memory ops.
-    def integration_worktree(self, integration: str) -> str | None:
-        return None
-
-    def remove_integration_worktree(self, integration: str) -> None:
-        return None
-
-    def clean_untracked_ledger(self) -> None:
-        return None
-
-    def dirty_tracked_ledger(self) -> str:
-        # The in-memory fake never models a dirty tracked working file (the very blind spot
-        # REQ-043's real-git ACs exist to cover) — it is always clean (REQ-043 Decision 2).
-        return ""
-
-    def commit_ledger_at(self, worktree: str, message: str) -> str | None:
+    def commit_ledger(self, message: str) -> str | None:
         self.commits.append((self.current, message))
         return f"sha{len(self.commits):04d}"
-
-    def fetch(self) -> bool:
-        return False
-
-    def feature_behind_remote(self, feature: str) -> bool:
-        return False
-
-    def incorporate_remote(self, feature: str) -> str | None:
-        return None
-
-    def try_merge_no_ff(self, feature: str, message: str) -> str | None:
-        self.merge_no_ff(feature, message)
-        return None
-
-    def try_reconcile_from_integration(
-        self, integration: str, feature: str, message: str
-    ) -> str | None:
-        self.reconcile_from_integration(integration, feature, message)
-        return None
 
 
 @pytest.fixture

@@ -106,8 +106,9 @@ def test_single_develop_step(tmp_path):
 
 
 def test_mechanical_land_zero_claude(tmp_path):
-    """A green develop gate lands mechanically: REQ flips done, ledger advances, the branch
-    merges — all with a single claude invocation (the develop session); the land spends none."""
+    """A green develop gate lands mechanically: REQ flips done, ledger advances, the commits
+    land on dev — all with a single claude invocation (the develop session); the land spends
+    none (REQ-048: trunk-based — no branch merge)."""
     _project_with_req(tmp_path)
     Ledger.init(tmp_path)
     runner = FakeRunner(default=ok_result())
@@ -123,7 +124,9 @@ def test_mechanical_land_zero_claude(tmp_path):
     assert any(e["event"] == "checkpoint" for e in events)
     assert not any(e["event"] == "repair_started" for e in events)
     assert Ledger(tmp_path).status_of("REQ-001:develop") is StepStatus.DONE
-    assert len(git.merged) == 1  # --no-ff merge happened mechanically
+    # REQ-048: trunk-based — the land never leaves dev; code + ledger both commit there.
+    assert git.current == "dev"
+    assert git.commits and all(branch == "dev" for branch, _ in git.commits)
     from devsteward.profiles.req.reqfile import parse_req
     assert parse_req(tmp_path / "docs/requirements/REQ-001.md").status == "done"
 

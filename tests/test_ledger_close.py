@@ -145,9 +145,10 @@ def _executor(root: Path, *, runner=None, with_validate=False) -> Executor:
 # -- AC1 -----------------------------------------------------------------------
 
 
-def test_branch_merged_event_committed_batch(tmp_path):
-    """After a green batch land with a feature branch, the integration branch is clean and
-    its tip is the ledger-close commit carrying the branch_merged event."""
+def test_batch_land_commits_clean_on_dev(tmp_path):
+    """After a green batch land (REQ-048: trunk-based), dev is clean and its tip is the
+    trailing ledger commit; the work commit and the cursor advance are two separate commits,
+    with no feature branch and no branch_merged event."""
     _scaffold(tmp_path)
     _init_git(tmp_path)
     ex = _executor(tmp_path)
@@ -157,25 +158,45 @@ def test_branch_merged_event_committed_batch(tmp_path):
 
     assert _current_branch(tmp_path) == "dev"
     assert _porcelain(tmp_path) == ""  # clean at rest — the whole point
-    assert _tip_subject(tmp_path) == "REQ-001: ledger close — branch_merged event"
+    assert _tip_subject(tmp_path) == "REQ-001: ledger checkpoint"
+    # the work commit precedes it and carries no ledger (REQ-048: code commit excludes it)
+    assert _subjects(tmp_path)[1] == "REQ-001:develop: REQ-001 title — develop"
     led = Ledger(tmp_path)
     assert led.status_of("REQ-001:develop") is StepStatus.DONE
-    assert any(e["event"] == "branch_merged" for e in led.events())
-    # the branch_merged event is *inside* the committed tip, not dangling in the tree
-    assert "branch_merged" in _git(tmp_path, "show", "HEAD:.devsteward/events.jsonl")
+    assert not any(e["event"] == "branch_merged" for e in led.events())
+    # the checkpoint event is *inside* the committed tip, not dangling in the tree
+    assert "checkpoint" in _git(tmp_path, "show", "HEAD:.devsteward/events.jsonl")
+
+
+def test_dev_only_cycle_no_branch_no_worktree_realgit(tmp_path):
+    """REQ-048 AC1: a full develop→land cycle creates no feature branch and spins up no
+    worktree — git's own branch and worktree lists show only dev and the repo root."""
+    _scaffold(tmp_path)
+    _init_git(tmp_path)
+    ex = _executor(tmp_path)
+
+    res = ex.advance_once()
+    assert res.outcome is RunOutcome.DONE
+
+    # exactly one branch — dev — and exactly one worktree — the repo root.
+    branches = [b.lstrip("* ").strip() for b in _git(tmp_path, "branch").splitlines()]
+    assert branches == ["dev"]
+    worktrees = [
+        ln for ln in _git(tmp_path, "worktree", "list", "--porcelain").splitlines()
+        if ln.startswith("worktree ")
+    ]
+    assert len(worktrees) == 1
 
 
 # -- AC2 -----------------------------------------------------------------------
 
 
-def test_branch_merged_event_committed_interactive(tmp_path):
-    """The same holds for the interactive close (``steward checkpoint``): the feature
-    branch merges --no-ff into a clean integration branch whose tip is the ledger-close
-    commit."""
+def test_interactive_checkpoint_commits_clean_on_dev(tmp_path):
+    """The same holds for the interactive close (``steward checkpoint``): it lands on dev
+    (REQ-048) with a clean tree whose tip is the trailing ledger commit, and a checkpoint
+    event marked interactive."""
     _scaffold(tmp_path)
     _init_git(tmp_path)
-    feature = "req-001-req-001-title"
-    _git(tmp_path, "checkout", "-q", "-b", feature)
     ex = _executor(tmp_path)
 
     res = ex.checkpoint(ex.step_by_id("REQ-001:develop"))
@@ -183,9 +204,9 @@ def test_branch_merged_event_committed_interactive(tmp_path):
 
     assert _current_branch(tmp_path) == "dev"
     assert _porcelain(tmp_path) == ""
-    assert _tip_subject(tmp_path) == "REQ-001: ledger close — branch_merged event"
+    assert _tip_subject(tmp_path) == "REQ-001: ledger checkpoint"
     led = Ledger(tmp_path)
-    assert any(e["event"] == "branch_merged" for e in led.events())
+    assert not any(e["event"] == "branch_merged" for e in led.events())
     (cp,) = [e for e in led.events() if e["event"] == "checkpoint"]
     assert cp["driver"] == "interactive"
 
@@ -194,25 +215,24 @@ def test_branch_merged_event_committed_interactive(tmp_path):
 
 
 def test_deferred_develop_close_commits_trailing_ledger(tmp_path):
-    """A deferred develop close (``lands=False`` — a REQ with a validate sibling) leaves the
-    feature branch clean and **carrying no ledger** (REQ-037): the develop_committed write
-    lands on the integration branch (via the worktree), so a later feature→dev merge cannot
-    conflict on ``.devsteward/``."""
+    """A deferred develop close (``lands=False`` — a REQ with a validate sibling) commits on
+    dev and leaves a clean tree (REQ-048): the work commit, then the trailing ledger commit
+    carrying ``develop_committed`` — and no land yet."""
     _scaffold(tmp_path, acs=[("AC1", "true", "artifact")])  # artifact ⇒ validate sibling
     _init_git(tmp_path)
     ex = _executor(tmp_path, with_validate=True)
 
-    res = ex.advance_once()  # the develop step only — it defers, it does not merge
+    res = ex.advance_once()  # the develop step only — it defers, it does not land
     assert res.outcome is RunOutcome.DONE
 
-    feature = _current_branch(tmp_path)
-    assert feature != "dev"  # stayed on the feature branch, no merge
+    assert _current_branch(tmp_path) == "dev"  # never leaves dev
     assert _porcelain(tmp_path) == ""  # clean at rest
-    # REQ-037: the feature branch carries pure code — no ledger commit rode it.
-    assert _git(tmp_path, "diff", f"dev...{feature}", "--", ".devsteward").strip() == ""
-    # the develop_committed event is on the integration branch's events.jsonl.
+    assert _tip_subject(tmp_path) == "REQ-001: ledger checkpoint"
+    # the develop_committed event is on dev's committed events.jsonl (not dirty in the tree).
     dev_events = _git(tmp_path, "show", "dev:.devsteward/events.jsonl")
     assert "develop_committed" in dev_events
+    # no land yet — no checkpoint event until the validate sibling goes green.
+    assert not any(e["event"] == "checkpoint" for e in Ledger(tmp_path).events())
 
 
 # -- AC4 -----------------------------------------------------------------------
@@ -278,10 +298,11 @@ def test_red_and_parked_outcomes_commit_ledger_and_evidence(tmp_path):
 
 
 def test_no_empty_commits_on_no_op_paths(tmp_path):
-    """No empty commits: a land that never branched (on the integration branch) makes no
-    branch_merged follow-up commit, and a production-branch refusal commits nothing."""
-    # (a) a checkpoint on the integration branch itself: it lands, but there is no feature
-    # branch to merge — so no ledger-close follow-up commit is fabricated (Decision 4).
+    """No empty commits: a land on dev makes exactly the code commit + the trailing ledger
+    commit (no branch_merged follow-up — REQ-048), and a production-branch refusal commits
+    nothing."""
+    # (a) a checkpoint on dev: the work commit + the trailing ledger commit, nothing extra —
+    # no feature branch to merge, so no branch_merged ledger-close commit is fabricated.
     _scaffold(tmp_path)
     _init_git(tmp_path)
     ex = _executor(tmp_path)
@@ -290,8 +311,8 @@ def test_no_empty_commits_on_no_op_paths(tmp_path):
     res = ex.checkpoint(ex.step_by_id("REQ-001:develop"))
     assert res.outcome is RunOutcome.DONE
     after = _subjects(tmp_path)
-    assert len(after) == before + 1  # exactly the land commit, nothing extra
-    assert not any("ledger close" in s for s in after)  # no merge ⇒ no branch_merged commit
+    assert len(after) == before + 2  # the code commit + the ledger checkpoint, nothing extra
+    assert not any("ledger close" in s for s in after)  # no branch_merged ledger-close commit
     assert not any(e["event"] == "branch_merged" for e in Ledger(tmp_path).events())
 
     # (b) a refusal on the production branch writes no commit at all.

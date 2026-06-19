@@ -53,8 +53,16 @@
       "uniqueItems": true
     },
     "supersedes": {
-      "type": ["string", "null"],
-      "pattern": "^REQ-[0-9]{3}[a-z]?$"
+      "description": "A single REQ id, a list of REQ ids, or null (REQ-048: a design that retires a stack names them all).",
+      "oneOf": [
+        { "type": "null" },
+        { "type": "string", "pattern": "^REQ-[0-9]{3}[a-z]?$" },
+        {
+          "type": "array",
+          "items": { "type": "string", "pattern": "^REQ-[0-9]{3}[a-z]?$" },
+          "uniqueItems": true
+        }
+      ]
     },
     "tags": {
       "type": "array",

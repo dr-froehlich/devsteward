@@ -227,7 +227,7 @@ def test_rework_cycle_to_green_land(tmp_path):
     green = ex.advance_once(only="REQ-001")  # validate — now green → land
     assert green.outcome is RunOutcome.DONE
     assert parse_req(req_dir / "REQ-001.md").status == "done"
-    assert len(git.merged) == 1
+    assert git.current == "dev"  # REQ-048: the green validate lands on dev, no merge
 
     # the full chain is auditable in events.jsonl, in order
     events = _events(tmp_path)

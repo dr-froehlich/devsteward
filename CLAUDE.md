@@ -35,22 +35,16 @@ When you design or change anything here, hold to these:
   must be isolated/translatable — never inline in logic.
 - **Same-commit discipline:** a REQ's frontmatter, its row in `REQUIREMENTS_INDEX.md`,
   and the code that satisfies it move in the *same* commit.
-- **Branching model:** ⚠️ **Under replacement by REQ-047 — do not extend.** This
-  feature-branch topology is the un-chosen default the Design principles above retire; once
-  REQ-047 lands this becomes trunk-based (all work on `dev`, no feature branches) and this
-  bullet is rewritten. Until then it still nominally describes the engine's behaviour, but
-  add **no** new branching/worktree/switch machinery.
-  `main` = production / released (release tags like `v0.1.0` cut
-  here; consumers pin them). `dev` = integration / beta — the default working and merge
-  target. **Declaration lives on `dev`; only implementation branches.** Intake (REQ
-  frontmatter, index row, roadmap), plans, and the ledger are committed directly on `dev` —
-  a requirement is a registry entry, not behavior, and forking the shared registry races id
-  allocation and conflicts the index/roadmap. **Implementation** of a REQ (code + acceptance
-  tests + the status-flip to `done` + index `DONE`-sync) goes on a feature branch → plain
-  local merge into `dev` (no PR; tiny fixes excepted). Never commit to `main`; release via
-  `dev → main` PR.
-  Beta tags (`vX.Y.Z-beta.N`, PEP 440 pre-release) may be cut on `dev`; stable tags on
-  `main`. If `main` is ever hotfixed directly, merge it back into `dev`.
+- **Branching model — trunk-based (REQ-047 → REQ-048, landed).** All work lands on **`dev`**:
+  intake (REQ frontmatter, index row, roadmap), plans, the ledger, **and** implementation
+  (code + acceptance tests + the status-flip to `done` + index `DONE`-sync) are all committed
+  directly on `dev`. **No feature branches, no worktrees, no engine-initiated branch
+  switching** — the engine never creates, switches, or merges a branch; there is one
+  co-located ledger that cannot diverge from itself. `main` = production / released (release
+  tags like `v0.1.0` cut here; consumers pin them); `dev` = integration / beta, the default
+  working branch. Never commit to `main`; the **only** branch operation is the human-gated
+  `dev → main` release PR. Beta tags (`vX.Y.Z-beta.N`, PEP 440 pre-release) may be cut on
+  `dev`; stable tags on `main`. If `main` is ever hotfixed directly, merge it back into `dev`.
 - **Co-author trailer** on commits:
   `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`
 - **Sanitized public repo:** no real local paths (`/mnt/c/Users/...`), no emails, no

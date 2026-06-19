@@ -147,7 +147,7 @@ def test_red_gate_no_land_writes(tmp_path):
     # zero land-side writes
     assert parse_req(tmp_path / "docs/requirements/REQ-001.md").status == "open"
     assert "OPEN" in (tmp_path / "docs/requirements/REQUIREMENTS_INDEX.md").read_text()
-    assert git.commits == [] and git.merged == []
+    assert git.commits == []  # REQ-048: a red gate commits nothing
     assert led.cursor_step is None
     assert not any(e["event"] == "checkpoint" for e in _events(tmp_path))
 
@@ -185,45 +185,25 @@ def test_no_step_redo_after_checkpoint(tmp_path):
 # -- AC4 ----------------------------------------------------------------------
 
 
-def test_full_close_out_merges(tmp_path):
-    """A green checkpoint on a feature branch commits the trailing ledger write as a
-    follow-up and merges --no-ff into the integration branch with a branch_merged event;
-    on the integration branch itself no merge is attempted."""
+def test_full_close_out_lands_on_dev(tmp_path):
+    """A green checkpoint lands the work on dev (REQ-048: trunk-based) — the authoritative
+    code commit, then the trailing ledger commit, both on dev; no feature branch, no merge,
+    no branch_merged event."""
     _project_with_req(tmp_path)
     _index(tmp_path, ("REQ-001", "REQ-001 title", "OPEN", "–"))
     Ledger.init(tmp_path)
-    feature = "req-001-req-001-title"
-    git = FakeGitTopology(current=feature, branches=["dev", feature])
+    git = FakeGitTopology(current="dev")
     ex = _executor(tmp_path, git=git)
 
     res = ex.checkpoint(ex.step_by_id("REQ-001:develop"))
     assert res.outcome is RunOutcome.DONE
-    # the land commit, then the trailing-ledger follow-up — both on the feature branch;
-    # then the branch_merged ledger-close commit on the integration branch (REQ-032: the
-    # integration branch is clean at rest, the event committed not left dirty).
-    assert [b for b, _ in git.commits] == [feature, feature, "dev"]
+    # the code commit, then the trailing-ledger follow-up — both on dev (REQ-032: clean at
+    # rest, the cursor advance committed not left dirty).
+    assert [b for b, _ in git.commits] == ["dev", "dev"]
     assert "ledger checkpoint" in git.commits[1][1]
-    assert "ledger close — branch_merged event" in git.commits[2][1]
-    # the --no-ff merge into the integration branch, recorded
-    assert git.merged == [(feature, "dev", git.merged[0][2])]
     assert git.current == "dev"
-    assert any(
-        e["event"] == "branch_merged" and e["branch"] == feature and e["into"] == "dev"
-        for e in _events(tmp_path)
-    )
-
-    # on the integration branch itself: lands, but no merge attempted
-    other = tmp_path / "on_integration"
-    other.mkdir()
-    _project_with_req(other)
-    _index(other, ("REQ-001", "REQ-001 title", "OPEN", "–"))
-    Ledger.init(other)
-    git2 = FakeGitTopology(current="dev")
-    ex2 = _executor(other, git=git2)
-    res2 = ex2.checkpoint(ex2.step_by_id("REQ-001:develop"))
-    assert res2.outcome is RunOutcome.DONE
-    assert git2.merged == []
-    assert not any(e["event"] == "branch_merged" for e in _events(other))
+    assert not any(e["event"] == "branch_merged" for e in _events(tmp_path))
+    assert parse_req(tmp_path / "docs/requirements/REQ-001.md").status == "done"
 
 
 # -- AC5 ----------------------------------------------------------------------

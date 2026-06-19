@@ -65,7 +65,6 @@ class Config:
         default_factory=lambda: {
             "production_branch": "main",
             "integration_branch": "dev",
-            "feature_branch": "req-{num}-{slug}",
         }
     )
     verify: dict = field(default_factory=dict)
@@ -82,15 +81,6 @@ class Config:
     @property
     def integration_branch(self) -> str:
         return (self.git or {}).get("integration_branch", "dev")
-
-    @property
-    def feature_branch_template(self) -> str:
-        """Name template for an auto-managed implementation branch (REQ-020).
-
-        Formatted with ``num`` (the REQ id sans ``REQ-`` prefix, keeping any lettered
-        suffix) and ``slug``; default ``req-{num}-{slug}`` (e.g. ``req-020-...``).
-        """
-        return (self.git or {}).get("feature_branch", "req-{num}-{slug}")
 
     @property
     def threshold(self) -> float:

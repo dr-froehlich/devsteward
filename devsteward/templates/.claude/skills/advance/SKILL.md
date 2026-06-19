@@ -8,7 +8,7 @@ description: Do exactly one checkpoint of the current requirement — the fused 
 You do **exactly one** checkpoint and stop. After REQ-029 the cycle per requirement is a
 single fused **Develop** checkpoint: plan-first, then the code, then the acceptance tests,
 all in one session. On green the engine **lands the REQ mechanically** (status flip, index
-sync, commit, `--no-ff` merge) — you never write `status: done` and the land spends no
+sync, commit — all on `dev`; trunk-based, no branch/merge) — you never write `status: done` and the land spends no
 Claude tokens. **The engine is the verifying bookkeeper in both modes** — the same gate,
 the same land, whoever drives. Your job is the cognitive work of the one checkpoint; what
 varies by mode is who invokes the bookkeeper and what happens at a fork.
@@ -35,9 +35,8 @@ Everything tagged *(batch)* or *(interactive)* below applies to that mode only.
 ## 1. Orient (always)
 
 - Run **`steward status`** for the cursor (`cursor.step`, e.g. `REQ-007:develop`) and step
-  statuses — never hand-read `.devsteward/state.yaml`. On a feature branch the on-disk file
-  is the stale branch-cut snapshot; `steward status` binds the live integration-branch
-  ledger (REQ-040), so it is the one sanctioned read from anywhere. If invoked as
+  statuses — never hand-read `.devsteward/state.yaml`. `steward status` is the one sanctioned
+  read of the live ledger (trunk-based, there is a single ledger on `dev`). If invoked as
   `/advance REQ-NNN develop`, that is your target.
 - Read the target REQ, `CLAUDE.md`, and anything the REQ's `depends_on` produced.
 - **Recovery (`--recover` in your command):** if the step command includes `--recover`,
@@ -49,7 +48,7 @@ Everything tagged *(batch)* or *(interactive)* below applies to that mode only.
     (`steward rework`, REQ-033). The event names the red validation's `evidence` dir — read
     it (the System Tester's `SYSTEM-TEST-FINDINGS.md`, the captured logs/artifacts) as your
     repair context: the lab found a real defect (or the validation test itself is wrong).
-    Fix the cause on this same req branch so the next validation passes; the findings travel
+    Fix the cause on `dev` so the next validation passes; the findings travel
     through the ledger, never on the command line.
 - **Repair (`--repair` in your command):** a previous develop attempt left the acceptance
   gate **red**. Your prompt carries the failure brief (the failed test ids + verifier
@@ -89,25 +88,24 @@ The fused **Develop** checkpoint, in order, in one session:
 
 End with the fixed report (below) **after** handling the land per your mode:
 
-- *(interactive)* branch first (no engine branch-guard runs in your client), then run
-  **`steward checkpoint REQ-NNN develop`** (with no arguments it targets the current
-  cursor step). It is the engine's bookkeeping as one transaction: it re-runs the
-  acceptance tests, checks the plan artifact exists, flips the REQ + index to `done`,
-  makes the one authoritative commit (frontmatter + index + code together, co-author
-  trailer), advances the ledger, commits the trailing ledger write as a follow-up, and
-  merges the feature branch `--no-ff` into the integration branch (the checkpoint event
-  records `driver: interactive`). On red nothing lands — fix and re-run; no `recover`
-  needed. Do **not** commit separately and do **not** hand-edit `state.yaml` —
-  `checkpoint` is the committer (committing first would double-commit; editing the
-  ledger by hand is what let it drift out of sync with a committed `done`).
-- *(batch)* do **not** commit and do **not** branch. Leave the working tree dirty; the engine
-  verifies, lands the REQ (flip + index + commit + `--no-ff` merge), and advances the ledger.
+- *(interactive)* run **`steward checkpoint REQ-NNN develop`** (with no arguments it targets
+  the current cursor step) — all on `dev`, no branch to create (trunk-based). It is the
+  engine's bookkeeping as one transaction: it re-runs the acceptance tests, checks the plan
+  artifact exists, flips the REQ + index to `done`, makes the one authoritative code commit
+  (frontmatter + index + code together, co-author trailer), advances the ledger, and commits
+  the trailing ledger write as a follow-up on `dev` (the checkpoint event records `driver:
+  interactive`). On red nothing lands — fix and re-run; no `recover` needed. Do **not** commit
+  separately and do **not** hand-edit `state.yaml` — `checkpoint` is the committer (committing
+  first would double-commit; editing the ledger by hand is what let it drift out of sync with
+  a committed `done`).
+- *(batch)* do **not** commit (and never create a branch). Leave the working tree dirty; the
+  engine verifies, lands the REQ (flip + index + commit, on `dev`), and advances the ledger.
   Committing here would *double-commit* — the engine commits too.
 - **REQ with a System-Test phase (REQ-030):** if the REQ declares any `artifact` or
   `manual` acceptance criterion, the green develop gate **defers the land** — the close
-  (either mode) only commits the work on the feature branch (`develop_committed`); the
-  flip, index sync, and merge fire after `REQ-NNN:validate` is green (`steward validate
-  REQ-NNN`, or the batch loop). Say so under *Next:* in your report.
+  (either mode) only commits the work on `dev` (`develop_committed`); the flip and index
+  sync fire after `REQ-NNN:validate` is green (`steward validate REQ-NNN`, or the batch
+  loop). Say so under *Next:* in your report.
 
 ```
 Did:       <what this checkpoint produced>

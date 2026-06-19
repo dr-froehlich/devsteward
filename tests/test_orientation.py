@@ -1,12 +1,11 @@
-"""REQ-040 — read commands resolve the live integration-branch ledger, and `steward
-checkpoint` refuses an already-done step.
+"""REQ-040 — `steward checkpoint` refuses an already-done step (idempotency).
 
-The read-side and idempotency follow-up to REQ-037 (which bound only the *write* paths).
-Like ``test_plane_split.py`` the blind spot that hid the live defect was a unit fake that
-kept one in-memory ledger and never modelled *which branch* a ``.devsteward/`` read
-resolved — so every assertion here runs against a **real** ``git init`` repo with the real
-``GitCli`` and a real integration worktree; only ``claude`` is faked. The oracle is real git
-state: which branch's ledger the read resolved, and whether a re-checkpoint wrote anything.
+REQ-048 made this trunk-based: there is one ledger on ``dev`` and the engine never branches
+or spins a worktree, so the old "read the live integration-branch ledger from a *feature
+branch*" hazard (REQ-040/041) can no longer arise and those tests retired with the
+machinery. What survives is the idempotency guard: a re-checkpoint of an already-done
+(deferred) develop step must write nothing. Every assertion runs against a **real** ``git
+init`` repo with the real ``GitCli``; only ``claude`` is faked.
 """
 
 from __future__ import annotations
@@ -148,48 +147,7 @@ def _run_cli(monkeypatch, tmp_path, args):
     return CliRunner().invoke(main, args)
 
 
-# -- AC1: read-path binding ----------------------------------------------------
-
-
-def test_status_reads_live_ledger_from_feature_branch_realgit(tmp_path, monkeypatch):
-    """On a real repo with the ledger on dev, from a feature branch whose branch-cut
-    .devsteward/state.yaml is stale (dev has since advanced — a cursor/step the feature
-    snapshot lacks), `steward status` reports the LIVE dev cursor and step status, not the
-    stale feature-branch snapshot."""
-    _scaffold(tmp_path, acs=[("AC1", "true", "artifact")])  # artifact ⇒ deferred + feature branch
-    _init_git(tmp_path)
-    ex = _executor(tmp_path)
-
-    r1 = ex.advance_once()  # develop defers onto a feature branch; the ledger advances on dev
-    assert r1.outcome is RunOutcome.DONE
-    feature = _branch(tmp_path)
-    assert feature != "dev"
-
-    # Teeth: the on-disk (feature branch) snapshot is genuinely stale — it has no record of
-    # the develop step, while dev's live ledger marks it done.
-    stale = (tmp_path / ".devsteward" / "state.yaml").read_text(encoding="utf-8")
-    assert "REQ-001:develop" not in stale
-    assert Ledger(_dev_worktree(tmp_path)).status_of("REQ-001:develop").value == "done"
-
-    # `steward status`, invoked while HEAD is the feature branch, must report the live cursor.
-    result = _run_cli(monkeypatch, tmp_path, ["status"])
-    assert result.exit_code == 0, result.output
-    assert "cursor: REQ-001:develop" in result.output
-    assert "REQ-001:develop" in result.output and "done" in result.output
-
-
-def _dev_worktree(root: Path) -> Path:
-    out = _git(root, "worktree", "list", "--porcelain")
-    path = None
-    for line in out.splitlines():
-        if line.startswith("worktree "):
-            path = line[len("worktree "):].strip()
-        elif line.strip() == "branch refs/heads/dev" and path and Path(path) != root:
-            return Path(path)
-    raise AssertionError("no dev worktree found")
-
-
-# -- AC2: checkpoint idempotency guard -----------------------------------------
+# -- checkpoint idempotency guard ----------------------------------------------
 
 
 def test_checkpoint_refuses_already_done_step_realgit(tmp_path, monkeypatch):
@@ -215,22 +173,21 @@ def test_checkpoint_refuses_already_done_step_realgit(tmp_path, monkeypatch):
     assert _dev_head(tmp_path) == head_before
 
 
-# -- AC3: the 2026-06-15 incident cannot recur end-to-end ----------------------
+# -- the 2026-06-15 incident cannot recur (no duplicate checkpoint) ------------
 
 
 def test_incident_no_duplicate_checkpoint_realgit(tmp_path, monkeypatch):
     """A deferred-land develop step is checkpointed once (its develop_committed lands on
-    dev); from the feature branch `steward status` reports it done (the live cursor, not the
-    stale snapshot), and a second `steward checkpoint` is refused — so no duplicate
-    develop_committed (and no `commit: null` shadow) is appended. Decisions 1 and 3 together."""
+    dev); `steward status` reports it done (the live cursor), and a second `steward
+    checkpoint` is refused — so no duplicate develop_committed (and no `commit: null` shadow)
+    is appended (REQ-040 Decision 3; trunk-based on dev — REQ-048)."""
     _scaffold(tmp_path, acs=[("AC1", "true", "artifact")])
     _init_git(tmp_path)
     ex = _executor(tmp_path, runner=_CodeRunner(tmp_path))
 
     r1 = ex.advance_once()  # the single deferred develop checkpoint
     assert r1.outcome is RunOutcome.DONE
-    feature = _branch(tmp_path)
-    assert feature != "dev"
+    assert _branch(tmp_path) == "dev"  # REQ-048: never leaves dev
 
     committed = [
         ln for ln in _dev_events_bytes(tmp_path).splitlines() if '"develop_committed"' in ln
@@ -238,7 +195,7 @@ def test_incident_no_duplicate_checkpoint_realgit(tmp_path, monkeypatch):
     assert len(committed) == 1  # exactly one, with a real commit sha
     assert '"commit": null' not in committed[0]
 
-    # Decision 1: from the feature branch, status sees the live done cursor (not the stale snapshot)
+    # status reports the live done cursor
     status = _run_cli(monkeypatch, tmp_path, ["status"])
     assert status.exit_code == 0, status.output
     assert "cursor: REQ-001:develop" in status.output
@@ -252,43 +209,3 @@ def test_incident_no_duplicate_checkpoint_realgit(tmp_path, monkeypatch):
         ln for ln in _dev_events_bytes(tmp_path).splitlines() if '"develop_committed"' in ln
     ]
     assert committed_after == committed  # byte-identical: no duplicate, no commit: null shadow
-
-
-# -- REQ-041: the read-side fix extends past `status` to `validate`'s pre-flight ----
-
-
-def test_validate_preflight_reads_live_ledger_from_feature_branch_realgit(tmp_path, monkeypatch):
-    """REQ-040 routed only `steward status` through the live ledger; `steward validate`'s
-    develop-done pre-flight still read the unbound feature-branch snapshot. On a real repo
-    with the ledger on dev, from a feature branch whose branch-cut snapshot lacks the develop
-    step (dev has it done), `steward validate REQ-001` must NOT fail with the stale
-    'is not closed yet' pre-flight error — it resolves the live done status and proceeds past
-    the pre-flight (here to the in-Claude bring-up refusal, which we force to isolate the read).
-    """
-    _scaffold(tmp_path, acs=[("AC1", "true", "artifact")])  # artifact ⇒ deferred develop + validate step
-    _init_git(tmp_path)
-    ex = _executor(tmp_path)
-
-    r1 = ex.advance_once()  # develop defers onto a feature branch; the ledger advances on dev
-    assert r1.outcome is RunOutcome.DONE
-    feature = _branch(tmp_path)
-    assert feature != "dev"
-
-    # Teeth: the on-disk (feature branch) snapshot has no record of the develop step, while
-    # dev's live ledger marks it done — the exact divergence that tripped the live symptom.
-    stale = (tmp_path / ".devsteward" / "state.yaml").read_text(encoding="utf-8")
-    assert "REQ-001:develop" not in stale
-    assert Ledger(_dev_worktree(tmp_path)).status_of("REQ-001:develop").value == "done"
-
-    # Short-circuit the guided bring-up so the assertion isolates the pre-flight read: with
-    # the bug, validate exits on "is not closed yet" before ever reaching this guard.
-    monkeypatch.setattr(cli.claude_mod, "in_claude_session", lambda: True)
-    monkeypatch.setattr(
-        cli, "_load_or_die",
-        lambda: SimpleNamespace(req_dir=tmp_path / "docs" / "requirements", root=tmp_path),
-    )
-    monkeypatch.setattr(cli, "build_executor", lambda cfg, **kw: _executor(tmp_path))
-    result = CliRunner().invoke(main, ["validate", "REQ-001"])
-
-    assert "is not closed yet" not in result.output  # the stale-read symptom must be gone
-    assert "from inside a Claude session" in result.output  # reached past the live pre-flight

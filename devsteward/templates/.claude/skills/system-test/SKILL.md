@@ -53,7 +53,7 @@ project keeps moving — resume it later from a plain shell with `steward valida
 1. **Orient narrowly.** Read the target REQ (`docs/requirements/REQ-NNN.md`) — its
    Requirement, acceptance block, and `process.lab` declarations — plus `CLAUDE.md` for
    how to run things. Do **not** read the develop diff, the develop session's plan
-   reasoning, or `git log -p` for the feature branch: validating against the builder's
+   reasoning, or `git log -p` for the builder's commits: validating against the builder's
    assumptions re-couples the oracle.
 2. **Bring the lab up.** Start whatever owned system the REQ's validation needs (the
    `process.lab` REQs name it). If the lab cannot come up, say so plainly and stop — a

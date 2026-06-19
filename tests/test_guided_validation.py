@@ -136,7 +136,7 @@ def test_shell_validate_wraps_interactive_session_two_phase(tmp_path):
     assert so["reviewer"] == "Petra" and so["approved"] is True
     assert res.outcome is RunOutcome.DONE
     assert parse_req(tmp_path / "docs/requirements/REQ-001.md").status == "done"
-    assert len(git.merged) == 1
+    assert git.current == "dev"  # REQ-048: lands on dev, no merge
 
     # cannot self-certify: a declining verdict (even with a captured artifact) does not land
     other = tmp_path / "declined"
@@ -188,9 +188,9 @@ def test_in_session_start_record_and_nesting_refusal(tmp_path, monkeypatch):
 
 
 def test_pending_validation_parks_async_nonblocking(tmp_path):
-    """A pending verdict parks as an async QA-ticket: clean tree, HEAD back on the
-    integration branch, the feature branch intact and unmerged — and a subsequent run
-    advances an independent REQ (the waiting human does not freeze the pipeline)."""
+    """A pending verdict parks as an async QA-ticket: clean tree on dev (REQ-048), the REQ
+    unlanded — and a subsequent run advances an independent REQ (the waiting human does not
+    freeze the pipeline)."""
     req_dir = tmp_path / "docs" / "requirements"
     _write_req(req_dir, "REQ-001", [_REGRESSION, _MANUAL])
     _write_req(req_dir, "REQ-002", [_REGRESSION])
@@ -199,15 +199,14 @@ def test_pending_validation_parks_async_nonblocking(tmp_path):
     Ledger.init(tmp_path)
     git = FakeGitTopology(current="dev")
     ex = _executor(tmp_path, git=git)
-    ex.advance_once(only="REQ-001")                    # develop REQ-001 → on its feature branch
-    feature = git.current
+    ex.advance_once(only="REQ-001")                    # develop REQ-001 → deferred commit
 
     step = ex.step_by_id("REQ-001:validate")
     res = ex.validate_runner.guided_validate(ex, step, signoff=_defer)
     assert res.outcome is RunOutcome.PARKED
 
-    assert git.current == "dev"                         # HEAD back on integration
-    assert feature in git.branches and git.merged == []  # branch intact, unmerged (D4)
+    assert git.current == "dev"                         # never leaves dev
+    assert parse_req(req_dir / "REQ-001.md").status == "open"  # unlanded on a park
     led = Ledger(tmp_path)
     assert led.status_of("REQ-001:validate") is StepStatus.BLOCKED
     (dec,) = led.open_decisions()
@@ -221,32 +220,26 @@ def test_pending_validation_parks_async_nonblocking(tmp_path):
 # -- AC4 ------------------------------------------------------------------------
 
 
-def test_parked_validation_resumes_and_reconciles_then_lands(tmp_path):
-    """A parked validation cleanly resumes after the integration branch has advanced —
-    reconciling the behind-but-merged feature branch instead of refusing it (Finding 1) —
-    and a green verdict fires the deferred mechanical land."""
+def test_parked_validation_resumes_then_lands(tmp_path):
+    """A parked (deferred) validation cleanly resumes and a green verdict fires the deferred
+    mechanical land — all on dev (REQ-048: trunk-based, no branch to reconcile)."""
     _project(tmp_path, [_REGRESSION, _MANUAL])
     git = FakeGitTopology(current="dev")
     ex = _executor(tmp_path, git=git)
-    ex.advance_once(only="REQ-001")                    # develop → feature branch
+    ex.advance_once(only="REQ-001")                    # develop → deferred commit
     step = ex.step_by_id("REQ-001:validate")
-    feature = ex.feature_branch_name(step)
 
-    # first attempt: the human defers → async park, HEAD back on integration
+    # first attempt: the human defers → async park
     ex.validate_runner.guided_validate(ex, step, signoff=_defer)
     assert git.current == "dev"
+    assert ex.ledger.status_of("REQ-001:validate") is StepStatus.BLOCKED
 
-    # the integration branch advances while it waits → the feature branch falls behind
-    git._diverged.add(feature)
-
-    # resume: start() reconciles the branch, the green verdict fires the deferred land
+    # resume: the green verdict fires the deferred land, still on dev
     res = ex.validate_runner.guided_validate(
         ex, ex.step_by_id("REQ-001:validate"), signoff=_approve)
     assert res.outcome is RunOutcome.DONE
-    assert git.reconciled and git.reconciled[-1][1] == feature
-    assert any(e["event"] == "branch_reconciled" for e in _events(tmp_path))
+    assert git.current == "dev"
     assert parse_req(tmp_path / "docs/requirements/REQ-001.md").status == "done"
-    assert any(m[0] == feature for m in git.merged)    # the reconciled branch landed
 
 
 # -- AC5 ------------------------------------------------------------------------
@@ -265,26 +258,26 @@ def _run_guided(tmp_path, name, signoff_fn):
 
 
 def test_human_validation_terminal_outcomes_clean_tree(tmp_path):
-    """The three terminal outcomes route correctly and each leaves a clean tree: green →
+    """The three terminal outcomes route correctly and each stays on dev (REQ-048): green →
     mechanical land; declined → red park whose message points at `steward rework`; pending →
-    async park — and no merge on any park."""
+    async park — and no land on any park."""
     # green → land
     root, git, res = _run_guided(tmp_path, "green", _approve)
     assert res.outcome is RunOutcome.DONE
     assert parse_req(root / "docs/requirements/REQ-001.md").status == "done"
-    assert len(git.merged) == 1 and git.current == "dev"
+    assert git.current == "dev"
 
-    # declined → red park pointing at `steward rework`, no merge, clean tree
+    # declined → red park pointing at `steward rework`, no land, on dev
     root, git, res = _run_guided(tmp_path, "declined", _decline)
     assert res.outcome is RunOutcome.PARKED
     assert "steward rework" in res.detail
     (dec,) = Ledger(root).open_decisions()
     assert "steward rework" in dec.question and "validation red" in dec.question
-    assert git.merged == [] and git.current == "dev"
+    assert git.current == "dev"
     assert parse_req(root / "docs/requirements/REQ-001.md").status == "open"
 
-    # pending → async park, no merge, clean tree
+    # pending → async park, no land, on dev
     root, git, res = _run_guided(tmp_path, "pending", _defer)
     assert res.outcome is RunOutcome.PARKED
-    assert git.merged == [] and git.current == "dev"
+    assert git.current == "dev"
     assert Ledger(root).status_of("REQ-001:validate") is StepStatus.BLOCKED

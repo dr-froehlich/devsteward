@@ -180,14 +180,14 @@ def test_phase_conditional_on_check(tmp_path):
     res = ex.advance_once(only="REQ-002")
     assert res.outcome is RunOutcome.DONE  # develop closed…
     assert parse_req(req_dir / "REQ-002.md").status == "open"  # …but no land yet
-    assert git.merged == []
+    assert git.current == "dev"  # REQ-048: never leaves dev
     assert not any(e["event"] == "checkpoint" for e in _events(tmp_path))
     assert any(e["event"] == "develop_committed" for e in _events(tmp_path))
 
     res2 = ex.advance_once(only="REQ-002")  # the validate step
     assert res2.step.id == "REQ-002:validate" and res2.outcome is RunOutcome.DONE
     assert parse_req(req_dir / "REQ-002.md").status == "done"
-    assert len(git.merged) == 1
+    assert git.current == "dev"  # REQ-048: lands on dev, no merge
     assert any(e["event"] == "checkpoint" for e in _events(tmp_path))
 
 
@@ -294,7 +294,7 @@ def test_validate_single_entry_point(tmp_path):
     assert res.outcome is RunOutcome.DONE
     req_path = tmp_path / "docs/requirements/REQ-001.md"
     assert parse_req(req_path).status == "done"  # the land proceeded
-    assert len(git.merged) == 1
+    assert git.current == "dev"  # REQ-048: lands on dev, no merge
     checkpoints = [e for e in _events(tmp_path) if e["event"] == "checkpoint"]
     assert checkpoints and checkpoints[-1]["driver"] == "interactive"
 
@@ -305,7 +305,8 @@ def test_validate_single_entry_point(tmp_path):
     assert len(events) == 2
     assert events[0]["rerun"] is False and events[1]["rerun"] is True
     assert parse_req(req_path).status == "done"
-    assert len(git.merged) == 1  # no second land
+    # REQ-048: a done re-validation lands nothing — the checkpoint count is unchanged.
+    assert len([e for e in _events(tmp_path) if e["event"] == "checkpoint"]) == 1
     assert ex.ledger.status_of("REQ-001:validate") is StepStatus.DONE  # undisturbed
 
 

@@ -147,18 +147,13 @@ class ReqValidateRoutine:
         led.save()
         led.append_event("step_started", step=step.id, command=step.command)
 
-        res = self._validate(
+        # REQ-048: a green validate lands inline (mechanical_land commits code + ledger on
+        # ``dev``) — there is no feature branch to merge.
+        return self._validate(
             ex, req, step,
             unattended=unattended, on_event=on_event, signoff=signoff,
             driver=driver, in_flight=True,
         )
-        if res.outcome is RunOutcome.DONE and ex._merges_after(step):
-            # Close the topology like a batch land (the second call from the batch
-            # driver's own merge bracket is a no-op once we are back on integration).
-            recovery = ex._merge_after_land(step, unattended=unattended)
-            if recovery is not None:  # REQ-037: an aborted merge surfaces as a recoverable park
-                return StepResult(step, RunOutcome.PARKED, recovery)
-        return res
 
     def revalidate(
         self,
@@ -205,14 +200,14 @@ class ReqValidateRoutine:
     # -- guided two-phase bookkeeping (REQ-034) ---------------------------------
 
     def start(self, ex, step: Step) -> "StartContext | StepResult":
-        """The **start** half (REQ-034 Decision 6): lab check, ready/reconcile the feature
-        branch, set RUNNING, prepare the evidence dir.
+        """The **start** half (REQ-034 Decision 6): lab check, set RUNNING, prepare the
+        evidence dir (REQ-048: trunk-based — no branch to ready).
 
         Returns a :class:`StartContext` for the record half, or a terminal
         :class:`StepResult` (``REFUSED``/``FAILED``) when validation cannot start (an
-        undone lab, a missing REQ, an unreconcilable branch). Both launch shapes call this:
-        shape A (``steward validate`` from a shell) then brings the interactive session up;
-        shape B (a running session's skill) does the guided work in-session."""
+        undone lab, a missing REQ). Both launch shapes call this: shape A (``steward
+        validate`` from a shell) then brings the interactive session up; shape B (a running
+        session's skill) does the guided work in-session."""
         led = ex.ledger
         req = self._req(step.req)
         if req is None:
@@ -225,17 +220,12 @@ class ReqValidateRoutine:
                 f"{req.id} validation waiting on {', '.join(pending_labs)} — "
                 f"the declared lab is not done yet",
             )
-        # D5: ready the branch — reconcile a behind-but-merged resume rather than refuse it.
-        surfaced = ex.ready_validate_branch(step)
-        if surfaced is not None:
-            return StepResult(step, RunOutcome.REFUSED, surfaced)
         led.set_cursor(step.id)
         led.set_status(step.id, StepStatus.RUNNING)
         led.save()
         led.append_event("step_started", step=step.id, command=step.command)
-        # REQ-037: the System-Tester session runs in the main tree (``ex.root``), so evidence
-        # is captured there; the ledger commit syncs it onto the integration branch. (``led``
-        # may be bound to an integration worktree, so anchor on ``ex.root``, not ``led.dir``.)
+        # REQ-048: the System-Tester session and evidence both live in the one tree on ``dev``
+        # (``ex.root``); the ledger commit captures the evidence in place.
         evidence_dir = ex.root / LEDGER_DIRNAME / EVIDENCE_DIRNAME / req.id / _now_stamp()
         evidence_dir.mkdir(parents=True, exist_ok=True)
         return StartContext(
@@ -262,8 +252,8 @@ class ReqValidateRoutine:
 
         Called directly by a mid-session skill (shape B) and by :meth:`guided_validate`
         after the foreground bring-up (shape A). Neither is wrapped by the executor's
-        ``_drive_step``, so the parks here self-commit the ledger close and return HEAD to
-        the integration branch (Decision 3)."""
+        ``_drive_step``, so the parks here self-commit the ledger close (REQ-048: all on
+        ``dev`` — no branch to return from)."""
         led: Ledger = ex.ledger
         req, step = ctx.req, ctx.step
         artifact_acs = [c for c in req.acceptance if c.check == "artifact"]
@@ -339,12 +329,8 @@ class ReqValidateRoutine:
                 led.answer_decision(
                     dec.id, "resolved by green validation (sign-off recorded)"
                 )
-        res = ex.mechanical_land(step, detail, driver=driver)
-        if res.outcome is RunOutcome.DONE and ex._merges_after(step):
-            recovery = ex._merge_after_land(step, unattended=(driver == "headless"))
-            if recovery is not None:  # REQ-037: an aborted merge surfaces as a recoverable park
-                return StepResult(step, RunOutcome.PARKED, recovery)
-        return res
+        # REQ-048: lands inline on ``dev`` — no feature branch to merge.
+        return ex.mechanical_land(step, detail, driver=driver)
 
     def guided_validate(
         self,
@@ -604,10 +590,9 @@ class ReqValidateRoutine:
         self, ex, step: Step, req: ReqFile, manual_acs
     ) -> StepResult:
         """Pending human validation → async QA park (REQ-034 Decision 3): a waiting human is
-        a standing work-item, not a frozen pipeline. Leaves a clean tree, HEAD back on the
-        integration branch, and the feature branch intact and **unmerged** (Decision 4) — a
-        subsequent ``steward run`` advances other eligible REQs. No verdict, so no evidence
-        event; the decision records the standing item."""
+        a standing work-item, not a frozen pipeline. Leaves a clean tree on ``dev`` (REQ-048)
+        — a subsequent ``steward run`` advances other eligible REQs. No verdict, so no
+        evidence event; the decision records the standing item."""
         led = ex.ledger
         ids = ", ".join(c.id for c in manual_acs)
         question = (
@@ -622,10 +607,9 @@ class ReqValidateRoutine:
             led.park_decision(dec)
         led.set_status(step.id, StepStatus.BLOCKED)
         led.save()
-        # D3/D4: commit the ledger/evidence close on the feature branch (intact, unmerged),
-        # then return HEAD to the integration branch. No merge on a park.
+        # REQ-048 (was D3/D4): commit the ledger/evidence close on ``dev``. A pending human
+        # validation is a standing work-item; the next ``steward run`` advances other REQs.
         ex._commit_ledger_close(step, "ledger close — validation pending (async QA)")
-        ex.return_to_integration()
         return StepResult(step, RunOutcome.PARKED, question)
 
     def _park_red(
@@ -637,7 +621,7 @@ class ReqValidateRoutine:
         It points at ``steward rework`` — the V-model return edge (REQ-033/REQ-034 D7).
 
         ``attended`` marks the guided path (not wrapped by ``_drive_step``): it self-commits
-        the ledger close and returns HEAD to the integration branch (Decision 3)."""
+        the ledger close on ``dev`` (REQ-048)."""
         led = ex.ledger
         brief = "\n".join(r["detail"] for r in results if not r["ok"]) or "validation red"
         rework = (
@@ -655,7 +639,6 @@ class ReqValidateRoutine:
         led.save()
         if attended:
             ex._commit_ledger_close(step, "ledger close — validation declined (red)")
-            ex.return_to_integration()
             return StepResult(step, RunOutcome.PARKED, question)
         return StepResult(step, RunOutcome.PARKED, brief)
 

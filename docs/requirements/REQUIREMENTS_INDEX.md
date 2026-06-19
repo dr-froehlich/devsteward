@@ -42,14 +42,15 @@ commit** as its frontmatter and the code.
 | REQ-034 | Human validation as a guided, asynchronous activity — interactive System-Tester session, QA-ticket parking, clean re-entry | DONE | [REQ-034](REQ-034.md) | REQ-020, REQ-030, REQ-032, REQ-033 |
 | REQ-035 | Re-validating a done REQ leaves verified_by frozen — provenance is not clobbered | DONE | [REQ-035](REQ-035.md) | REQ-030 |
 | REQ-036 | steward sync-skills — refresh stamped bundled skills from the installed template, with a provenance manifest and a drift signal | DONE | [REQ-036](REQ-036.md) | REQ-007, REQ-030 |
-| REQ-037 | The ledger lives on dev only — feature branches carry pure code, and topology operations are atomic and recoverable | DONE | [REQ-037](REQ-037.md) | REQ-020, REQ-032, REQ-034 |
+| REQ-037 | The ledger lives on dev only — feature branches carry pure code, and topology operations are atomic and recoverable | SUPERSEDED | [REQ-037](REQ-037.md) | REQ-020, REQ-032, REQ-034 |
 | REQ-038 | Cross-host validation deploy channel — validate exports a clean release-candidate artifact; live fixes return as a patch (artifact-export, Finding 90 option A) | DRAFT | [REQ-038](REQ-038.md) | REQ-030, REQ-033, REQ-034, REQ-037 |
 | REQ-039 | Concept phase — an interactive architecture/exploration session that gates develop (left-arm counterpart of the System-Test phase) | DRAFT | [REQ-039](REQ-039.md) | REQ-027, REQ-029, REQ-030, REQ-034 |
-| REQ-040 | Read commands resolve the live integration-branch ledger, and checkpoint refuses an already-done step | DONE | [REQ-040](REQ-040.md) | REQ-018, REQ-037 |
-| REQ-041 | Every read-side ledger access resolves the live integration-branch ledger — not just steward status | DONE | [REQ-041](REQ-041.md) | REQ-037, REQ-040 |
+| REQ-040 | Read commands resolve the live integration-branch ledger, and checkpoint refuses an already-done step | SUPERSEDED | [REQ-040](REQ-040.md) | REQ-018, REQ-037 |
+| REQ-041 | Every read-side ledger access resolves the live integration-branch ledger — not just steward status | SUPERSEDED | [REQ-041](REQ-041.md) | REQ-037, REQ-040 |
 | REQ-042 | Positional REQ target for advance/run — name the REQ to steer which eligible step runs | DONE | [REQ-042](REQ-042.md) | REQ-002, REQ-026 |
-| REQ-043 | A surfaced branch divergence leaves no uncommitted ledger write, and the topology close-out switch never crashes on a dirty tree | DONE | [REQ-043](REQ-043.md) | REQ-032, REQ-037 |
-| REQ-044 | steward supersede — close an already-superseded feature branch without a false merge-by-hand recovery | DRAFT | [REQ-044](REQ-044.md) | REQ-037, REQ-043 |
+| REQ-043 | A surfaced branch divergence leaves no uncommitted ledger write, and the topology close-out switch never crashes on a dirty tree | SUPERSEDED | [REQ-043](REQ-043.md) | REQ-032, REQ-037 |
+| REQ-044 | steward supersede — close an already-superseded feature branch without a false merge-by-hand recovery | SUPERSEDED | [REQ-044](REQ-044.md) | REQ-037, REQ-043 |
 | REQ-047 | Single-source-of-truth state model — trunk-based on dev with a universal transaction boundary, so engine state cannot diverge or strand | DRAFT | [REQ-047](REQ-047.md) | REQ-002, REQ-018, REQ-020, REQ-032 |
+| REQ-048 | Trunk-based model — all work on dev, deleting the worktree/switch/branch machinery | DONE | [REQ-048](REQ-048.md) | REQ-047 |
 
 New requirement template: [`_templates/req.md`](../../devsteward/templates/docs/requirements/_templates/req.md)
