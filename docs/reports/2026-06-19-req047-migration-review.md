@@ -92,9 +92,13 @@ Flagged here for the record.
   rejects the inline `# draft | open | …` comment the REQ template puts on the `status:`
   line — `steward activate REQ-052` failed with "no 'status:' line in frontmatter". This is a
   **pre-existing latent bug**, unrelated to the topology pivot; flagged here only because the
-  review hit it (worked around by promoting REQ-052's status by hand). Recommend a small
-  follow-on fix (tolerate a trailing comment in the regex) — **not** taken in this sweep, to
-  avoid smuggling an unrelated change.
+  review hit it (worked around by promoting REQ-052's status by hand). It also hit the land
+  step of `steward validate REQ-052` (same writer, flipping to `done`), which is what forced
+  the fix. **Fixed** in commit `671fdda` (its own commit, outside this sweep, to avoid
+  smuggling an unrelated change): `_STATUS_LINE_RE` now tolerates and preserves a trailing
+  comment, with a regression test covering the comment-bearing status line. All callers
+  benefit — `activate` (draft→open), `validate`/land (→done) — since they share
+  `set_frontmatter_status`.
 - **`build/lib/` stale copies.** `build/lib/devsteward/templates/.claude/skills/` holds an
   old snapshot of three skills (pre-migration). Build output, not source; housekeeping only.
 
