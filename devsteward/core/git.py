@@ -63,3 +63,11 @@ class GitCli:
             return None
         self._run("commit", "-m", message, check=True)
         return self.head_sha()
+
+    def reset_hard(self, sha: str) -> None:
+        """Restore committed and tracked state to ``sha`` (REQ-049 transaction rollback).
+
+        ``git reset --hard`` undoes commits made since ``sha`` *and* discards tracked-file
+        edits, restoring the pre-command state byte-identically. Untracked files created
+        mid-command are left in place (visible, not "applied")."""
+        self._run("reset", "--hard", sha, check=True)

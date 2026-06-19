@@ -33,6 +33,7 @@ from typing import Callable
 from ...core import claude as claude_mod
 from ...core.executor import RunOutcome, StepResult
 from ...core.ledger import LEDGER_DIRNAME, Ledger
+from ...core.transaction import transaction
 from ...core.model import AcceptanceCheck, Decision, Step, StepStatus
 from ...core.verify import (
     NoUsableEnvError,
@@ -352,7 +353,12 @@ class ReqValidateRoutine:
             # CLAUDECODE refusal — never spawn Claude from within Claude. The start half's
             # RUNNING survives for a clean re-entry from a plain shell.
             return StepResult(step, RunOutcome.REFUSED, outcome)
-        return self.record(ex, ctx, signoff=signoff, on_event=on_event, driver=driver)
+        # REQ-049: the post-session land/park is atomic — a git failure rolls the repo +
+        # ledger back to the pre-record snapshot. The interactive bring-up above is left
+        # outside the boundary (a Ctrl-C there must not discard captured evidence). The batch
+        # path (``__call__`` → ``_validate``) runs under ``_drive_step``'s own transaction.
+        with transaction(ex.git, label=f"validate {step.req}"):
+            return self.record(ex, ctx, signoff=signoff, on_event=on_event, driver=driver)
 
     # -- the one validation pass -------------------------------------------------
 

@@ -14,10 +14,13 @@ from . import __version__, skillsync
 from .build import build_executor
 from .config import Config, ProjectNotFound, load_config
 from .core import claude as claude_mod
+from .core.errors import StewardError
 from .core.executor import RunOutcome, StepResult
+from .core.invariants import check_invariants
 from .core.ledger import Ledger
 from .core.stop import StopController
 from .core.model import StepStatus
+from .core.transaction import transaction
 from .lifecycle import (
     LifecycleError,
     activate as lifecycle_activate,
@@ -38,7 +41,36 @@ def _load_or_die() -> Config:
         raise click.ClickException(str(exc)) from exc
 
 
-@click.group()
+class _StewardCLI(click.Group):
+    """The single top-level transaction-error handler (REQ-049).
+
+    Every mutating command runs inside the universal boundary; a :class:`PreconditionError`
+    (the command refused to start) or :class:`RecoverableError` (a mutation failed and was
+    rolled back) is caught *here*, once, and printed as a one-line failure plus its operator
+    ``recovery`` — never a raw traceback. A bare ``CalledProcessError` reaching this layer is
+    itself a bug — a mutation that escaped the boundary — so it is surfaced loudly.
+    """
+
+    def invoke(self, ctx):
+        try:
+            return super().invoke(ctx)
+        except StewardError as exc:
+            click.echo(click.style(f"✗ {exc}", fg="red"), err=True)
+            click.echo(click.style(f"  recovery: {exc.recovery}", fg="yellow"), err=True)
+            raise SystemExit(1) from exc
+        except subprocess.CalledProcessError as exc:
+            click.echo(
+                click.style(
+                    f"✗ a git command failed and escaped the transaction boundary (a bug — "
+                    f"please report): {exc}",
+                    fg="red",
+                ),
+                err=True,
+            )
+            raise SystemExit(1) from exc
+
+
+@click.group(cls=_StewardCLI)
 @click.version_option(__version__, prog_name="steward")
 def main() -> None:
     """DevSteward — drive a Claude Code project from its requirements ledger."""
@@ -138,8 +170,13 @@ def activate(req_id: str) -> None:
     files for you to commit deliberately. Refuses done/superseded REQs (supersede instead).
     """
     cfg = _load_or_die()
+    ex = build_executor(cfg)
+    # REQ-049: the frontmatter flip + index row move atomically (same-commit discipline — a
+    # mid-edit crash must not leave them out of sync); regardless of HEAD (allow_any_head).
+    check_invariants(ex, allow_any_head=True)
     try:
-        res = lifecycle_activate(cfg, req_id)
+        with transaction(ex.git, label=f"activate {req_id}", pass_through=(LifecycleError,)):
+            res = lifecycle_activate(cfg, req_id)
     except LifecycleError as exc:
         raise click.ClickException(str(exc)) from exc
     color = "green" if res.changed else "yellow"
@@ -157,9 +194,14 @@ def recover(req_id: str) -> None:
     so return it to develop with `steward rework REQ_ID` instead.
     """
     cfg = _load_or_die()
-    led = Ledger(cfg.root)
+    ex = build_executor(cfg)
+    # REQ-049 AC3: a recovery verb succeeds regardless of HEAD — INV-1 (single ledger) only,
+    # not the branch/tree gate — and is atomic. A LifecycleError is a graceful refusal raised
+    # before any mutation, so it passes through the boundary untouched (no rollback).
+    check_invariants(ex, allow_any_head=True)
     try:
-        res = lifecycle_recover(led, req_id)
+        with transaction(ex.git, label=f"recover {req_id}", pass_through=(LifecycleError,)):
+            res = lifecycle_recover(ex.ledger, req_id)
     except LifecycleError as exc:
         raise click.ClickException(str(exc)) from exc
     flipped = ", ".join(res.steps)
@@ -184,9 +226,11 @@ def rework(req_id: str) -> None:
     to rework (a done REQ → supersede instead; nothing parked red → nothing to do).
     """
     cfg = _load_or_die()
-    led = Ledger(cfg.root)
+    ex = build_executor(cfg)
+    check_invariants(ex, allow_any_head=True)  # REQ-049 AC3: regardless of HEAD; single-ledger only
     try:
-        res = lifecycle_rework(cfg, led, req_id)
+        with transaction(ex.git, label=f"rework {req_id}", pass_through=(LifecycleError,)):
+            res = lifecycle_rework(cfg, ex.ledger, req_id)
     except LifecycleError as exc:
         raise click.ClickException(str(exc)) from exc
     where = f" (evidence: {res.evidence})" if res.evidence else ""
@@ -577,9 +621,7 @@ def validate(req_id: str, quiet: bool) -> None:
             f"plain terminal tab and run `steward validate {req_id}` there, or drive the "
             f"validation in this session via the /system-test skill's start/record steps."
         )
-    refusal = ex.branch_guard()
-    if refusal is not None:
-        raise click.ClickException(refusal)
+    check_invariants(ex)  # REQ-049: refuse on production / mid-merge (raises; handled top-level)
     # REQ-034 Decision 6 (shape A): start → interactive guided bring-up (editor pattern) →
     # record. The routine readies/reconciles the branch (Decision 5) inside its start half.
     res = routine.guided_validate(
@@ -713,8 +755,13 @@ def decision_list() -> None:
 @click.argument("answer")
 def decision_answer(decision_id: str, answer: str) -> None:
     cfg = _load_or_die()
-    led = Ledger(cfg.root)
-    d = led.answer_decision(decision_id, answer)
+    ex = build_executor(cfg)
+    # REQ-049 AC3: answering a parked decision succeeds regardless of HEAD — the historical
+    # stranding (a parked decision stuck on the wrong branch, no command able to recover it)
+    # is unreachable: single-ledger (INV-1) only, no branch/tree gate.
+    check_invariants(ex, allow_any_head=True)
+    with transaction(ex.git, label=f"decision answer {decision_id}"):
+        d = ex.ledger.answer_decision(decision_id, answer)
     if d is None:
         raise click.ClickException(f"no open decision {decision_id}")
     click.echo(f"Answered {decision_id}; {d.step} unblocked. Run `steward run` to resume.")

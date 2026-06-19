@@ -13,8 +13,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from devsteward.config import load_config
 from devsteward.core.accounts import SingleAccountProvider
+from devsteward.core.errors import PreconditionError
 from devsteward.core.executor import Executor, RunOutcome
 from devsteward.core.ledger import Ledger
 from devsteward.core.model import Step, StepStatus
@@ -63,18 +66,21 @@ def test_config_branch_names(tmp_path: Path):
 
 
 def test_refuses_on_production_branch(project):
-    """AC2 — on the production branch: no claude, no commit, step stays PENDING."""
+    """AC2 — on the production branch a mutation refuses to *start*: REQ-049 folds the old
+    branch_guard into INV-2, so ``check_invariants`` raises a typed ``PreconditionError``
+    before any claude call, commit, or ledger write (the step stays PENDING)."""
     step = Step(id="REQ-011:land", command="/advance REQ-011 land", verify=("true",))
     runner = FakeRunner(default=ok_result())
     committer = RecordingCommitter()
     ex = _executor(project, [step], branch="main", runner=runner, committer=committer)
 
-    res = ex.advance_once()
-    assert res.outcome is RunOutcome.REFUSED
+    with pytest.raises(PreconditionError) as exc:
+        ex.advance_once()
+    assert "main" in str(exc.value)
+    assert exc.value.recovery  # carries the one-line operator recovery
     assert runner.calls == []
     assert committer.committed == []
     assert Ledger(project).status_of("REQ-011:land") is StepStatus.PENDING
-    assert "main" in res.detail
 
 
 def test_proceeds_off_production_branch(project):

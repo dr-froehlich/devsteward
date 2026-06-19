@@ -100,6 +100,7 @@ class FakeGitTopology:
     def __init__(self, current: str = "dev"):
         self.current = current
         self.commits: list[tuple[str, str]] = []
+        self.resets: list[str] = []
 
     def current_branch(self) -> str:
         return self.current
@@ -114,6 +115,13 @@ class FakeGitTopology:
     def commit_ledger(self, message: str) -> str | None:
         self.commits.append((self.current, message))
         return f"sha{len(self.commits):04d}"
+
+    def reset_hard(self, sha: str) -> None:
+        # The in-memory loop never raises, so the transaction rollback is not exercised here;
+        # record the call and truncate the recorded commits to the snapshot for fidelity.
+        self.resets.append(sha)
+        n = int(sha[3:]) if sha.startswith("sha") else len(self.commits)
+        del self.commits[n:]
 
 
 @pytest.fixture

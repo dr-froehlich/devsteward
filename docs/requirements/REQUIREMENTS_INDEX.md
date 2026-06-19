@@ -52,5 +52,6 @@ commit** as its frontmatter and the code.
 | REQ-044 | steward supersede — close an already-superseded feature branch without a false merge-by-hand recovery | SUPERSEDED | [REQ-044](REQ-044.md) | REQ-037, REQ-043 |
 | REQ-047 | Single-source-of-truth state model — trunk-based on dev with a universal transaction boundary, so engine state cannot diverge or strand | DRAFT | [REQ-047](REQ-047.md) | REQ-002, REQ-018, REQ-020, REQ-032 |
 | REQ-048 | Trunk-based model — all work on dev, deleting the worktree/switch/branch machinery | DONE | [REQ-048](REQ-048.md) | REQ-047 |
+| REQ-049 | Universal transaction boundary + central invariants — no mutation can diverge or strand | DONE | [REQ-049](REQ-049.md) | REQ-047, REQ-048 |
 
 New requirement template: [`_templates/req.md`](../../devsteward/templates/docs/requirements/_templates/req.md)

@@ -17,7 +17,7 @@ from devsteward.core.ledger import Ledger
 from devsteward.core.model import Step, StepStatus
 from devsteward.core.verify import CommandVerifier
 
-from conftest import FakeRunner, ListStepSource, RecordingCommitter
+from conftest import FakeGitTopology, FakeRunner, ListStepSource, RecordingCommitter
 
 
 def test_markers_in_content_are_not_a_limit():
@@ -82,6 +82,7 @@ def test_executor_no_false_limit_on_marker_content(project):
         accounts=SingleAccountProvider(),
         runner=FakeRunner(default=result),
         committer=committer,
+        git=FakeGitTopology(),
     )
 
     res = ex.run_step(step)

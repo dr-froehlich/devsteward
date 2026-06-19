@@ -188,6 +188,32 @@ give (REQ-047 Decision 3/4).
   commands succeed from any HEAD/working-tree state; no command is left unrecoverable by a
   parked decision (the historical stalemate is unreachable — INV-1 on writes).
 
+### Stage B — as built (REQ-049, landed on `dev`)
+
+Three faithful refinements surfaced while building, all *implementing* the plan's intent:
+
+- **`check_invariants(ex, *, allow_any_head=False)`.** AC3 (decision/recovery succeed
+  *regardless of HEAD*) requires the recovery verbs to be exempt from INV-2's branch/tree
+  gate while still INV-1-checked — exactly the plan's note that "the decision-stranding bug
+  was INV-1 unenforced on a write." So the four recovery/decision verbs pass
+  `allow_any_head=True` (INV-1 only); the committing paths run the full set. INV-2 folding in
+  `branch_guard` means an on-`main` mutation now *raises* `PreconditionError` (was a returned
+  `RunOutcome.REFUSED`); two REFUSED-on-production tests updated, graceful REFUSEDs unchanged.
+- **`transaction(..., pass_through=(...))`.** A lifecycle verb's `LifecycleError` is a
+  graceful refusal raised *before* any mutation — a `reset --hard` on it would wrongly
+  discard the uncommitted work those verbs exist to leave (`recover` must *preserve* the
+  failed attempt's edits). So the boundary passes caller-declared refusals straight through
+  without rollback. Wrapping the non-committing recovery verbs would otherwise contradict
+  their own contract — flagged and resolved this way.
+- **`reset_hard` rejoins the `GitTopology` seam.** The boundary's restore needs it; it is the
+  one method Stage A's collapse has to give back — a read-restore, not topology.
+
+Boundary placement: `transaction` wraps `_drive_step` (covers `advance_once`/`run` and, via
+`run_step`, the batch validate path), `checkpoint`, and the guided-validate `record`. The
+`_commit`/`_commit_ledger_close` git-error swallows are removed so failures reach the
+boundary; unit loop suites moved onto the in-memory `FakeGitTopology` seam so that removal
+does not regress them (real-git teeth live in `test_transaction_boundary.py`).
+
 ---
 
 ## Stage C — REQ-050: commit integrity (absorbs REQ-046-F2)

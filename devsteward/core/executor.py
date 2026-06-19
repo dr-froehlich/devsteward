@@ -26,7 +26,6 @@ event records which one drove (``driver: headless | interactive``).
 
 from __future__ import annotations
 
-import subprocess
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
@@ -34,9 +33,11 @@ from typing import Callable
 
 from . import claude as claude_mod
 from .git import GitCli
+from .invariants import check_invariants
 from .ledger import Ledger
 from .model import Decision, Step, StepStatus
 from .seams import AccountProvider, GitTopology, StepSource, Verifier
+from .transaction import transaction
 
 PARK_SENTINEL = "[[DEVSTEWARD_PARK]]"
 
@@ -128,7 +129,7 @@ class Executor:
         self.git: GitTopology = git if git is not None else GitCli(self.root)
         self.ledger = Ledger(self.root)
 
-    # -- branch guard ----------------------------------------------------------
+    # -- invariants / read entry point -----------------------------------------
 
     def current_branch(self) -> str:
         return self.git.current_branch()
@@ -141,19 +142,9 @@ class Executor:
         from any state. Kept as a stable read entry point for the CLI."""
         return self.ledger
 
-    def branch_guard(self) -> str | None:
-        """Refusal message if HEAD is the production branch, else ``None``.
-
-        A whole-run precondition (the engine never switches branches), so the drivers
-        consult it once up front — before any ``claude`` invocation.
-        """
-        if self.current_branch() == self.production_branch:
-            return (
-                f"refusing to autocommit on the production branch "
-                f"'{self.production_branch}' — DevSteward never commits to production; "
-                f"switch to the integration branch '{self.integration_branch}' and re-run."
-            )
-        return None
+    # The old ``branch_guard()`` (refuse to commit on the production branch) folded into
+    # ``check_invariants`` as INV-2 (REQ-049): a precondition raised centrally, before any
+    # mutation, as a typed ``PreconditionError`` rather than a per-call-site refusal string.
 
     def bring_up_guided_session(
         self, step: Step, evidence_rel: str, *, on_event=None
@@ -376,9 +367,7 @@ class Executor:
         no index touch, no commit, no cursor move, no checkpoint event — so a re-run
         after a fix lands with no ``recover``.
         """
-        refusal = self.branch_guard()
-        if refusal is not None:  # never commit a checkpoint onto the production branch
-            return StepResult(step, RunOutcome.REFUSED, refusal)
+        check_invariants(self)  # REQ-049: refuse on production / mid-merge before any write
         led = self.ledger
         if led.status_of(step.id) is StepStatus.DONE:
             # REQ-040 Decision 3: the bookkeeper is idempotent. A re-checkpoint of an
@@ -393,17 +382,21 @@ class Executor:
                 f"(steward checkpoint is idempotent: no flip, no commit, no ledger "
                 f"write). Run `steward status` for the live cursor and the next step.",
             )
-        verified, detail = self.verifier.verify(step)
-        led.append_event("verify", step=step.id, ok=verified, detail=detail[:2000])
-        if not verified:
-            led.set_status(step.id, StepStatus.FAILED)
-            led.save()
-            return StepResult(step, RunOutcome.VERIFY_FAILED, detail)
-        if not step.lands:
-            # REQ-030 Decision 6: a validate step follows — commit the develop work; the
-            # land fires after `steward validate`.
-            return self.commit_deferred(step, detail, driver="interactive")
-        return self.mechanical_land(step, detail, driver="interactive")
+        # REQ-049: the verify-gated land is atomic — any git failure mid-commit rolls the
+        # repo + ledger back to the pre-command snapshot and surfaces a RecoverableError. A
+        # red verify is a *return value* (not an exception), so its FAILED write persists.
+        with transaction(self.git, label=f"checkpoint {step.id}"):
+            verified, detail = self.verifier.verify(step)
+            led.append_event("verify", step=step.id, ok=verified, detail=detail[:2000])
+            if not verified:
+                led.set_status(step.id, StepStatus.FAILED)
+                led.save()
+                return StepResult(step, RunOutcome.VERIFY_FAILED, detail)
+            if not step.lands:
+                # REQ-030 Decision 6: a validate step follows — commit the develop work; the
+                # land fires after `steward validate`.
+                return self.commit_deferred(step, detail, driver="interactive")
+            return self.mechanical_land(step, detail, driver="interactive")
 
     def mechanical_land(
         self, step: Step, detail: str = "", driver: str = "headless"
@@ -629,12 +622,11 @@ class Executor:
             return None
         title = step.title or step.id
         message = f"{step.id}: {title}\n\n{_TRAILER}"
-        try:
-            # REQ-048: the code commit (code + REQ flip + index) never carries the ledger —
-            # the cursor advances in its own trailing .devsteward/ commit.
-            return self.git.commit_code(message)
-        except subprocess.CalledProcessError:
-            return None
+        # REQ-048: the code commit (code + REQ flip + index) never carries the ledger — the
+        # cursor advances in its own trailing .devsteward/ commit. REQ-049: a git failure
+        # here is *not* swallowed — it propagates to the transaction boundary, which rolls
+        # the half-commit back and surfaces a RecoverableError (no silent None half-state).
+        return self.git.commit_code(message)
 
     def _commit_ledger_close(self, step: Step | None, subject: str) -> str | None:
         """Commit the trailing ledger write (and any captured evidence) on ``dev`` as a
@@ -642,15 +634,13 @@ class Executor:
 
         REQ-048 (trunk-based): the ledger is the single ``.devsteward/`` at the repo root and
         the commit lands directly on ``dev`` — no worktree, no branch. A clean ledger makes
-        **no empty commit** (:meth:`GitCli.commit_ledger` returns ``None``). Tolerant of a
-        missing repo / failed commit so a non-git test harness or a committer-stubbed land
-        does not crash on the trailing close.
+        **no empty commit** (:meth:`GitCli.commit_ledger` returns ``None``). REQ-049: a git
+        failure here is not swallowed — it propagates to the enclosing transaction boundary,
+        which restores the pre-command snapshot and raises a RecoverableError (the in-memory
+        fake never raises, so a non-git test harness still runs clean).
         """
         ref = (step.req or step.id) if step is not None else "ledger"
-        try:
-            return self.git.commit_ledger(f"{ref}: {subject}\n\n{_TRAILER}")
-        except subprocess.CalledProcessError:
-            return None
+        return self.git.commit_ledger(f"{ref}: {subject}\n\n{_TRAILER}")
 
     # -- step driver -----------------------------------------------------------
 
@@ -668,10 +658,16 @@ class Executor:
         event, any captured evidence) — a clean ledger makes no empty commit — so the next
         step in a batch run starts from a clean tree rather than riding this step's writes.
         Shared by both drivers.
+
+        REQ-049: the whole step is one transaction — a git failure anywhere in the session,
+        verify, land, or ledger close rolls the repo + ledger back to the pre-step snapshot
+        and surfaces a RecoverableError. Terminal *outcomes* (PARKED/FAILED/VERIFY_FAILED)
+        are return values, not exceptions, so they persist; only a real failure rolls back.
         """
-        res = self.run_step(step, unattended=unattended, on_event=on_event)
-        if res.outcome is RunOutcome.PARKED:
-            self._commit_ledger_close(step, "ledger close — parked")
+        with transaction(self.git, label=f"step {step.id}"):
+            res = self.run_step(step, unattended=unattended, on_event=on_event)
+            if res.outcome is RunOutcome.PARKED:
+                self._commit_ledger_close(step, "ledger close — parked")
         return res
 
     # -- drivers ---------------------------------------------------------------
@@ -688,10 +684,7 @@ class Executor:
         ``only`` restricts selection to one REQ's steps (REQ-026): the next eligible step
         of ``REQ-NNN`` even when a lower-id REQ is also eligible.
         """
-        refusal = self.branch_guard()
-        if refusal is not None:
-            self.ledger.append_event("branch_refused", branch=self.current_branch())
-            return StepResult(self.next_eligible(only=only), RunOutcome.REFUSED, refusal)
+        check_invariants(self)  # REQ-049: refuse up front on production / mid-merge (raises)
         step = self.next_eligible(only=only)
         if step is None:
             return None
@@ -710,10 +703,7 @@ class Executor:
         next independent step and stops when nothing is eligible. ``only`` restricts the
         whole run to one REQ's steps (REQ-026).
         """
-        refusal = self.branch_guard()
-        if refusal is not None:
-            self.ledger.append_event("branch_refused", branch=self.current_branch())
-            return [StepResult(self.next_eligible(only=only), RunOutcome.REFUSED, refusal)]
+        check_invariants(self)  # REQ-049: refuse up front on production / mid-merge (raises)
         results: list[StepResult] = []
         count = 0
         while True:

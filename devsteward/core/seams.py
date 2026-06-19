@@ -64,10 +64,13 @@ class GitTopology(Protocol):
         """The checked-out branch (the ``main``-refusal guard reads this)."""
 
     def head_sha(self) -> str:
-        """The current ``HEAD`` commit sha."""
+        """The current ``HEAD`` commit sha (the snapshot the transaction boundary restores)."""
 
     def commit_code(self, message: str) -> str | None:
         """Stage everything except ``.devsteward/`` and commit; ``None`` if nothing staged."""
 
     def commit_ledger(self, message: str) -> str | None:
         """Stage and commit only ``.devsteward/``; ``None`` when the ledger is unchanged."""
+
+    def reset_hard(self, sha: str) -> None:
+        """Restore the working tree and ``HEAD`` to ``sha`` (the transaction rollback, REQ-049)."""

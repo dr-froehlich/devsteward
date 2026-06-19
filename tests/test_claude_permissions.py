@@ -17,7 +17,13 @@ from devsteward.core.executor import Executor
 from devsteward.core.model import Step
 from devsteward.core.verify import CommandVerifier
 
-from conftest import FakeRunner, ListStepSource, RecordingCommitter, ok_result
+from conftest import (
+    FakeGitTopology,
+    FakeRunner,
+    ListStepSource,
+    RecordingCommitter,
+    ok_result,
+)
 
 # A stand-in for `claude` that echoes the argv it was handed back as a stream-json result,
 # so a test can assert which permission flag run_claude appended.
@@ -66,6 +72,7 @@ def test_executor_threads_permission_mode_to_runner(project):
         runner=runner,
         committer=RecordingCommitter(),
         permission_mode="bypassPermissions",
+        git=FakeGitTopology(),
     )
     ex.run_step(step)
     assert runner.calls[-1]["permission_mode"] == "bypassPermissions"

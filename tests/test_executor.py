@@ -11,7 +11,14 @@ from devsteward.core.ledger import Ledger
 from devsteward.core.model import Step, StepStatus
 from devsteward.core.verify import CommandVerifier
 
-from conftest import FakeRunner, ListStepSource, RecordingCommitter, ok_result, park_result
+from conftest import (
+    FakeGitTopology,
+    FakeRunner,
+    ListStepSource,
+    RecordingCommitter,
+    ok_result,
+    park_result,
+)
 
 
 def _executor(root, steps, runner, committer=None, on_verified=None):
@@ -23,6 +30,7 @@ def _executor(root, steps, runner, committer=None, on_verified=None):
         runner=runner,
         committer=committer or RecordingCommitter(),
         on_verified=on_verified,
+        git=FakeGitTopology(),  # REQ-049: unit loop tests use the in-memory git seam (on dev)
     )
 
 
@@ -258,6 +266,7 @@ def test_graceful_stop_after_current_step(project, monkeypatch):
         runner=FakeRunner(default=ok_result()),
         committer=RecordingCommitter(),
         stop=_CountingStop(stop_after=1),
+        git=FakeGitTopology(),
     )
     results = ex.run()
     assert [r.step.id for r in results] == ["REQ-A:design"]  # only the first step ran

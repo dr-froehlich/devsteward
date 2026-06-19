@@ -14,7 +14,10 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
+import pytest
+
 from devsteward.core.accounts import SingleAccountProvider
+from devsteward.core.errors import PreconditionError
 from devsteward.core.executor import Executor, RunOutcome
 from devsteward.core.ledger import Ledger
 from devsteward.core.model import StepStatus
@@ -328,6 +331,8 @@ def test_no_empty_commits_on_no_op_paths(tmp_path):
     ex2 = _executor(other)
     n_before = len(_subjects(other))
 
-    res2 = ex2.advance_once()
-    assert res2.outcome is RunOutcome.REFUSED
-    assert len(_subjects(other)) == n_before  # the engine made no commit on production
+    # REQ-049: on production the mutation refuses to start (typed PreconditionError) before
+    # any commit — the engine made no commit on the production branch.
+    with pytest.raises(PreconditionError):
+        ex2.advance_once()
+    assert len(_subjects(other)) == n_before
