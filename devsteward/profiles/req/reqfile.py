@@ -162,7 +162,13 @@ def load_reqs(req_dir: Path) -> list[ReqFile]:
     return reqs
 
 
-_STATUS_LINE_RE = re.compile(r"^(status:[ \t]*)(['\"]?)([A-Za-z-]+)(['\"]?)[ \t]*$", re.MULTILINE)
+# The trailing ``([ \t]*(?:#.*)?)`` group tolerates — and preserves — an inline comment,
+# because the intake template stamps ``status: draft   # draft | open | …`` on every REQ.
+# The YAML parser strips that comment, so a regex that anchored ``$`` to the value would
+# silently fail to match any normally-intaken REQ at land/validate time.
+_STATUS_LINE_RE = re.compile(
+    r"^(status:[ \t]*)(['\"]?)([A-Za-z-]+)(['\"]?)([ \t]*(?:#.*)?)$", re.MULTILINE
+)
 
 
 def set_frontmatter_status(path: Path, new_status: str) -> str:
@@ -183,7 +189,7 @@ def set_frontmatter_status(path: Path, new_status: str) -> str:
 
     def repl(m: re.Match) -> str:
         old.append(m.group(3))
-        return f"{m.group(1)}{m.group(2)}{new_status}{m.group(4)}"
+        return f"{m.group(1)}{m.group(2)}{new_status}{m.group(4)}{m.group(5)}"
 
     new_block, n = _STATUS_LINE_RE.subn(repl, block, count=1)
     if n == 0:

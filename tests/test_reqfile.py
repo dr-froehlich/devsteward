@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
-from devsteward.profiles.req.reqfile import load_reqs, parse_req, update_acceptance_status
+from devsteward.profiles.req.reqfile import (
+    load_reqs,
+    parse_req,
+    set_frontmatter_status,
+    update_acceptance_status,
+)
 
 from conftest import write_req
 
@@ -64,6 +69,27 @@ def test_acceptance_check_parsed_and_default_empty(tmp_path):
 
     write_req(tmp_path, "REQ-006", check=None)
     assert parse_req(tmp_path / "REQ-006.md").acceptance[0].check == ""
+
+
+def test_set_frontmatter_status_preserves_inline_comment(tmp_path):
+    """The intake template stamps ``status: <v>   # draft | open | …`` on every REQ. The
+    surgical status writer must flip the value and KEEP the trailing comment — anchoring
+    ``$`` to the value made every normally-intaken REQ fail at land/validate (REQ-052)."""
+    path = tmp_path / "REQ-052.md"
+    path.write_text(
+        "---\n"
+        "id: REQ-052\n"
+        'title: "t"\n'
+        "status: in-progress      # draft | open | in-progress | blocked | done | dropped\n"
+        "kind: chore\n"
+        "---\n\nbody\n",
+        encoding="utf-8",
+    )
+    old = set_frontmatter_status(path, "done")
+    assert old == "in-progress"
+    text = path.read_text(encoding="utf-8")
+    assert "status: done      # draft | open | in-progress | blocked | done | dropped\n" in text
+    assert parse_req(path).status == "done"
 
 
 def test_status_writeback_preserves_check(tmp_path):
