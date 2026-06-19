@@ -249,6 +249,18 @@ validation. Driven **interactively** (not by `steward run`) in this order — se
   covering both reviews, fixes the feasible low-risk findings inline, and spins the rest out as
   recommendations / follow-on REQs. Manual sign-off + regression (suite stays green). With
   REQ-047.
+- REQ-055 — **`steward revalidate`** (draft, feature): the one correctness-of-fit gap from
+  REQ-053's audit — the only place a named path makes a human redo *sound* work. A red
+  validation today steers unconditionally to `steward rework` (re-open develop, rebuild),
+  right only when develop was *hollow* (internal cause). When the cause is *external* (broken
+  lab/fixture/credential the human fixed) the develop work stands and only the validation
+  should re-run. Adds `revalidate` as `rework`'s structural mirror — same precondition (an
+  in-flight REQ parked on a *red* validation), opposite action: flip `validate` BLOCKED→PENDING,
+  leave `develop` DONE, answer the parked decision, append a `revalidate` event — and fixes the
+  `_park_red` brief to name *both* edges as a root-cause choice. Red-only precondition (state F
+  / pending-awaiting-oracle stays `steward validate`, REQ-057). Regression-only; code + brief +
+  tests, no handbook (docs → REQ-057). Independent of REQ-054. With REQ-033 (the mirrored edge),
+  REQ-047.
 - REQ-053 — **process resilience: forward-path audit + rework/repeat model** (draft, design):
   the third strand of REQ-052's idea stub, split out as a process redesign. Audits whether,
   post-REQ-047 (state can no longer diverge), every red/failed/parked state has a clear,
@@ -291,7 +303,8 @@ REQ-001
            ├─ REQ-036 (draft, steward sync-skills: refresh stamped bundled skills + provenance manifest + drift signal; with REQ-007)
            └─ REQ-039 (draft, concept phase: interactive leading architecture session that gates develop — left-arm counterpart of validate; with REQ-027, REQ-029, REQ-034)
  REQ-047 (done, trunk-based pivot) ──┬─ REQ-052 (draft, post-pivot code + skill review → sign-off report)
-                                     └─ REQ-053 (draft, design: process-resilience forward-path audit + rework/repeat model)
+                                     └─ REQ-053 (done, design: process-resilience forward-path audit + rework/repeat model)
+ REQ-033 (rework edge) ── REQ-055 (draft, feature: steward revalidate — mirror of rework, external-cause re-validate; with REQ-047)
  REQ-011 (done, production-branch guard) ── REQ-019 (done, integration-branch guard) ── REQ-020 (draft, branch lifecycle automation)
  REQ-024 (draft, onboard skill) ── orchestrates REQ-007 + REQ-009 + REQ-010/023 + REQ-021 + REQ-022 (memzy onboarding)
 ```
