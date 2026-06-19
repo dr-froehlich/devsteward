@@ -57,6 +57,7 @@ commit** as its frontmatter and the code.
 | REQ-051 | Lab fixtures upstream — a missing fixture is a hard red and the System Tester never improvises | DONE | [REQ-051](REQ-051.md) | REQ-047, REQ-048 |
 | REQ-052 | Post-REQ-047 cleanup — code + skill review for stale/bent legacy, with a sign-off report | DONE | [REQ-052](REQ-052.md) | REQ-047 |
 | REQ-053 | Process resilience — every red step has an available forward path; audit the rework-vs-repeat model | DONE | [REQ-053](REQ-053.md) | REQ-047 |
+| REQ-054 | Rename the recover verb to repeat — the run-it-again action, named honestly | DRAFT | [REQ-054](REQ-054.md) | REQ-026 |
 | REQ-055 | steward revalidate — re-run a red validation without redoing sound develop work | DRAFT | [REQ-055](REQ-055.md) | REQ-033, REQ-047 |
 
 New requirement template: [`_templates/req.md`](../../devsteward/templates/docs/requirements/_templates/req.md)

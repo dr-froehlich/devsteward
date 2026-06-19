@@ -249,6 +249,17 @@ validation. Driven **interactively** (not by `steward run`) in this order — se
   covering both reviews, fixes the feasible low-risk findings inline, and spins the rest out as
   recommendations / follow-on REQs. Manual sign-off + regression (suite stays green). With
   REQ-047.
+- REQ-054 — **rename `recover` → `repeat`** (draft, refactor): recommendation #1 of REQ-053's
+  audit. `steward recover` is misnamed for its dominant use — re-arming a `FAILED` step whose
+  work was *sound* (an external crash/timeout/account swap) so the next run runs it again;
+  `repeat` names that action honestly and reads right for the gate-red case too (the resuming
+  session judges from the tree, so no split-by-cause). Renames the user-facing surface only —
+  the `steward repeat` verb (**hard rename, no alias**), `lifecycle.repeat()`, and the
+  `--recover` → `--repeat` resume flag (a two-sided contract: the executor appends it, the
+  `advance` skill consumes it, so both move together). Leaves the internal `StepStatus.RECOVER`
+  symbol and the `step_recover` event name unchanged (not user-facing; preserves ledger-history
+  continuity). Code + tests only; handbook/skill *prose* defers to a docs REQ. No behavioural
+  change. Independent of REQ-055. With REQ-026 (the verb it renames).
 - REQ-055 — **`steward revalidate`** (draft, feature): the one correctness-of-fit gap from
   REQ-053's audit — the only place a named path makes a human redo *sound* work. A red
   validation today steers unconditionally to `steward rework` (re-open develop, rebuild),
@@ -304,6 +315,7 @@ REQ-001
            └─ REQ-039 (draft, concept phase: interactive leading architecture session that gates develop — left-arm counterpart of validate; with REQ-027, REQ-029, REQ-034)
  REQ-047 (done, trunk-based pivot) ──┬─ REQ-052 (draft, post-pivot code + skill review → sign-off report)
                                      └─ REQ-053 (done, design: process-resilience forward-path audit + rework/repeat model)
+ REQ-026 (recover verb) ── REQ-054 (draft, refactor: rename recover → repeat + --recover → --repeat; hard rename, no alias)
  REQ-033 (rework edge) ── REQ-055 (draft, feature: steward revalidate — mirror of rework, external-cause re-validate; with REQ-047)
  REQ-011 (done, production-branch guard) ── REQ-019 (done, integration-branch guard) ── REQ-020 (draft, branch lifecycle automation)
  REQ-024 (draft, onboard skill) ── orchestrates REQ-007 + REQ-009 + REQ-010/023 + REQ-021 + REQ-022 (memzy onboarding)
