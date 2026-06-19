@@ -30,7 +30,6 @@ history — never rewritten, ignored for eligibility.
 
 from __future__ import annotations
 
-import re
 from pathlib import Path
 
 from ...core.model import Step
@@ -42,22 +41,8 @@ _COMMAND = "/advance"
 # The System Tester session (REQ-030 D2) — fresh, never sees develop's diff.
 _VALIDATE_COMMAND = "/system-test"
 
-_SLUG_MAX_WORDS = 5
-
 #: REQ-027 ``check:`` values routed to the validate step (REQ-030 Decision 1).
 _VALIDATE_CHECKS = {"artifact", "manual"}
-
-
-def _slugify(title: str) -> str:
-    """A short branch-name segment from a REQ title (REQ-020 feeds ``req-<num>-<slug>``).
-
-    Take the headline before the first ` — ` (em dash) separator, lowercase, map runs of
-    non-alphanumerics to a single hyphen, and cap at a few words. E.g.
-    "Branch lifecycle automation — the executor…" → ``branch-lifecycle-automation``.
-    """
-    headline = title.split(" — ", 1)[0]
-    words = [w for w in re.sub(r"[^a-z0-9]+", "-", headline.lower()).split("-") if w]
-    return "-".join(words[:_SLUG_MAX_WORDS])
 
 
 def has_validate_step(req: ReqFile) -> bool:
@@ -113,7 +98,6 @@ class ReqStepSource:
                 for c in r.acceptance
                 if c.test and c.check not in _VALIDATE_CHECKS
             )
-            slug = _slugify(r.title)
             out.append(
                 Step(
                     id=f"{r.id}:{phase}",
@@ -123,7 +107,6 @@ class ReqStepSource:
                     title=f"{r.title} — {phase}",
                     req=r.id,
                     phase=phase,
-                    slug=slug,
                     attended=bool(attended_reason),
                     attended_reason=attended_reason,
                     lands=not validating,
@@ -152,7 +135,6 @@ class ReqStepSource:
                         title=f"{r.title} — validate",
                         req=r.id,
                         phase="validate",
-                        slug=slug,
                         blocked_note=(
                             "validation waiting on " + ", ".join(labs_pending)
                             if labs_pending

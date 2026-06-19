@@ -50,8 +50,7 @@ class Step:
     ``command`` is the headless Claude prompt (e.g. ``"/advance"``). ``depends_on``
     lists the ids of steps that must be ``DONE`` before this one is eligible. ``verify``
     lists the test commands the verifier must see green before the step is marked done.
-    ``req``/``phase``/``slug`` are profile bookkeeping (unused by the generic profile);
-    ``slug`` feeds the feature-branch name when the executor manages topology (REQ-020).
+    ``req``/``phase`` are profile bookkeeping (unused by the generic profile).
     """
 
     id: str
@@ -61,7 +60,6 @@ class Step:
     title: str = ""
     req: str | None = None
     phase: str | None = None
-    slug: str = ""  # short branch-name segment; the profile (not the core) derives it
     #: This step needs a human present (the profile sets it; the core only honors it by
     #: parking in batch). REQ-029: a REQ that declared a split develop or a concept phase.
     attended: bool = False
@@ -69,9 +67,9 @@ class Step:
     #: surfaces it verbatim in the batch park decision). Empty when ``attended`` is False.
     attended_reason: str = ""
     #: Whether a green gate on this step *lands* its deliverable (terminal flip, land
-    #: gate, ``--no-ff`` merge). The REQ profile sets ``False`` on a develop step that
-    #: defers to a trailing ``validate`` step (REQ-030 Decision 6): the work is committed
-    #: on the feature branch, but the land fires only after validation is green.
+    #: gate). The REQ profile sets ``False`` on a develop step that defers to a trailing
+    #: ``validate`` step (REQ-030 Decision 6): the work is committed on ``dev``, but the
+    #: land fires only after validation is green.
     lands: bool = True
     #: Opaque human-readable note on why the step is currently held (the profile fills
     #: it; ``steward status`` surfaces it verbatim). E.g. REQ-030 Decision 7: a validate

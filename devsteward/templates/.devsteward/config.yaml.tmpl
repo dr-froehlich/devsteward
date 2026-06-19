@@ -35,19 +35,15 @@ accounts:
 claude:
   permission_mode: dangerously-skip
 
-# Branching model. `main` is production (release tags are cut here); the integration
-# branch is the default working and merge target, with REQ-sized work on feature branches
-# merged into it by a plain local merge. The engine refuses to autocommit on
-# `production_branch` — switch to the integration branch or a feature branch to run.
-# For an implementation step (`build`/`land`) on the integration branch the engine now
-# *manages* the feature branch end-to-end: it creates+switches to `feature_branch` (a
-# template over `{num}` = the REQ id sans `REQ-`, and `{slug}`), then merges it back
-# `--no-ff` after a green land. Declaration (`design`/intake) stays on the integration
-# branch and is never branched.
+# Branching model — trunk-based. `main` is production (release tags are cut here); the
+# integration branch is the default working branch. All work — declaration *and*
+# implementation — lands on the integration branch; there are no feature branches, no
+# worktrees, and the engine never switches branches. The engine refuses to autocommit on
+# `production_branch` — switch to the integration branch to run. The only branch operation
+# is the human-gated integration → production release PR.
 git:
   production_branch: main
   integration_branch: dev
-  feature_branch: req-{num}-{slug}
 
 # How the land gate verifies (REQ-028). A `land` step is DONE only when its named
 # acceptance behaviour *observably ran and passed*: a skipped or zero-collection named

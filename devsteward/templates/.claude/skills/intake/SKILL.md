@@ -102,10 +102,8 @@ and no lab is needed):
 - Run `steward lint` and fix anything it reports. Leave it green.
 
 Do all of this in **one commit** (frontmatter + index + roadmap together), co-author
-trailer, on `dev` — the integration branch. A requirement is a *registry declaration*, not
-implementation; committing it on `dev` serializes id allocation and keeps the shared
-index/roadmap from forking. (Trunk-based — REQ-048: implementation lands on `dev` too, in its
-own commits; there is no feature branch.)
+trailer, on `dev`. A requirement is a *registry declaration*, not implementation;
+committing it serializes id allocation and keeps the index/roadmap consistent.
 
 ## 4. Unattended fork handling
 

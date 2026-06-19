@@ -8,7 +8,7 @@ description: Do exactly one checkpoint of the current requirement — the fused 
 You do **exactly one** checkpoint and stop. After REQ-029 the cycle per requirement is a
 single fused **Develop** checkpoint: plan-first, then the code, then the acceptance tests,
 all in one session. On green the engine **lands the REQ mechanically** (status flip, index
-sync, commit — all on `dev`; trunk-based, no branch/merge) — you never write `status: done` and the land spends no
+sync, commit — all on `dev`) — you never write `status: done` and the land spends no
 Claude tokens. **The engine is the verifying bookkeeper in both modes** — the same gate,
 the same land, whoever drives. Your job is the cognitive work of the one checkpoint; what
 varies by mode is who invokes the bookkeeper and what happens at a fork.
@@ -36,7 +36,7 @@ Everything tagged *(batch)* or *(interactive)* below applies to that mode only.
 
 - Run **`steward status`** for the cursor (`cursor.step`, e.g. `REQ-007:develop`) and step
   statuses — never hand-read `.devsteward/state.yaml`. `steward status` is the one sanctioned
-  read of the live ledger (trunk-based, there is a single ledger on `dev`). If invoked as
+  read of the live ledger (there is a single ledger on `dev`). If invoked as
   `/advance REQ-NNN develop`, that is your target.
 - Read the target REQ, `CLAUDE.md`, and anything the REQ's `depends_on` produced.
 - **Recovery (`--recover` in your command):** if the step command includes `--recover`,
@@ -89,7 +89,7 @@ The fused **Develop** checkpoint, in order, in one session:
 End with the fixed report (below) **after** handling the land per your mode:
 
 - *(interactive)* run **`steward checkpoint REQ-NNN develop`** (with no arguments it targets
-  the current cursor step) — all on `dev`, no branch to create (trunk-based). It is the
+  the current cursor step) — all on `dev`. It is the
   engine's bookkeeping as one transaction: it re-runs the acceptance tests, checks the plan
   artifact exists, flips the REQ + index to `done`, makes the one authoritative code commit
   (frontmatter + index + code together, co-author trailer), advances the ledger, and commits

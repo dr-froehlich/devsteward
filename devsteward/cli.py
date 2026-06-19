@@ -251,8 +251,8 @@ def status() -> None:
     """Show the ledger cursor, eligible/blocked steps, and parked decisions."""
     cfg = _load_or_die()
     ex = build_executor(cfg)
-    # REQ-040 Decision 1: bind the read path too — from a feature branch an unbound read
-    # returns the stale branch-cut snapshot, not the live integration-branch cursor.
+    # REQ-040 Decision 1: bind the read path too — from another checked-out branch (e.g.
+    # `main`) an unbound read returns a stale snapshot, not the live integration-branch cursor.
     led = ex.live_ledger()
     click.echo(f"profile: {led.profile}    cursor: {led.cursor_step or '—'}")
 
@@ -482,8 +482,8 @@ def checkpoint(req_id: str | None, phase: str | None) -> None:
     cfg = _load_or_die()
     ex = build_executor(cfg)
     if req_id is None:
-        # REQ-041: resolve the cursor from the live integration-branch ledger, not the
-        # unbound feature-branch snapshot (REQ-040 Decision 1, completed across read sites).
+        # REQ-041: resolve the cursor from the live integration-branch ledger, not an
+        # unbound snapshot of another branch (REQ-040 Decision 1, completed across read sites).
         step_id = ex.live_ledger().cursor_step
         if not step_id:
             raise click.ClickException(
@@ -605,8 +605,8 @@ def validate(req_id: str, quiet: bool) -> None:
             f"criterion, or it is not active"
         )
     # REQ-041: the develop-done pre-flight must read the live integration-branch ledger —
-    # an unbound read on a feature branch sees the stale branch-cut snapshot and falsely
-    # reports a checkpointed develop step as "not closed" (REQ-040 Decision 1, finished here).
+    # an unbound read from another branch sees a stale snapshot and falsely reports a
+    # checkpointed develop step as "not closed" (REQ-040 Decision 1, finished here).
     if ex.live_ledger().status_of(f"{req_id}:develop") is not StepStatus.DONE:
         raise click.ClickException(
             f"{req_id}:develop is not closed yet — validation follows the develop "

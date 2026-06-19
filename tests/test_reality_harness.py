@@ -1,50 +1,33 @@
-"""REQ-013 — the reality harness: prove the engine drives a *real* ``claude -p``.
+"""REQ-013 — the reality-gate fixture plumbing (hermetic).
 
-Every other test in this suite mocks Claude (``FakeRunner``), which is exactly why the
-engine could look "done" while never having driven a real session end to end. This module
-closes that gap with a single opt-in test that:
+REQ-013 introduced an opt-in test that drove a **real** ``claude -p`` end-to-end, to close
+the gap that every other test mocks Claude (``FakeRunner``). That real-run test
+(``test_real_claude_end_to_end``) was removed in REQ-052: a once-observed end-to-end
+validation is not a regression test — it could only ever skip in CI (it needs network,
+quota, and ``claude`` on PATH), and Claude should not be spun up as the object of a
+regression test. Run that kind of check as a validation, observed, not on every suite.
 
-1. scaffolds a real, lint-clean throwaway project (with the bundled skills and one
-   trivial, observably-checkable REQ);
-2. runs the production executor, which shells out to a **real** ``claude -p``;
-3. asserts the chain actually happened — a real file edit the engine then verified and
-   committed.
-
-The real run needs network, quota, and ``claude`` on PATH, so it is **opt-in**: it skips
-unless ``DEVSTEWARD_REALITY=1`` and ``claude`` is present. The default ``pytest`` run
-stays hermetic. The three hermetic meta-tests below (REQ-013's acceptance) guard the
-gate's own plumbing so that a red real-run indicts the *engine*, never the fixture.
-
-Run the real gate with::
-
-    DEVSTEWARD_REALITY=1 python -m pytest tests/test_reality_harness.py -k real -s
-
-Since REQ-014 gave the headless run a permission mode, this passes on a single account
-(first green 2026-06-08, ~258s for design->build->land). It stays opt-in because it needs
-real claude, network, and quota — not because it is expected to fail. It is the standing
-trust gate: no checkpoint of the engine's own loop is trusted until it has run green.
+What remains are REQ-013's actual acceptance criteria: the **hermetic meta-tests** that
+guard the gate's own fixture plumbing — a lint-clean throwaway project with exactly one
+eligible step, and the opt-in skip logic — so the fixtures stay sound and executable.
 """
 
 from __future__ import annotations
 
 import shutil
-import subprocess
 from pathlib import Path
-
-import pytest
 
 from devsteward.build import build_executor
 from devsteward.cli import _package_templates, _stamp
 from devsteward.config import load_config
 from devsteward.core.ledger import Ledger
-from devsteward.core.model import StepStatus
 from devsteward.lint import lint
 
 REALITY_ENV = "DEVSTEWARD_REALITY"
 
-# Provider is `single`: the harness proves the executor → claude → edit → verify → commit
-# chain. cswap rotation has its own acceptance tests (REQ-012); pinning to single keeps
-# this gate's failure mode unambiguous.
+# Provider is `single`: the fixture project exercises the executor → verify chain. cswap
+# rotation has its own acceptance tests (REQ-012); pinning to single keeps the fixture's
+# behaviour unambiguous.
 _CONFIG = """\
 profile: req
 accounts:
@@ -106,10 +89,11 @@ _INDEX = """\
 
 
 def reality_skip_reason() -> str | None:
-    """``None`` ⇒ run the real end-to-end gate; a string ⇒ the reason to skip it.
+    """``None`` ⇒ the real end-to-end gate could run; a string ⇒ the reason it would skip.
 
-    Opt-in and degrading: the default test run never shells out to ``claude``, and an
-    enabled-but-unavailable ``claude`` skips with a clear reason rather than erroring.
+    Kept as the predicate the opt-in meta-tests exercise: the default test run never shells
+    out to ``claude``, and an enabled-but-unavailable ``claude`` degrades to a clear reason
+    rather than an error.
     """
     import os
 
@@ -143,20 +127,6 @@ def scaffold_reality_project(root: Path) -> None:
     )
 
 
-def init_git(root: Path) -> None:
-    """A real git repo on a non-production branch so the engine is allowed to commit."""
-
-    def g(*args: str) -> None:
-        subprocess.run(["git", *args], cwd=root, check=True, capture_output=True)
-
-    g("init", "-q")
-    g("config", "user.email", "reality@devsteward.test")
-    g("config", "user.name", "DevSteward Reality Harness")
-    g("checkout", "-q", "-b", "dev")  # off `main`, so the branch guard allows commits
-    g("add", "-A")
-    g("commit", "-q", "-m", "Reality harness: initial throwaway project")
-
-
 # -- hermetic meta-tests (REQ-013 acceptance) ---------------------------------
 
 
@@ -185,40 +155,3 @@ def test_fixture_project_is_lintable_and_has_one_eligible_step(tmp_path):
     assert lint(cfg) == []
     ex = build_executor(cfg)
     assert [s.id for s in ex.eligible_steps()] == ["REQ-001:develop"]
-
-
-# -- the real end-to-end gate (opt-in) ----------------------------------------
-
-
-def test_real_claude_end_to_end(tmp_path):
-    """Drive a real ``claude -p`` through the production executor and prove the chain.
-
-    Skipped unless ``DEVSTEWARD_REALITY=1`` and claude is on PATH. Passes on a single
-    account since REQ-014 (first green 2026-06-08); the standing trust gate.
-    """
-    reason = reality_skip_reason()
-    if reason:
-        pytest.skip(reason)
-
-    scaffold_reality_project(tmp_path)
-    init_git(tmp_path)
-    cfg = load_config(tmp_path)
-    ex = build_executor(cfg)
-
-    results = ex.run(max_steps=1)  # one fused develop step, then mechanical land
-    outcomes = {r.step.id: r.outcome.value for r in results}
-
-    greeting = tmp_path / "greeting.txt"
-    assert greeting.exists(), f"no real edit produced; outcomes={outcomes}"
-    assert "hello" in greeting.read_text().split(), greeting.read_text()
-
-    # The engine's own acceptance check is genuinely green.
-    check = subprocess.run("grep -qx hello greeting.txt", shell=True, cwd=tmp_path)
-    assert check.returncode == 0
-
-    # The develop step reached DONE and a real commit landed beyond the initial one.
-    assert Ledger(tmp_path).status_of("REQ-001:develop") is StepStatus.DONE
-    count = subprocess.run(
-        ["git", "rev-list", "--count", "HEAD"], cwd=tmp_path, capture_output=True, text=True
-    )
-    assert int(count.stdout.strip()) >= 2, f"engine committed nothing; outcomes={outcomes}"
