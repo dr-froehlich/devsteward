@@ -25,6 +25,7 @@ from .lifecycle import (
     LifecycleError,
     activate as lifecycle_activate,
     repeat as lifecycle_repeat,
+    revalidate as lifecycle_revalidate,
     rework as lifecycle_rework,
 )
 from .lint import lint as run_lint
@@ -241,6 +242,38 @@ def rework(req_id: str) -> None:
         click.style(
             f"reworking {req_id}: {res.develop_step} -> recover, {res.validate_step} -> "
             f"pending{where}. Re-run `steward run` to fix and revalidate.",
+            fg="green",
+        )
+    )
+
+
+@main.command()
+@click.argument("req_id")
+def revalidate(req_id: str) -> None:
+    """Re-run REQ_ID's red validation without redoing develop (the external-cause edge).
+
+    The validate-layer mirror of `steward rework` (REQ-055): when a red validation was
+    caused by something *external* to the work (a broken lab fixture, a missing credential,
+    a downed host) that you have since fixed, the develop work stands. This flips
+    REQ_ID:validate back to PENDING, **leaves REQ_ID:develop at DONE**, answers the parked
+    decision, and records a `revalidate` event — then `steward run`/`steward validate`
+    re-runs the validation only. Touches no git and no REQ file. Same refusals as `rework`
+    (a done REQ → supersede; nothing parked red → nothing to do). Use `steward rework`
+    instead when the develop was hollow.
+    """
+    cfg = _load_or_die()
+    ex = build_executor(cfg)
+    check_invariants(ex, allow_any_head=True)  # REQ-049 AC3: regardless of HEAD; single-ledger only
+    try:
+        with transaction(ex.git, label=f"revalidate {req_id}", pass_through=(LifecycleError,)):
+            res = lifecycle_revalidate(cfg, ex.ledger, req_id)
+    except LifecycleError as exc:
+        raise click.ClickException(str(exc)) from exc
+    where = f" (evidence: {res.evidence})" if res.evidence else ""
+    click.echo(
+        click.style(
+            f"revalidating {req_id}: {res.validate_step} -> pending (develop stays "
+            f"done){where}. Re-run `steward run` to re-validate.",
             fg="green",
         )
     )

@@ -1,5 +1,5 @@
 """Operator verbs that shape the queue: ``activate``, ``repeat`` (REQ-026, renamed from
-``recover`` by REQ-054), ``rework`` (REQ-033).
+``recover`` by REQ-054), ``rework`` (REQ-033), ``revalidate`` (REQ-055).
 
 Pure status mutations, kept out of the content-agnostic core:
 
@@ -22,9 +22,18 @@ Pure status mutations, kept out of the content-agnostic core:
   answer* to the parked question) and, like ``repeat``, touches neither git nor the REQ
   file (D5).
 
+* :func:`revalidate` is the validate-layer mirror of ``rework`` (REQ-055): the
+  **external-cause** return edge. When a red validation was caused by something outside the
+  work (a broken lab fixture, a missing credential, a downed host) that the human then
+  fixed, the develop *stands* — so it flips ``REQ-NNN:validate`` ``BLOCKED → PENDING`` while
+  leaving ``REQ-NNN:develop`` at ``DONE``, answers the parked decision, and appends a
+  ``revalidate`` event. Same precondition as ``rework``, opposite action; like it, touches
+  neither git nor the REQ file.
+
 No verb introduces a new ``claude`` invocation or skill — the reopened work is picked up
 by the existing ``/advance`` skill via the status flip (``rework`` reopens develop as
-``RECOVER``, so the executor carries its usual ``--repeat`` resume signal).
+``RECOVER``, so the executor carries its usual ``--repeat`` resume signal; ``revalidate``
+re-arms only validate, which ``steward validate`` / ``steward run`` then re-runs).
 """
 
 from __future__ import annotations
@@ -70,6 +79,15 @@ class ReworkResult:
     develop_step: str  # flipped DONE -> RECOVER
     validate_step: str  # flipped BLOCKED -> PENDING
     evidence: str | None  # the red validation's evidence dir (the repair context)
+    brief: str  # the red validation's failure brief
+    decision: str | None  # the parked validate decision answered, if any
+
+
+@dataclass
+class RevalidateResult:
+    req_id: str
+    validate_step: str  # flipped BLOCKED -> PENDING (develop is left untouched at DONE)
+    evidence: str | None  # the red validation's evidence dir
     brief: str  # the red validation's failure brief
     decision: str | None  # the parked validate decision answered, if any
 
@@ -130,8 +148,67 @@ def repeat(ledger: Ledger, req_id: str) -> RepeatResult:
     return RepeatResult(req_id, failed)
 
 
+def _resolve_red_validation(cfg: Config, ledger: Ledger, req_id: str, *, verb: str):
+    """Shared precondition for the two red-validation return edges (``rework`` /
+    ``revalidate``): resolve the REQ and assert a *real* red parked on its validate step.
+
+    Returns ``(validate_step, brief, evidence)`` on success. Raises :class:`LifecycleError`
+    (CLI → non-zero) on the identical refusal taxonomy both verbs share: an unknown id, a
+    ``done`` REQ (points at supersede — done is never weakened, D3), a REQ with no validate
+    step, or a validate step not ``BLOCKED`` on a red. ``verb`` only shapes the message.
+    """
+    reqs = {r.id: r for r in load_reqs(cfg.req_dir)}
+    req = reqs.get(req_id)
+    if req is None:
+        raise LifecycleError(f"{req_id} is not a known requirement (no REQ file found).")
+    if req.status.lower() == "done":
+        raise LifecycleError(
+            f"{req_id} is done — a finished requirement's red re-validation is never "
+            f"{verb}ed (done is never weakened). Change direction by superseding it with "
+            f"a new REQ (`supersedes: {req_id}`)."
+        )
+
+    validate = f"{req_id}:validate"
+    # A validate step exists iff the REQ declares an artifact/manual AC (REQ-030) — read it
+    # from the REQ's own acceptance block, not the ledger overlay (an untouched validate
+    # step has no recorded status yet).
+    if not any(c.check in ("artifact", "manual") for c in req.acceptance):
+        raise LifecycleError(
+            f"{req_id} has no validate step to {verb} — it declares no artifact/manual "
+            f"acceptance criterion, so no validation can have gone red."
+        )
+
+    # The substantive test (D3, AC2): a *real* red — the latest validation event is
+    # ``ok: false`` and the step is parked. A manual park that only awaits its oracle
+    # records no validation event; a green/never-run validation records none or ok:true.
+    latest = ledger.latest_validation(req_id)
+    is_red = latest is not None and latest.get("ok") is False
+    if not (is_red and ledger.status_of(validate) is StepStatus.BLOCKED):
+        raise LifecycleError(
+            f"{req_id} has no red validation to {verb} — {validate} is not blocked on a "
+            f"red System-Test result. Run `steward validate {req_id}` to validate it, or "
+            f"`steward repeat {req_id}` if a step actually failed."
+        )
+
+    brief = "\n".join(
+        r.get("detail", "") for r in latest.get("results", []) if not r.get("ok")
+    ) or "validation red"
+    return validate, brief, latest.get("evidence")
+
+
+def _answer_validate_decision(ledger: Ledger, validate: str, answer: str) -> str | None:
+    """Answer any open decision parked on ``validate`` (D1) — this is what unblocks the
+    step. Returns the answered decision id, or ``None`` if none was parked."""
+    for dec in ledger.open_decisions():
+        if dec.step == validate:
+            ledger.answer_decision(dec.id, answer)
+            return dec.id
+    return None
+
+
 def rework(cfg: Config, ledger: Ledger, req_id: str) -> ReworkResult:
-    """Return a red validation to develop for a fix-and-revalidate cycle (REQ-033).
+    """Return a red validation to develop for a fix-and-revalidate cycle (REQ-033) — the
+    **internal-cause** edge: the develop was hollow, so reopen it.
 
     On an in-flight REQ whose latest validation event is red (an artifact red or a
     *declined* manual sign-off), flip ``REQ-NNN:develop`` to ``RECOVER`` and
@@ -144,54 +221,15 @@ def rework(cfg: Config, ledger: Ledger, req_id: str) -> ReworkResult:
     is never weakened, D3), a REQ with no validate step, or a validate step that is not
     blocked on a red.
     """
-    reqs = {r.id: r for r in load_reqs(cfg.req_dir)}
-    req = reqs.get(req_id)
-    if req is None:
-        raise LifecycleError(f"{req_id} is not a known requirement (no REQ file found).")
-    if req.status.lower() == "done":
-        raise LifecycleError(
-            f"{req_id} is done — a finished requirement's red re-validation is never "
-            f"reworked (done is never weakened). Change direction by superseding it with "
-            f"a new REQ (`supersedes: {req_id}`)."
-        )
-
+    validate, brief, evidence = _resolve_red_validation(
+        cfg, ledger, req_id, verb="rework"
+    )
     develop = f"{req_id}:develop"
-    validate = f"{req_id}:validate"
-    # A validate step exists iff the REQ declares an artifact/manual AC (REQ-030) — read it
-    # from the REQ's own acceptance block, not the ledger overlay (an untouched validate
-    # step has no recorded status yet).
-    if not any(c.check in ("artifact", "manual") for c in req.acceptance):
-        raise LifecycleError(
-            f"{req_id} has no validate step to rework — it declares no artifact/manual "
-            f"acceptance criterion, so no validation can have gone red."
-        )
 
-    # The substantive test (D3, AC2): a *real* red — the latest validation event is
-    # ``ok: false`` and the step is parked. A manual park that only awaits its oracle
-    # records no validation event; a green/never-run validation records none or ok:true.
-    latest = ledger.latest_validation(req_id)
-    is_red = latest is not None and latest.get("ok") is False
-    if not (is_red and ledger.status_of(validate) is StepStatus.BLOCKED):
-        raise LifecycleError(
-            f"{req_id} has no red validation to rework — {validate} is not blocked on a "
-            f"red System-Test result. Run `steward validate {req_id}` to validate it, or "
-            f"`steward repeat {req_id}` if a step actually failed."
-        )
-
-    brief = "\n".join(
-        r.get("detail", "") for r in latest.get("results", []) if not r.get("ok")
-    ) or "validation red"
-    evidence = latest.get("evidence")
-
-    # Answer the parked validate decision (D1) — this also unblocks validate -> PENDING.
-    decision_id: str | None = None
-    for dec in ledger.open_decisions():
-        if dec.step == validate:
-            ledger.answer_decision(
-                dec.id, "reworked: human returned the red validation to develop for a fix"
-            )
-            decision_id = dec.id
-            break
+    decision_id = _answer_validate_decision(
+        ledger, validate,
+        "reworked: human returned the red validation to develop for a fix",
+    )
 
     ledger.set_status(develop, StepStatus.RECOVER)
     ledger.set_status(validate, StepStatus.PENDING)
@@ -206,3 +244,41 @@ def rework(cfg: Config, ledger: Ledger, req_id: str) -> ReworkResult:
         decision=decision_id,
     )
     return ReworkResult(req_id, develop, validate, evidence, brief, decision_id)
+
+
+def revalidate(cfg: Config, ledger: Ledger, req_id: str) -> RevalidateResult:
+    """Re-arm a red validation without redoing develop (REQ-055) — the **external-cause**
+    mirror of :func:`rework`: a broken lab fixture / missing credential / downed host was
+    fixed, the develop work *stands*, so re-run the validation only.
+
+    Same precondition as ``rework`` (an in-flight REQ parked on a *red* validation),
+    opposite action: flip ``REQ-NNN:validate`` ``BLOCKED → PENDING`` while **leaving
+    ``REQ-NNN:develop`` untouched at ``DONE``**, answer any open decision parked on the
+    validate step, and append a ``revalidate`` event carrying the red validation's evidence
+    path and failure brief. Touches neither git nor the REQ file (D1/D4).
+
+    Refuses (:class:`LifecycleError`) on the identical taxonomy as ``rework`` (D2): an
+    unknown id, a ``done`` REQ (→ supersede), a REQ with no validate step, or a validate
+    step not blocked on a red.
+    """
+    validate, brief, evidence = _resolve_red_validation(
+        cfg, ledger, req_id, verb="revalidate"
+    )
+
+    decision_id = _answer_validate_decision(
+        ledger, validate,
+        "revalidated: external cause fixed, develop stands — re-running validation only",
+    )
+
+    # The whole point of the mirror: develop is left at DONE (D1). Only validate re-arms.
+    ledger.set_status(validate, StepStatus.PENDING)
+    ledger.save()
+    ledger.append_event(
+        "revalidate",
+        req=req_id,
+        validate=validate,
+        evidence=evidence,
+        brief=brief[:2000],
+        decision=decision_id,
+    )
+    return RevalidateResult(req_id, validate, evidence, brief, decision_id)

@@ -712,19 +712,24 @@ class ReqValidateRoutine:
     ) -> StepResult:
         """Red validation parks immediately with the failure brief — no repair loop
         (REQ-030 Decision 8): a red here is a human question (hollow develop or broken lab).
-        It points at ``steward rework`` — the V-model return edge (REQ-033/REQ-034 D7).
+        It names **both** V-model return edges as a choice keyed on the root cause (REQ-055):
+        ``steward rework`` when the develop was hollow (internal cause — redo it), or
+        ``steward revalidate`` when an external lab/setup issue was fixed and the develop
+        stands (re-run the validation only). It does not presume the cause.
 
         ``attended`` marks the guided path (not wrapped by ``_drive_step``): it self-commits
         the ledger close on ``dev`` (REQ-048)."""
         led = ex.ledger
         brief = "\n".join(r["detail"] for r in results if not r["ok"]) or "validation red"
-        rework = (
-            f"Return it to develop for a fix with `steward rework {req.id}` "
-            f"(the V-model return edge)."
+        choice = (
+            f"Pick the edge that fits the root cause: if the develop was hollow, return it "
+            f"to develop for a fix with `steward rework {req.id}`; if an external lab/setup "
+            f"issue was fixed and the develop stands, re-run the validation only with "
+            f"`steward revalidate {req.id}`."
         )
         if not in_flight:
-            return StepResult(step, RunOutcome.VERIFY_FAILED, f"{brief}\n\n{rework}")
-        question = f"{req.id} validation red — needs a human:\n{brief[:1500]}\n\n{rework}"
+            return StepResult(step, RunOutcome.VERIFY_FAILED, f"{brief}\n\n{choice}")
+        question = f"{req.id} validation red — needs a human:\n{brief[:1500]}\n\n{choice}"
         dec = Decision(
             id=led.next_decision_id(), step=step.id, question=question, req=req.id
         )
