@@ -59,5 +59,6 @@ commit** as its frontmatter and the code.
 | REQ-053 | Process resilience — every red step has an available forward path; audit the rework-vs-repeat model | DONE | [REQ-053](REQ-053.md) | REQ-047 |
 | REQ-054 | Rename the recover verb to repeat — the run-it-again action, named honestly | DONE | [REQ-054](REQ-054.md) | REQ-026 |
 | REQ-055 | steward revalidate — re-run a red validation without redoing sound develop work | DONE | [REQ-055](REQ-055.md) | REQ-033, REQ-047 |
+| REQ-056 | Repair-exhausted and land-refused fail to a repeatable step, not a decision park (states D/H) | DRAFT | [REQ-056](REQ-056.md) | REQ-029, REQ-053, REQ-054 |
 
 New requirement template: [`_templates/req.md`](../../devsteward/templates/docs/requirements/_templates/req.md)

@@ -272,6 +272,21 @@ validation. Driven **interactively** (not by `steward run`) in this order — se
   / pending-awaiting-oracle stays `steward validate`, REQ-057). Regression-only; code + brief +
   tests, no handbook (docs → REQ-057). Independent of REQ-054. With REQ-033 (the mirrored edge),
   REQ-047.
+- REQ-056 — **D/H fail to a repeatable step, not a decision park** (draft, fix): recommendation
+  #4 of REQ-053's audit, reframed by the owner from *patch* to *subtract*. Two states that
+  REQ-053 enumerated as stalemate-generators are not genuine forks — **repair-exhausted** (D:
+  budget spent, gate still red) and **land-refused** (H: no plan names the REQ) — yet both park
+  a decision, and answering one restarts the step clean, abandoning the partial work, so the
+  human re-parks in a loop. Neither is a *choice*; both want "fix it out-of-band, run it again",
+  which the engine already has as `steward repeat` (FAILED→RECOVER→`--repeat`, the audit's state
+  A). Takes D/H **off** the decision mechanism: set the step `FAILED` (not `BLOCKED`), park no
+  decision, keep the `repair_exhausted`/`land_refused` event, and let `repeat` carry the dirty
+  tree forward — `answer_decision`/`park_decision` untouched (pure subtraction). Companion: a
+  `FAILED` step's `steward status` line names its forward verb (`steward repeat REQ`) so the
+  guidance the decision gave isn't lost. Leaves the decision surface meaning only real forks
+  (attended / skill-question / rework-vs-revalidate). Regression-only; rewrites the two
+  park-asserting phase-model tests. With REQ-029 (the repair loop + land gate that create D/H),
+  REQ-054 (the `repeat` verb).
 - REQ-053 — **process resilience: forward-path audit + rework/repeat model** (draft, design):
   the third strand of REQ-052's idea stub, split out as a process redesign. Audits whether,
   post-REQ-047 (state can no longer diverge), every red/failed/parked state has a clear,
@@ -317,6 +332,7 @@ REQ-001
                                      └─ REQ-053 (done, design: process-resilience forward-path audit + rework/repeat model)
  REQ-026 (recover verb) ── REQ-054 (draft, refactor: rename recover → repeat + --recover → --repeat; hard rename, no alias)
  REQ-033 (rework edge) ── REQ-055 (draft, feature: steward revalidate — mirror of rework, external-cause re-validate; with REQ-047)
+ REQ-053 (forward-path audit) ── REQ-056 (draft, fix: D/H off decisions → repeat; FAILED-step names its forward verb; with REQ-029, REQ-054)
  REQ-011 (done, production-branch guard) ── REQ-019 (done, integration-branch guard) ── REQ-020 (draft, branch lifecycle automation)
  REQ-024 (draft, onboard skill) ── orchestrates REQ-007 + REQ-009 + REQ-010/023 + REQ-021 + REQ-022 (memzy onboarding)
 ```
