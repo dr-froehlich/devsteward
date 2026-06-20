@@ -166,6 +166,34 @@ def test_multi_eligible_prints_steer_hint(monkeypatch):
         assert f"steward {command} REQ-NNN" in result.output
 
 
+def test_status_failed_step_names_repeat(tmp_path, monkeypatch):
+    """REQ-056 AC4 — the forward path is named and the decision surface holds only real forks:
+    `steward status` annotates a FAILED step with `steward repeat REQ` as its forward verb, and
+    after a repair-exhausted / land-refused failure (which parks no decision) the step does not
+    appear in `steward decision list`."""
+    from devsteward.core.ledger import Ledger
+    from devsteward.core.model import StepStatus
+    from test_transaction_boundary import _init_git, _scaffold
+
+    _scaffold(tmp_path)  # REQ-001 (regression AC) + ledger + single-account config
+    _init_git(tmp_path)
+    monkeypatch.chdir(tmp_path)
+
+    # A D-/H-failed develop step is recorded FAILED with no decision parked (the new behaviour).
+    led = Ledger(tmp_path)
+    led.set_status("REQ-001:develop", StepStatus.FAILED)
+    led.save()
+
+    status = CliRunner().invoke(main, ["status"])
+    assert status.exit_code == 0, status.output
+    assert "REQ-001:develop" in status.output and "failed" in status.output
+    assert "steward repeat REQ-001" in status.output  # the forward verb is named
+
+    decisions = CliRunner().invoke(main, ["decision", "list"])
+    assert decisions.exit_code == 0, decisions.output
+    assert "No parked decisions." in decisions.output  # the failure parked none
+
+
 def test_validate_wires_announce_and_stop(monkeypatch):
     """REQ-025: `validate` must thread the visibility sink + graceful-stop controller into
     build_executor like run/advance — otherwise a cswap quota wait sleeps with no output and

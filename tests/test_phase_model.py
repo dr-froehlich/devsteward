@@ -134,20 +134,44 @@ def test_mechanical_land_zero_claude(tmp_path):
 # -- AC3 ----------------------------------------------------------------------
 
 
-def test_land_requires_plan_artifact(tmp_path):
-    """The mechanical land refuses (parks, surfaces) when no plan names the REQ; with a plan
-    present it proceeds."""
-    # (a) no plan → refused, REQ stays active, step not DONE
+def test_land_refused_fails_not_parks(tmp_path):
+    """REQ-056 AC2 — a land-gate refusal (no plan names the REQ) *fails* to a repeatable step
+    instead of parking a decision: the develop step is set FAILED (not BLOCKED), no decision is
+    parked, the land_refused event is still recorded, the ledger close is still committed (clean
+    tree at rest), and the run continues to other REQs. With a plan present it lands."""
+    # (a) no plan → FAILED, no decision parked, REQ stays active, step not DONE
     _project_with_req(tmp_path, plan=False)
     Ledger.init(tmp_path)
     ex = _executor(tmp_path)
     res = ex.advance_once()
-    assert res.outcome is RunOutcome.PARKED
+    assert res.outcome is RunOutcome.VERIFY_FAILED  # non-stopping; not PARKED
     assert "no file in plans/ names REQ-001" in res.detail
     led = Ledger(tmp_path)
-    assert led.status_of("REQ-001:develop") is StepStatus.BLOCKED
+    assert led.status_of("REQ-001:develop") is StepStatus.FAILED  # not BLOCKED
+    assert led.open_decisions() == []  # no decision parked
+    events = _events(tmp_path)
+    assert any(e["event"] == "land_refused" for e in events)
+    assert not any(e["event"] == "decision_parked" for e in events)
+    assert not any(e["event"] == "checkpoint" for e in events)  # nothing landed
     from devsteward.profiles.req.reqfile import parse_req
     assert parse_req(tmp_path / "docs/requirements/REQ-001.md").status == "open"
+
+    # the ledger close is committed → the tree is clean at rest (REQ-032)
+    git = ex.git
+    assert git.commits and git.commits[-1][0] == "dev"
+
+    # a run does not hard-stop on a land refusal: a second independent REQ still lands
+    multi = tmp_path / "multi"
+    multi.mkdir()
+    req_dir = multi / "docs" / "requirements"
+    write_req(req_dir, "REQ-001", status="open")        # no plan → will fail H
+    write_req(req_dir, "REQ-002", status="open")        # planned → lands
+    write_index(req_dir, [("REQ-001", "one", "OPEN", "–"), ("REQ-002", "two", "OPEN", "–")])
+    _write_plan(multi, "REQ-002")
+    Ledger.init(multi)
+    results = {r.step.id: r.outcome for r in _executor(multi).run()}
+    assert results["REQ-001:develop"] is RunOutcome.VERIFY_FAILED
+    assert results["REQ-002:develop"] is RunOutcome.DONE  # run continued past the refusal
 
     # (b) a fresh project with the plan present → lands
     other = tmp_path / "with_plan"
@@ -162,9 +186,13 @@ def test_land_requires_plan_artifact(tmp_path):
 # -- AC4 ----------------------------------------------------------------------
 
 
-def test_repair_budget_then_park(tmp_path):
-    """A red develop gate spawns at most two fresh repair sessions (each carrying the failure
-    brief, on the repair model) then parks; a repair that turns it green lands instead."""
+def test_repair_exhausted_fails_not_parks(tmp_path):
+    """REQ-056 AC1 — a red develop gate spawns at most two fresh repair sessions (each carrying
+    the failure brief, on the repair model) then *fails to a repeatable step* instead of parking
+    a decision: the develop step is set FAILED (not BLOCKED), no decision is parked, the
+    repair_exhausted event is still recorded, and the unattended run continues to other
+    independent steps (no hard stop) — converging on the no-budget red-gate path (state A). A
+    repair that turns the gate green lands instead."""
     _project_with_req(tmp_path)
     Ledger.init(tmp_path)
     runner = FakeRunner(default=ok_result())
@@ -172,7 +200,8 @@ def test_repair_budget_then_park(tmp_path):
     ex = _executor(tmp_path, runner=runner, verifier=verifier, repair_budget=2)
 
     res = ex.advance_once()
-    assert res.outcome is RunOutcome.PARKED
+    assert res.outcome is RunOutcome.VERIFY_FAILED  # converges on state A; not PARKED
+    assert "FAILED tests/test_x.py::test_y" in res.detail  # the latest red brief
     # develop + exactly two repairs
     assert len(runner.calls) == 3
     repair_calls = [c for c in runner.calls if "--repair" in c["command"]]
@@ -182,10 +211,29 @@ def test_repair_budget_then_park(tmp_path):
         assert c["model"] == "claude-sonnet-4-6"  # repair model
     assert runner.calls[0]["model"] == "claude-opus-4-8"  # develop model
     led = Ledger(tmp_path)
-    assert led.status_of("REQ-001:develop") is StepStatus.BLOCKED
-    assert led.open_decisions() and led.open_decisions()[0].step == "REQ-001:develop"
+    assert led.status_of("REQ-001:develop") is StepStatus.FAILED  # not BLOCKED
+    assert led.open_decisions() == []  # no decision parked
     events = _events(tmp_path)
+    assert any(e["event"] == "repair_exhausted" for e in events)  # event still recorded
+    assert not any(e["event"] == "decision_parked" for e in events)
     assert not any(e["event"] == "checkpoint" for e in events)
+
+    # the run does not hard-stop on an exhausted repair: a second independent REQ still lands.
+    # The scripted verifier is keyed by call count — REQ-001's develop+2 repairs are 3 reds,
+    # then REQ-002's develop verify is green.
+    multi = tmp_path / "multi"
+    multi.mkdir()
+    req_dir = multi / "docs" / "requirements"
+    write_req(req_dir, "REQ-001", status="open")
+    write_req(req_dir, "REQ-002", status="open")
+    write_index(req_dir, [("REQ-001", "one", "OPEN", "–"), ("REQ-002", "two", "OPEN", "–")])
+    _write_plan(multi, "REQ-001", "REQ-002")
+    Ledger.init(multi)
+    v_multi = _ScriptedVerifier([(False, "red"), (False, "red"), (False, "red"), (True, "ok")])
+    results = {r.step.id: r.outcome
+               for r in _executor(multi, verifier=v_multi, repair_budget=2).run()}
+    assert results["REQ-001:develop"] is RunOutcome.VERIFY_FAILED
+    assert results["REQ-002:develop"] is RunOutcome.DONE  # run continued past the failure
 
     # repair #1 turns the gate green → lands, only one repair spawned
     other = tmp_path / "repairs_ok"
@@ -199,6 +247,40 @@ def test_repair_budget_then_park(tmp_path):
     assert res2.outcome is RunOutcome.DONE
     assert len([c for c in runner2.calls if "--repair" in c["command"]]) == 1
     assert Ledger(other).status_of("REQ-001:develop") is StepStatus.DONE
+
+
+def test_repeat_recovers_dirty_fail_with_signal(tmp_path):
+    """REQ-056 AC3 — `steward repeat` recovers a D-/H-failed step carrying the resume signal:
+    it flips the FAILED develop step to RECOVER, and the next driven run issues the develop
+    command with --repeat (step_started recover: true), so the resuming session assesses the
+    dirty tree rather than restarting clean."""
+    from devsteward.lifecycle import repeat
+
+    # Drive state H: a land-gate refusal leaves REQ-001:develop FAILED with no plan.
+    _project_with_req(tmp_path, plan=False)
+    Ledger.init(tmp_path)
+    ex = _executor(tmp_path)
+    assert ex.advance_once().outcome is RunOutcome.VERIFY_FAILED
+    led = Ledger(tmp_path)
+    assert led.status_of("REQ-001:develop") is StepStatus.FAILED
+
+    # `steward repeat REQ-001` re-arms the failed step to RECOVER.
+    res = repeat(led, "REQ-001")
+    assert res.steps == ["REQ-001:develop"]
+    reloaded = Ledger(tmp_path)
+    assert reloaded.status_of("REQ-001:develop") is StepStatus.RECOVER
+
+    # The next driven run issues the develop command with the --repeat resume signal.
+    _write_plan(tmp_path, "REQ-001")  # the human supplies the missing plan
+    runner = FakeRunner(default=ok_result())
+    ex2 = _executor(tmp_path, runner=runner)
+    res2 = ex2.advance_once(only="REQ-001")
+    assert res2.outcome is RunOutcome.DONE
+    assert "--repeat" in runner.calls[-1]["command"]
+    events = _events(tmp_path)
+    started = [e for e in events if e["event"] == "step_started"
+               and e["step"] == "REQ-001:develop"]
+    assert started[-1]["recover"] is True  # the resume signal rode the step_started event
 
 
 # -- AC5 ----------------------------------------------------------------------

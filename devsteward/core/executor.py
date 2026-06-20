@@ -434,18 +434,18 @@ class Executor:
         if self.land_gate is not None:
             refusal = self.land_gate(step)
             if refusal is not None:
-                dec = Decision(
-                    id=led.next_decision_id(),
-                    step=step.id,
-                    question=refusal,
-                    req=step.req,
-                )
-                led.park_decision(dec)
-                led.set_status(step.id, StepStatus.BLOCKED)
+                # REQ-056 Decision 2: a land-gate refusal (no plan names the REQ) is a
+                # mechanical failure, not a choice — the only action is add-the-plan-and-rerun.
+                # Fail to a repeatable step instead of parking a decision: set FAILED (not
+                # BLOCKED), park **no** decision, keep the land_refused event, and still commit
+                # the ledger close so the tree is clean at rest (REQ-032). VERIFY_FAILED is
+                # non-stopping, so a missing plan for one REQ never halts unrelated REQs;
+                # `steward repeat REQ` recovers it once the human adds the plan.
+                led.set_status(step.id, StepStatus.FAILED)
                 led.save()
                 led.append_event("land_refused", step=step.id, detail=refusal)
                 self._commit_ledger_close(step, "ledger close — land refused")
-                return StepResult(step, RunOutcome.PARKED, refusal)
+                return StepResult(step, RunOutcome.VERIFY_FAILED, refusal)
         if self.on_verified is not None:
             self.on_verified(step)
         snapshot = self.git.head_sha()
@@ -582,23 +582,19 @@ class Executor:
                 return None  # resolved — the caller lands
             brief = detail  # feed the next attempt the latest failure
 
-        # Budget exhausted, still red → park for a human (REQ-029 Decision 3).
-        dec = Decision(
-            id=led.next_decision_id(),
-            step=step.id,
-            question=(
-                f"{step.req or step.id}: gate still red after {self.repair_budget} "
-                f"repair attempts — needs a human"
-            ),
-            req=step.req,
-        )
-        led.park_decision(dec)
-        led.set_status(step.id, StepStatus.BLOCKED)
+        # Budget exhausted, still red → fail to a repeatable step (REQ-056 Decision 1).
+        # State D is just state A after the budget runs out: there is no choice to record,
+        # only "look, fix, run it again." Set FAILED (not BLOCKED), park **no** decision,
+        # keep the repair_exhausted event, and return the same non-stopping VERIFY_FAILED as
+        # the no-budget red gate — the run drains other independent steps and `steward repeat
+        # REQ` recovers it, handing the resuming session the dirty tree (the ledger write is
+        # left uncommitted, exactly as state A leaves it).
+        led.set_status(step.id, StepStatus.FAILED)
         led.save()
         led.append_event(
             "repair_exhausted", step=step.id, attempts=self.repair_budget
         )
-        return StepResult(step, RunOutcome.PARKED, dec.question)
+        return StepResult(step, RunOutcome.VERIFY_FAILED, brief)
 
     def step_by_id(self, step_id: str) -> Step | None:
         """Look up a derived step by id (``steward checkpoint`` resolves its target here)."""

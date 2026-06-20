@@ -312,6 +312,11 @@ def status() -> None:
             note = ""
             if s.blocked_note and s.id not in eligible and st is not StepStatus.DONE:
                 note = click.style(f"  ⏳ {s.blocked_note}", fg="yellow")
+            elif st is StepStatus.FAILED:
+                # REQ-056 Decision 4: a FAILED step names its own forward verb. D, H, and the
+                # pre-existing FAILED states (A/B/G) now carry the next-action hint the parked
+                # -decision line used to give — `steward repeat REQ` re-runs against the tree.
+                note = click.style(f"  → steward repeat {s.req or s.id}", fg="red")
             click.echo(f"  {mark} {s.id:<22} {st.value}{tag}{note}")
 
     decisions = led.open_decisions()
