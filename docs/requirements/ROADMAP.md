@@ -287,6 +287,24 @@ validation. Driven **interactively** (not by `steward run`) in this order — se
   (attended / skill-question / rework-vs-revalidate). Regression-only; rewrites the two
   park-asserting phase-model tests. With REQ-029 (the repair loop + land gate that create D/H),
   REQ-054 (the `repeat` verb).
+- REQ-057 — **post-REQ-047 docs refresh + a Claude-targeted `steward` black-box manual** (draft,
+  docs): recommendation #5 of REQ-053's audit, widened by the owner into the documentation REQ
+  the whole REQ-054…056 cluster deferred to. Two needs. (1) The Quarto handbook is stale — it
+  still describes feature branches/worktrees/switching, names the dead verb `recover` (renamed
+  `repeat` by REQ-054), has no `revalidate` (REQ-055), and predates REQ-056 — so it gets a
+  **complete** revision to the trunk-based model with the recovery/forward-path model documented
+  as one section. (2) Agents driving DevSteward from a consumer project (FlowSteward) read the
+  engine's `cli.py` to learn the tool and recover states — the wrong behaviour: DevSteward is an
+  **encapsulated unit**, the `steward` CLI is its only public interface. Adds a concise
+  **Claude-targeted `steward` manual** (black-box: operate + recover from every red/parked state
+  without reading source), ships it in the templates, has `steward new` stamp it into new
+  projects, and references it from the consumer `CLAUDE.md.tmpl`. Both docs + the bundled skills
+  carry `repeat`/`revalidate` (REQ-054/055 deferred the prose here). Rides one behavioural fix:
+  `decision answer` on a pending-validation (state-F) ticket refuses and redirects to
+  `steward validate` (closing the same circle REQ-056 closed for D/H). 3 regression ACs
+  (guard, stamping+reference, verb strings) + 1 manual sign-off (revision complete + manual
+  black-box-sufficient); fused, no lab. With REQ-007, REQ-034, REQ-047, REQ-054, REQ-055,
+  REQ-056.
 - REQ-053 — **process resilience: forward-path audit + rework/repeat model** (draft, design):
   the third strand of REQ-052's idea stub, split out as a process redesign. Audits whether,
   post-REQ-047 (state can no longer diverge), every red/failed/parked state has a clear,
@@ -333,6 +351,7 @@ REQ-001
  REQ-026 (recover verb) ── REQ-054 (draft, refactor: rename recover → repeat + --recover → --repeat; hard rename, no alias)
  REQ-033 (rework edge) ── REQ-055 (draft, feature: steward revalidate — mirror of rework, external-cause re-validate; with REQ-047)
  REQ-053 (forward-path audit) ── REQ-056 (draft, fix: D/H off decisions → repeat; FAILED-step names its forward verb; with REQ-029, REQ-054)
+ REQ-054 + REQ-055 + REQ-056 ── REQ-057 (draft, docs: complete post-REQ-047 handbook revision + Claude-targeted black-box steward manual shipped via templates + state-F decision-answer guard; with REQ-007, REQ-034, REQ-047)
  REQ-011 (done, production-branch guard) ── REQ-019 (done, integration-branch guard) ── REQ-020 (draft, branch lifecycle automation)
  REQ-024 (draft, onboard skill) ── orchestrates REQ-007 + REQ-009 + REQ-010/023 + REQ-021 + REQ-022 (memzy onboarding)
 ```
