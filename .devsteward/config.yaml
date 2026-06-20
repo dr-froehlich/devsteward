@@ -4,10 +4,11 @@ requirements_dir: docs/requirements
 index_file: docs/requirements/REQUIREMENTS_INDEX.md
 roadmap_file: docs/requirements/ROADMAP.md
 accounts:
-  # cswap provider speaks the claude-swap 0.11 switcher CLI (REQ-012): precheck switches
-  # the active account with `--switch-to`, then claude runs plain. Degrades to single
-  # when cswap is absent. `use: N` pins an account by index.
-  provider: cswap
+  # clauder provider delegates the per-step budget gate to the external `clauder` CLI
+  # (REQ-058): `clauder gate` decides proceed/switch/wait against the combined budget and
+  # tells cswap when to switch — the engine never drives cswap directly and never runs
+  # `clauder monitor` (operator-started, out-of-band). Degrades to single when clauder is absent.
+  provider: clauder
 
 # Headless runs need a permission mode or every edit stalls (see REQ-014). Default
 # `dangerously-skip` = autonomous edits; this is a trusted repo.
