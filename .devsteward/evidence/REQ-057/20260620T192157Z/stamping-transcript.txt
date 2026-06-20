@@ -1,0 +1,18 @@
+# steward new — stamping transcript (REQ-057 system-test)
+## stamped tree at consumer root
+total 36
+drwxr-xr-x 5 peter peter 4096 Jun 20 22:58 .
+drwx------ 3 peter peter 4096 Jun 20 22:58 ..
+drwxr-xr-x 3 peter peter 4096 Jun 20 22:58 .claude
+drwxr-xr-x 2 peter peter 4096 Jun 20 22:58 .devsteward
+-rw-r--r-- 1 peter peter  357 Jun 20 22:58 .gitignore
+-rw-r--r-- 1 peter peter 3364 Jun 20 22:58 CLAUDE.md
+-rw-r--r-- 1 peter peter 7438 Jun 20 22:58 STEWARD.md
+drwxr-xr-x 4 peter peter 4096 Jun 20 22:58 docs
+
+## STEWARD.md present at consumer root
+-rw-r--r-- 1 peter peter 7438 Jun 20 22:58 /tmp/devsteward-scratch.GY6d6o/myproj/STEWARD.md
+
+## CLAUDE.md references STEWARD.md (lines)
+58:**The authoritative `steward` reference is [`STEWARD.md`](STEWARD.md)** — the full command
+60:state. Treat DevSteward as a black box: drive it through the `steward` CLI and `STEWARD.md`,

@@ -1,0 +1,943 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.10.2">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+
+<title>The DevSteward Handbook</title>
+<style>
+/* Default styles provided by pandoc.
+** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+*/
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+</style>
+
+
+<script src="handbook_files/libs/clipboard/clipboard.min.js"></script>
+<script src="handbook_files/libs/quarto-html/quarto.js" type="module"></script>
+<script src="handbook_files/libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="handbook_files/libs/quarto-html/popper.min.js"></script>
+<script src="handbook_files/libs/quarto-html/tippy.umd.min.js"></script>
+<script src="handbook_files/libs/quarto-html/anchor.min.js"></script>
+<link href="handbook_files/libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="handbook_files/libs/quarto-html/quarto-syntax-highlighting-15204dc0ccd9d4b5d43ebd22bf5322b0.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="handbook_files/libs/bootstrap/bootstrap.min.js"></script>
+<link href="handbook_files/libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="handbook_files/libs/bootstrap/bootstrap-1998016ec92d5a4dc3e090faf47cba1e.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+
+
+</head>
+
+<body class="quarto-light">
+
+<div id="quarto-content" class="page-columns page-rows-contents page-layout-article">
+<div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+  <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">Table of contents</h2>
+   
+  <ul>
+  <li><a href="#sec-method" id="toc-sec-method" class="nav-link active" data-scroll-target="#sec-method"><span class="header-section-number">1</span> The method</a>
+  <ul class="collapse">
+  <li><a href="#the-shape-of-the-method" id="toc-the-shape-of-the-method" class="nav-link" data-scroll-target="#the-shape-of-the-method"><span class="header-section-number">1.1</span> The shape of the method</a></li>
+  <li><a href="#first-class-conventions" id="toc-first-class-conventions" class="nav-link" data-scroll-target="#first-class-conventions"><span class="header-section-number">1.2</span> First-class conventions</a></li>
+  <li><a href="#the-two-repo-pattern" id="toc-the-two-repo-pattern" class="nav-link" data-scroll-target="#the-two-repo-pattern"><span class="header-section-number">1.3</span> The two-repo pattern</a></li>
+  </ul></li>
+  <li><a href="#sec-format" id="toc-sec-format" class="nav-link" data-scroll-target="#sec-format"><span class="header-section-number">2</span> The hybrid machine-readable REQ format</a>
+  <ul class="collapse">
+  <li><a href="#layer-1-yaml-frontmatter-the-machine-contract" id="toc-layer-1-yaml-frontmatter-the-machine-contract" class="nav-link" data-scroll-target="#layer-1-yaml-frontmatter-the-machine-contract"><span class="header-section-number">2.1</span> Layer 1 — YAML frontmatter (the machine contract)</a></li>
+  <li><a href="#layer-2-the-acceptance-block-the-verification-contract" id="toc-layer-2-the-acceptance-block-the-verification-contract" class="nav-link" data-scroll-target="#layer-2-the-acceptance-block-the-verification-contract"><span class="header-section-number">2.2</span> Layer 2 — the acceptance block (the verification contract)</a></li>
+  <li><a href="#layer-3-prose-the-reasoning-untouched" id="toc-layer-3-prose-the-reasoning-untouched" class="nav-link" data-scroll-target="#layer-3-prose-the-reasoning-untouched"><span class="header-section-number">2.3</span> Layer 3 — prose (the reasoning, untouched)</a></li>
+  <li><a href="#why-hybrid" id="toc-why-hybrid" class="nav-link" data-scroll-target="#why-hybrid"><span class="header-section-number">2.4</span> Why hybrid</a></li>
+  <li><a href="#what-is-not-in-the-req" id="toc-what-is-not-in-the-req" class="nav-link" data-scroll-target="#what-is-not-in-the-req"><span class="header-section-number">2.5</span> What is <em>not</em> in the REQ</a></li>
+  </ul></li>
+  <li><a href="#sec-engine" id="toc-sec-engine" class="nav-link" data-scroll-target="#sec-engine"><span class="header-section-number">3</span> The engine</a>
+  <ul class="collapse">
+  <li><a href="#the-executor-core-devstewardcore" id="toc-the-executor-core-devstewardcore" class="nav-link" data-scroll-target="#the-executor-core-devstewardcore"><span class="header-section-number">3.1</span> The executor core (<code>devsteward/core/</code>)</a>
+  <ul class="collapse">
+  <li><a href="#the-four-seams-coreseams.py" id="toc-the-four-seams-coreseams.py" class="nav-link" data-scroll-target="#the-four-seams-coreseams.py"><span class="header-section-number">3.1.1</span> The four seams (<code>core/seams.py</code>)</a></li>
+  <li><a href="#why-the-engine-owns-verification-and-forks" id="toc-why-the-engine-owns-verification-and-forks" class="nav-link" data-scroll-target="#why-the-engine-owns-verification-and-forks"><span class="header-section-number">3.1.2</span> Why the engine owns verification and forks</a></li>
+  <li><a href="#one-fused-step-mechanical-land-bounded-repair-req-029" id="toc-one-fused-step-mechanical-land-bounded-repair-req-029" class="nav-link" data-scroll-target="#one-fused-step-mechanical-land-bounded-repair-req-029"><span class="header-section-number">3.1.3</span> One fused step, mechanical land, bounded repair (REQ-029)</a></li>
+  </ul></li>
+  <li><a href="#the-ledger-.devsteward" id="toc-the-ledger-.devsteward" class="nav-link" data-scroll-target="#the-ledger-.devsteward"><span class="header-section-number">3.2</span> The ledger (<code>.devsteward/</code>)</a></li>
+  <li><a href="#account-quota-coreaccounts.py" id="toc-account-quota-coreaccounts.py" class="nav-link" data-scroll-target="#account-quota-coreaccounts.py"><span class="header-section-number">3.3</span> Account / quota (<code>core/accounts.py</code>)</a></li>
+  <li><a href="#park-and-surface" id="toc-park-and-surface" class="nav-link" data-scroll-target="#park-and-surface"><span class="header-section-number">3.4</span> Park-and-surface</a></li>
+  </ul></li>
+  <li><a href="#sec-workflow" id="toc-sec-workflow" class="nav-link" data-scroll-target="#sec-workflow"><span class="header-section-number">4</span> The REQ workflow</a>
+  <ul class="collapse">
+  <li><a href="#one-develop-step-per-requirement-req-029" id="toc-one-develop-step-per-requirement-req-029" class="nav-link" data-scroll-target="#one-develop-step-per-requirement-req-029"><span class="header-section-number">4.1</span> One develop step per requirement (REQ-029)</a></li>
+  <li><a href="#the-v-model-mapping-check-steers-the-phases" id="toc-the-v-model-mapping-check-steers-the-phases" class="nav-link" data-scroll-target="#the-v-model-mapping-check-steers-the-phases"><span class="header-section-number">4.2</span> The V-model mapping: <code>check:</code> steers the phases</a></li>
+  <li><a href="#the-system-test-phase-req-030" id="toc-the-system-test-phase-req-030" class="nav-link" data-scroll-target="#the-system-test-phase-req-030"><span class="header-section-number">4.3</span> The System-Test phase (REQ-030)</a></li>
+  <li><a href="#labs-owned-fixtures-with-reality-derived-provenance" id="toc-labs-owned-fixtures-with-reality-derived-provenance" class="nav-link" data-scroll-target="#labs-owned-fixtures-with-reality-derived-provenance"><span class="header-section-number">4.4</span> Labs — owned fixtures with reality-derived provenance</a></li>
+  <li><a href="#sequencing-whole-requirements" id="toc-sequencing-whole-requirements" class="nav-link" data-scroll-target="#sequencing-whole-requirements"><span class="header-section-number">4.5</span> Sequencing whole requirements</a></li>
+  <li><a href="#branching-model-trunk-based-req-047" id="toc-branching-model-trunk-based-req-047" class="nav-link" data-scroll-target="#branching-model-trunk-based-req-047"><span class="header-section-number">4.6</span> Branching model — trunk-based (REQ-047)</a></li>
+  <li><a href="#two-drivers-one-bookkeeper" id="toc-two-drivers-one-bookkeeper" class="nav-link" data-scroll-target="#two-drivers-one-bookkeeper"><span class="header-section-number">4.7</span> Two drivers, one bookkeeper</a></li>
+  <li><a href="#recovery-the-forward-path-out-of-every-red-or-parked-state" id="toc-recovery-the-forward-path-out-of-every-red-or-parked-state" class="nav-link" data-scroll-target="#recovery-the-forward-path-out-of-every-red-or-parked-state"><span class="header-section-number">4.8</span> Recovery — the forward path out of every red or parked state</a></li>
+  <li><a href="#the-fixed-report" id="toc-the-fixed-report" class="nav-link" data-scroll-target="#the-fixed-report"><span class="header-section-number">4.9</span> The fixed report</a></li>
+  <li><a href="#a-day-in-the-life" id="toc-a-day-in-the-life" class="nav-link" data-scroll-target="#a-day-in-the-life"><span class="header-section-number">4.10</span> A day in the life</a></li>
+  </ul></li>
+  <li><a href="#sec-skills" id="toc-sec-skills" class="nav-link" data-scroll-target="#sec-skills"><span class="header-section-number">5</span> The skills</a>
+  <ul class="collapse">
+  <li><a href="#intake-interview-an-idea-into-a-draft-req" id="toc-intake-interview-an-idea-into-a-draft-req" class="nav-link" data-scroll-target="#intake-interview-an-idea-into-a-draft-req"><span class="header-section-number">5.1</span> <code>/intake</code> — interview an idea into a draft REQ</a></li>
+  <li><a href="#advance-one-checkpoint" id="toc-advance-one-checkpoint" class="nav-link" data-scroll-target="#advance-one-checkpoint"><span class="header-section-number">5.2</span> <code>/advance</code> — one checkpoint</a></li>
+  <li><a href="#bootstrap-bring-a-new-project-to-life" id="toc-bootstrap-bring-a-new-project-to-life" class="nav-link" data-scroll-target="#bootstrap-bring-a-new-project-to-life"><span class="header-section-number">5.3</span> <code>/bootstrap</code> — bring a new project to life</a></li>
+  <li><a href="#system-test-the-system-tester-req-030" id="toc-system-test-the-system-tester-req-030" class="nav-link" data-scroll-target="#system-test-the-system-tester-req-030"><span class="header-section-number">5.4</span> <code>/system-test</code> — the System Tester (REQ-030)</a></li>
+  <li><a href="#the-park-and-surface-contract" id="toc-the-park-and-surface-contract" class="nav-link" data-scroll-target="#the-park-and-surface-contract"><span class="header-section-number">5.5</span> The park-and-surface contract</a></li>
+  <li><a href="#renaming" id="toc-renaming" class="nav-link" data-scroll-target="#renaming"><span class="header-section-number">5.6</span> Renaming</a></li>
+  </ul></li>
+  </ul>
+</nav>
+</div>
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default">
+<div class="quarto-title">
+<h1 class="title">The DevSteward Handbook</h1>
+<p class="subtitle lead">One developer’s proven house style for running software projects with Claude Code, made reproducible</p>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<p>DevSteward is a single controlled baseline for the way one developer runs software projects with Claude Code: requirements as the unit of work, a dependency DAG that orders them, and an engine that walks the work <em>and certifies it</em>. This handbook is the reference guide — the method, the file format, the engine, the workflow, and the skills — assembled as one document.</p>
+<p>It is authored as per-topic fragments and rendered as a single Quarto document, so a plain reader and the branded manuals site read the same content. Section cross-references resolve within the document.</p>
+<section id="sec-method" class="level1" data-number="1">
+<h1 data-number="1"><span class="header-section-number">1</span> The method</h1>
+<p>DevSteward captures one developer’s proven, evolved house style for running software projects with Claude Code and makes it reproducible. It exists because the alternative — copying the most recent project as a reference — lets the method drift and good ideas fail to propagate. DevSteward is the single controlled baseline.</p>
+<section id="the-shape-of-the-method" class="level2" data-number="1.1">
+<h2 data-number="1.1" class="anchored" data-anchor-id="the-shape-of-the-method"><span class="header-section-number">1.1</span> The shape of the method</h2>
+<ol type="1">
+<li><strong>Requirements are the unit of work.</strong> Each is one file with a machine-readable contract (YAML frontmatter + an acceptance block) and rich prose (Context, Decisions, Notes). See <a href="#sec-format" class="quarto-xref">Section&nbsp;2</a>.</li>
+<li><strong>REQ-001 is a frozen north star.</strong> Direction changes by <em>superseding</em> it with a new REQ, never by quietly weakening it.</li>
+<li><strong>A dependency DAG orders the work.</strong> <code>depends_on</code> makes a REQ eligible only once its prerequisites are done. <code>ROADMAP.md</code> is the human view of that graph.</li>
+<li><strong>An engine walks the work — and certifies it, whoever drives.</strong> The default is <strong>interactive</strong>: a human drives <code>/advance</code> in a live session (the interview stays live at forks) and closes with <code>steward checkpoint</code>, which verifies and lands through the same gate as batch. <code>steward advance</code> / <code>steward run</code> are the batch lane for queues of well-specified, low-fork REQs — headless, parking forks. The guarantees are the engine’s in both modes. See <a href="#sec-engine" class="quarto-xref">Section&nbsp;3</a>.</li>
+<li><strong>Verification is mechanical.</strong> Acceptance criteria name runnable tests; a step is done only when they are green — checked by the engine, not asserted by a model.</li>
+</ol>
+</section>
+<section id="first-class-conventions" class="level2" data-number="1.2">
+<h2 data-number="1.2" class="anchored" data-anchor-id="first-class-conventions"><span class="header-section-number">1.2</span> First-class conventions</h2>
+<p>These are not style preferences; the linter and the engine enforce them.</p>
+<ul>
+<li><strong>English everywhere</strong> in code and technical docs. Localized UI strings are allowed but isolated and translatable — never inline in logic.</li>
+<li><strong>Same-commit discipline.</strong> A REQ’s frontmatter, its <code>REQUIREMENTS_INDEX.md</code> row, and the code that satisfies it move together, in one commit.</li>
+<li><strong>Branching model — trunk-based (REQ-047).</strong> <code>main</code> is production (release tags are cut here); <code>dev</code> is the integration branch and the <strong>single working branch</strong>. <em>All</em> work lands on <code>dev</code> — intake, plans, the ledger, <strong>and</strong> implementation (code + tests + the flip to <code>done</code>) — in linear history. No feature branches, no worktrees, no engine-initiated branch switching. The engine enforces this: it refuses to autocommit on the production branch (config-driven via <code>git.production_branch</code>, default <code>main</code>). Never commit directly to <code>main</code>; the one branch operation is the human-gated <code>dev → main</code> release PR.</li>
+<li><strong>Co-author trailer</strong> on every commit.</li>
+<li><strong>Sanitized public artifacts.</strong> No real local paths, emails, or credentials in shared files; templates use placeholders.</li>
+</ul>
+</section>
+<section id="the-two-repo-pattern" class="level2" data-number="1.3">
+<h2 data-number="1.3" class="anchored" data-anchor-id="the-two-repo-pattern"><span class="header-section-number">1.3</span> The two-repo pattern</h2>
+<p>DevSteward ships as one public, pipx-installable package (the <code>material-core</code> pattern): the <strong>engine</strong> (<code>steward</code> CLI) and the bundled <strong>scaffolding</strong> ride in the same wheel. <strong>Consumer projects</strong> are private, pin a <code>devsteward</code> tag, and hold the real data. A consumer is created by <code>steward new</code> (or the <code>/bootstrap</code> skill, which wraps it with an interview).</p>
+<p>A standing rule closes the loop between the two: <strong>engine REQs originate from consumer postmortems</strong>. When real consumer work hits friction — a false done, a hand-edit the engine should own, a gate without teeth — the postmortem becomes a requirement on the engine, not a local workaround in the consumer. That is how the controlled baseline improves instead of forking.</p>
+</section>
+</section>
+<section id="sec-format" class="level1" data-number="2">
+<h1 data-number="2"><span class="header-section-number">2</span> The hybrid machine-readable REQ format</h1>
+<p>A REQ file is Markdown with three layers, each tuned for a different reader.</p>
+<section id="layer-1-yaml-frontmatter-the-machine-contract" class="level2" data-number="2.1">
+<h2 data-number="2.1" class="anchored" data-anchor-id="layer-1-yaml-frontmatter-the-machine-contract"><span class="header-section-number">2.1</span> Layer 1 — YAML frontmatter (the machine contract)</h2>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode yaml code-with-copy"><code class="sourceCode yaml"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">id</span><span class="kw">:</span><span class="at"> REQ-007</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="fu">title</span><span class="kw">:</span><span class="at"> Group scope — shared access for co-deployed courses</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="fu">status</span><span class="kw">:</span><span class="at"> open</span><span class="co">            # draft | open | in-progress | blocked | done | dropped | superseded</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="fu">kind</span><span class="kw">:</span><span class="at"> feature</span><span class="co">           # feature | fix | chore | refactor | spec | design | docs</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="fu">added</span><span class="kw">:</span><span class="at"> 2026-05-26</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="fu">completed</span><span class="kw">:</span><span class="at"> </span><span class="ch">null</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="fu">verified_by</span><span class="kw">:</span><span class="at"> </span><span class="ch">null</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="fu">depends_on</span><span class="kw">:</span><span class="at"> </span><span class="kw">[</span><span class="at">REQ</span><span class="dv">-005</span><span class="kw">,</span><span class="at"> REQ</span><span class="dv">-006</span><span class="kw">]</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a><span class="fu">concept_refs</span><span class="kw">:</span><span class="at"> </span><span class="kw">[]</span></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a><span class="fu">scenario_refs</span><span class="kw">:</span><span class="at"> </span><span class="kw">[</span><span class="at">SCN</span><span class="dv">-002</span><span class="kw">]</span></span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a><span class="fu">supersedes</span><span class="kw">:</span><span class="at"> </span><span class="ch">null</span></span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a><span class="fu">tags</span><span class="kw">:</span><span class="at"> </span><span class="kw">[</span><span class="at">access</span><span class="kw">]</span></span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a><span class="fu">process</span><span class="kw">:</span><span class="co">                # optional (REQ-027) — omit when every value is the default</span></span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">develop</span><span class="kw">:</span><span class="at"> fused</span><span class="co">        # fused (default) | split — split = attended design review first</span></span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">concept</span><span class="kw">:</span><span class="at"> </span><span class="ch">false</span><span class="co">        # concept phase (risk buy-down / spike) before develop?</span></span>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">lab</span><span class="kw">:</span><span class="at"> </span><span class="kw">[</span><span class="at">REQ</span><span class="dv">-031</span><span class="kw">]</span><span class="co">        # REQs owning lab assets the System-Test phase requires</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>Validated against <code>req.schema.json</code> by <code>steward lint</code>. The <code>id</code> must match the filename (<code>REQ-007.md</code>). This is the layer the engine reads to build the dependency graph.</p>
+<p>The optional <strong><code>process:</code> block</strong> records the intake-time declarations a present human made: whether develop runs <strong>fused</strong> (one design+build session, the default) or <strong>split</strong> (an attended design review first, for genuinely risky REQs), whether a <strong>concept phase</strong> (risk buy-down / spike) precedes develop, and which REQs own the <strong>lab assets</strong> the System-Test phase will require. An absent block means exactly the defaults (<code>develop: fused</code>, <code>concept: false</code>, <code>lab: []</code>); <code>lab:</code> references are lint-resolved like <code>depends_on</code>.</p>
+</section>
+<section id="layer-2-the-acceptance-block-the-verification-contract" class="level2" data-number="2.2">
+<h2 data-number="2.2" class="anchored" data-anchor-id="layer-2-the-acceptance-block-the-verification-contract"><span class="header-section-number">2.2</span> Layer 2 — the acceptance block (the verification contract)</h2>
+<p>A single fenced block the verifier can run and track. A fully-tagged example showing all three <code>check:</code> values:</p>
+<pre><code>```yaml acceptance
+- id: AC1
+  text: The group-token parser grants every child course path in the fixture set.
+  test: "pytest tests/test_scope.py::test_group_token_authorizes_children"
+  check: regression
+  status: pending        # pending | pass | fail  (engine-owned)
+- id: AC2
+  text: A login against the lab IMAP server fetches the captured mail and the parsed
+    fields match the golden copy.
+  test: "pytest tests/system/test_imap_fetch.py::test_captured_mail_golden"
+  check: artifact
+  status: pending
+- id: AC3
+  text: A reviewer confirms the rendered report is legible and correctly localized.
+  test: "manual: reviewer signs off the rendered report"
+  check: manual
+  status: pending
+```</code></pre>
+<p>Every criterion has an <code>id</code>, a human <code>text</code>, a runnable <code>test</code>, and a <strong><code>check:</code> classification</strong> — the REQ-027 routing key, validated by <code>steward lint</code> on active REQs (presence + enum only; lint never judges test <em>quality</em>):</p>
+<ul>
+<li><strong><code>regression</code></strong> — module/unit scope; the oracle is coupled to the code (mock assertions); runs headless in the <strong>Build</strong> phase.</li>
+<li><strong><code>artifact</code></strong> — system scope; a <strong>decoupled, durable</strong> oracle: a captured / golden / hashable observable produced by the lab, of which the engine consumes only the pass/fail signal. Runs in the <strong>System-Test</strong> phase.</li>
+<li><strong><code>manual</code></strong> — system scope; a <strong>human</strong> oracle; a decision stop inside the System-Test phase.</li>
+</ul>
+<p><strong>Oracle</strong> (glossary): the part of a test that decides correct vs incorrect — distinct from the <em>fixture</em> (inputs/environment) and the <em>system under test</em>. A coupled oracle (authored alongside the code it checks) cannot disconfirm; what separates the three <code>check:</code> values is the oracle’s coupling, not the test’s name.</p>
+<p>The <code>status</code> field is <strong>engine-owned</strong>: the verifier writes <code>pass</code>/<code>fail</code> back after running the test. Do not hand-edit it. <code>steward lint</code> fails if any active REQ has a criterion without a test id or without a valid <code>check:</code>.</p>
+</section>
+<section id="layer-3-prose-the-reasoning-untouched" class="level2" data-number="2.3">
+<h2 data-number="2.3" class="anchored" data-anchor-id="layer-3-prose-the-reasoning-untouched"><span class="header-section-number">2.3</span> Layer 3 — prose (the reasoning, untouched)</h2>
+<p><code>## Context</code>, a <code>## Decisions</code> table, the <code>## Requirement</code> body, and <code>## Notes</code>. This is where the density that makes a REQ valuable a year later lives. The machine never parses it; humans always do. Keep it honest about trade-offs and explicit about what is <em>not</em> in scope.</p>
+</section>
+<section id="why-hybrid" class="level2" data-number="2.4">
+<h2 data-number="2.4" class="anchored" data-anchor-id="why-hybrid"><span class="header-section-number">2.4</span> Why hybrid</h2>
+<p>Strict schema + parseable blocks give tools exactly what they need; rich prose stays rich. The schema and linter make the format a <strong>contract, not a convention</strong> — you can’t half-follow it and stay green.</p>
+</section>
+<section id="what-is-not-in-the-req" class="level2" data-number="2.5">
+<h2 data-number="2.5" class="anchored" data-anchor-id="what-is-not-in-the-req"><span class="header-section-number">2.5</span> What is <em>not</em> in the REQ</h2>
+<p>Checkpoint and cursor state. <strong>REQ = spec, ledger = cursor.</strong> The ledger lives in <code>.devsteward/</code>. The only engine-written field inside a REQ is acceptance <code>status:</code>.</p>
+</section>
+</section>
+<section id="sec-engine" class="level1" data-number="3">
+<h1 data-number="3"><span class="header-section-number">3</span> The engine</h1>
+<p>The engine is two layers: a <strong>content-agnostic executor core</strong> and a swappable <strong>profile</strong> on top. This is what lets DevSteward “run any Claude automation” while still shipping a sharp opinion about requirements.</p>
+<section id="the-executor-core-devstewardcore" class="level2" data-number="3.1">
+<h2 data-number="3.1" class="anchored" data-anchor-id="the-executor-core-devstewardcore"><span class="header-section-number">3.1</span> The executor core (<code>devsteward/core/</code>)</h2>
+<p>Knows nothing about requirements. For each eligible step it:</p>
+<ol type="1">
+<li><strong>resolves</strong> the next step from the ledger in dependency order (status <code>pending</code>, all <code>depends_on</code> <code>done</code>);</li>
+<li><strong>prechecks</strong> the account/quota gate;</li>
+<li>invokes <code>claude -p "&lt;command&gt;"</code> headless (stream-json, watchdog, limit detection);</li>
+<li><strong>park-and-surface:</strong> if the skill raised a fork, leaves the step blocked and moves on;</li>
+<li><strong>verifies</strong> — runs the step’s named acceptance tests; green is mandatory (a step with no tests marker-trusts, which a profile may forbid where it matters — see below);</li>
+<li><strong>lands</strong> — on green, the engine itself commits and advances the ledger to <code>done</code> (in the REQ profile this is the mechanical land: status flip, index sync, the single commit on <code>dev</code> — no Claude); on red, it may spawn a bounded repair session before parking.</li>
+</ol>
+<section id="the-four-seams-coreseams.py" class="level3" data-number="3.1.1">
+<h3 data-number="3.1.1" class="anchored" data-anchor-id="the-four-seams-coreseams.py"><span class="header-section-number">3.1.1</span> The four seams (<code>core/seams.py</code>)</h3>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 13%">
+<col style="width: 21%">
+<col style="width: 36%">
+<col style="width: 28%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Seam</th>
+<th>Question</th>
+<th>Generic profile</th>
+<th>REQ profile</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>StepSource</code></td>
+<td>what are the steps?</td>
+<td>explicit list in <code>state.yaml</code></td>
+<td>derived from REQ files</td>
+</tr>
+<tr class="even">
+<td><code>Verifier</code></td>
+<td>did it succeed?</td>
+<td>run named tests</td>
+<td>run named tests</td>
+</tr>
+<tr class="odd">
+<td><code>DecisionGate</code></td>
+<td>what at a fork?</td>
+<td>park-and-surface</td>
+<td>park-and-surface</td>
+</tr>
+<tr class="even">
+<td><code>AccountProvider</code></td>
+<td>which quota?</td>
+<td>single-account</td>
+<td>claude-swap, degrades</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="why-the-engine-owns-verification-and-forks" class="level3" data-number="3.1.2">
+<h3 data-number="3.1.2" class="anchored" data-anchor-id="why-the-engine-owns-verification-and-forks"><span class="header-section-number">3.1.2</span> Why the engine owns verification and forks</h3>
+<p>So unattended automation can’t be <strong>talked into a false “done”</strong>. The model does the thinking; the engine holds the guarantees. A fork the model can’t resolve becomes a recorded, surfaced decision — never a guess committed to history. The engine also owns the <strong>single commit</strong> (the skill leaves the working tree dirty and does not commit), so each checkpoint lands as one authoritative commit rather than a skill commit plus an engine one.</p>
+<p>These guarantees hold <strong>in both driving modes</strong> (REQ-018). In batch (<code>steward advance</code> / <code>steward run</code>, driving <code>claude -p</code> headless) the executor runs the whole loop. A human driving <code>/advance</code> in a live session — the default mode — closes with <strong><code>steward checkpoint</code></strong>, which runs the <em>same</em> gate and the <em>same</em> mechanical land: verification is never the session’s to assert, and the close-out (the commit on <code>dev</code> + the trailing ledger follow-up) is the engine’s too. The <code>checkpoint</code> event records the <strong>driver</strong> (<code>interactive</code> or <code>headless</code>) — who did the cognition — while certification is the engine’s either way. The one interactive difference: at a fork the skill <em>asks</em> (<code>AskUserQuestion</code>) instead of parking. See the two-driver contract in <a href="#sec-workflow" class="quarto-xref">Section&nbsp;4</a>.</p>
+</section>
+<section id="one-fused-step-mechanical-land-bounded-repair-req-029" class="level3" data-number="3.1.3">
+<h3 data-number="3.1.3" class="anchored" data-anchor-id="one-fused-step-mechanical-land-bounded-repair-req-029"><span class="header-section-number">3.1.3</span> One fused step, mechanical land, bounded repair (REQ-029)</h3>
+<p>The REQ profile derives <strong>one step per REQ</strong>: <code>develop</code>. It is the single Claude session — plan-first, then code, then the acceptance tests — replacing the old <code>design → build → land</code> triple, which paid three cold sessions where two verified nothing. The plan artifact survives as in-session discipline, not a session boundary; the cognition is fused.</p>
+<p><code>develop</code> is <strong>where the work is delivered</strong>, so it is the gate with teeth: it must run at least one named acceptance test the engine re-runs itself — a develop step that declares none is <em>refused</em>, not trusted (<code>ReqVerifier</code>). A no-op is caught when its acceptance tests fail: the guarantee holds for the “done” that matters. (Earlier the design/build/land split let a REQ with no tests at all reach <code>done</code> because every phase marker-trusted. That false-done path is closed.)</p>
+<p>On a <strong>green</strong> develop gate the engine performs the <strong>mechanical land</strong> itself — status flip, index <code>DONE</code>-sync, the single commit on <code>dev</code>, ledger advance — invoking <strong>no Claude</strong> (paying Opus to watch pytest run bought nothing; the verifier is the authority). The same mechanical-land routine is what interactive <code>steward checkpoint</code> runs, so a REQ lands identically however it was driven. The land also refuses when <strong>no file in <code>docs/plans/</code> names the REQ id</strong> (plan-first, enforced at the one moment it is cheap and load-bearing — never plan <em>quality</em>).</p>
+<p>On a <strong>red</strong> gate the engine spawns at most <strong>two</strong> bounded repair sessions — each a <em>fresh</em> session (no <code>--resume</code>) fed the failure brief (failed test ids + verifier detail), on the configured repair model (default <strong>Sonnet</strong>, so the cold restart is cheap) — then parks the step for a human. Model/effort are configurable <strong>per step kind</strong> (<code>claude.steps.&lt;kind&gt;</code>; develop defaults Opus-high, repair Sonnet). A REQ that declared <code>develop: split</code> or <code>concept: true</code> is <strong>batch-ineligible</strong>: <code>steward run</code> parks it naming the attended need rather than simulating the human’s presence.</p>
+<p><strong>The System-Test phase (REQ-030)</strong> slots between develop and the land when the REQ declares an <code>artifact</code> or <code>manual</code> criterion: the develop gate then runs the <code>regression</code> tests and only <strong>commits</strong> the work on <code>dev</code> (<code>develop_committed</code> — no status flip yet; an empty named-test list is acceptable here because the runnable gate lives at validation), and a <code>REQ-NNN:validate</code> step follows — a fresh, diff-free System Tester session captures artifacts, the engine runs the <code>artifact</code> tests itself, manual criteria take a human sign-off, and on green the <em>same</em> mechanical land fires. A red validation parks with no repair loop, naming the root-cause edge (<code>steward rework</code> or <code>steward revalidate</code>). A <code>manual</code> criterion is a <strong>guided</strong> human validation (REQ-034): <code>steward validate</code> runs a two-phase bookkeeping around a foreground <em>interactive</em> session attached to the terminal (the editor pattern — never <code>claude -p</code>, never spawned from within Claude), and a pending verdict parks as <strong>async QA</strong> — a clean working tree on <code>dev</code> — so the project keeps moving and the validation resumes later. See <a href="#sec-workflow" class="quarto-xref">Section&nbsp;4</a> for the full phase.</p>
+<p>The gate’s <em>green</em> is sharper than exit-0 (REQ-028): exit-0 cannot tell a pass from a skip or a zero-collection, so the gate reads pytest’s per-test outcomes. A named acceptance test that <strong>skips</strong> fails the gate (a skip is not the proof the REQ promised — skip ≠ green; skips in the <em>full</em> suite stay legal), and one that <strong>collects zero tests</strong> (a typo’d, renamed, or unowned id) fails too — a REQ cannot certify itself by naming a test that never runs. Beyond each named test, the gate runs the <strong>full project suite</strong> and requires it clean, so a known-broken behaviour elsewhere cannot ship green. All of this runs under the project’s <strong>configured environment</strong> (<code>verify.python</code>/<code>verify.full_suite</code> in config, else the project venv, then the engine’s own): an unusable env is a hard, surfaced error, never a silent <code>127 pytest: not found</code> that reads as “not yet verified”. And <code>steward lint</code> reconciles the marker against the ledger — a <code>done</code> REQ whose ledger <code>develop</code> is <code>failed</code>/absent is a hard lint error, because the ledger is the cursor of record and a hand-edited <code>done</code> must not outrun it.</p>
+</section>
+</section>
+<section id="the-ledger-.devsteward" class="level2" data-number="3.2">
+<h2 data-number="3.2" class="anchored" data-anchor-id="the-ledger-.devsteward"><span class="header-section-number">3.2</span> The ledger (<code>.devsteward/</code>)</h2>
+<ul>
+<li><code>state.yaml</code> — round-trip-stable YAML: the profile, the cursor, the per-step status overlay, and parked <code>decisions:</code>.</li>
+<li><code>events.jsonl</code> — append-only, git-friendly event log: <code>step_started</code>, <code>verify</code>, <code>checkpoint</code> (with the commit sha and the <code>driver</code> — <code>interactive</code> or <code>headless</code>), <code>repair_started</code>, <code>repair_exhausted</code>, <code>land_refused</code>, <code>attended_parked</code>, <code>decision_parked</code>, <code>decision_answered</code>, <code>develop_committed</code>, <code>validation</code> (the dated evidence event: per-AC results, artifact paths + sha256, sign-offs — REQ-030), … Old <code>design</code>/<code>build</code>/<code>land</code> rows from before REQ-029 stay as history — reinterpreted, never rewritten.</li>
+<li><code>evidence/REQ-NNN/&lt;timestamp&gt;/</code> — artifacts captured by validation runs (REQ-030), committed so the evidence survives lab teardown.</li>
+</ul>
+<p>The ledger holds <em>no requirement content</em> — only where the cursor is and what happened.</p>
+</section>
+<section id="account-quota-coreaccounts.py" class="level2" data-number="3.3">
+<h2 data-number="3.3" class="anchored" data-anchor-id="account-quota-coreaccounts.py"><span class="header-section-number">3.3</span> Account / quota (<code>core/accounts.py</code>)</h2>
+<p>Lifted and generalized from the proven <code>run_batch*.py</code> quota machinery. With <code>cswap</code> on PATH, <code>claude</code> is routed through claude-swap (two-account, <code>--use N</code> pinning, adaptive gate). Without it, the provider degrades to plain single-account and logs “proceeding without quota check” — it never hard-fails on a missing tool.</p>
+</section>
+<section id="park-and-surface" class="level2" data-number="3.4">
+<h2 data-number="3.4" class="anchored" data-anchor-id="park-and-surface"><span class="header-section-number">3.4</span> Park-and-surface</h2>
+<p>When the engine shells out headless it sets <code>DEVSTEWARD_UNATTENDED=1</code>. Skills then <em>write a decision request to the ledger and stop</em> instead of blocking on <code>AskUserQuestion</code>. The engine records it (<code>state.yaml</code> + <code>events.jsonl</code>), notifies, and advances to the next independent step. <code>steward decision answer &lt;id&gt; "&lt;answer&gt;"</code> unblocks it; the next <code>run</code> resumes. <strong>The interview stays sacred</strong> — a fork is never auto-resolved.</p>
+</section>
+</section>
+<section id="sec-workflow" class="level1" data-number="4">
+<h1 data-number="4"><span class="header-section-number">4</span> The REQ workflow</h1>
+<p>The shipped profile turns every active requirement into a single develop checkpoint and sequences requirements by their dependencies.</p>
+<section id="one-develop-step-per-requirement-req-029" class="level2" data-number="4.1">
+<h2 data-number="4.1" class="anchored" data-anchor-id="one-develop-step-per-requirement-req-029"><span class="header-section-number">4.1</span> One develop step per requirement (REQ-029)</h2>
+<p>For each active REQ (<code>open</code> / <code>in-progress</code> / <code>blocked</code>) the REQ profile derives <strong>one</strong> step:</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 19%">
+<col style="width: 45%">
+<col style="width: 35%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Step</th>
+<th>What happens</th>
+<th>Verified?</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>REQ-NNN:develop</code></td>
+<td>Plan-first → implement → write &amp; green the acceptance tests</td>
+<td><strong>yes</strong></td>
+</tr>
+</tbody>
+</table>
+<p><code>develop</code> is the single Claude session — the fused successor to the old <code>design → build → land</code> triple (which paid three cold sessions where two verified nothing). It carries the REQ’s acceptance <code>test:</code> commands as its verification, so the engine re-runs them before marking the requirement done.</p>
+<p>On a <strong>green</strong> develop gate the engine performs the <strong>mechanical land</strong> itself — status flip, index sync, the single commit on <code>dev</code>, ledger advance — with <strong>no Claude</strong> (and it refuses unless a file in <code>docs/plans/</code> names the REQ). On a <strong>red</strong> gate it spawns up to <strong>two</strong> fresh repair sessions (failure brief, default Sonnet), then parks. A REQ that declared <code>develop: split</code> or <code>concept: true</code> is parked in batch, naming the attended need, rather than driven headless. (See <a href="#sec-engine" class="quarto-xref">Section&nbsp;3</a> for the gate’s teeth.)</p>
+</section>
+<section id="the-v-model-mapping-check-steers-the-phases" class="level2" data-number="4.2">
+<h2 data-number="4.2" class="anchored" data-anchor-id="the-v-model-mapping-check-steers-the-phases"><span class="header-section-number">4.2</span> The V-model mapping: <code>check:</code> steers the phases</h2>
+<p>Each acceptance criterion’s <code>check:</code> classification (see <a href="#sec-format" class="quarto-xref">Section&nbsp;2</a>) is a <strong>routing key</strong> that maps it onto the V-model:</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 25%">
+<col style="width: 35%">
+<col style="width: 17%">
+<col style="width: 20%">
+</colgroup>
+<thead>
+<tr class="header">
+<th><code>check:</code></th>
+<th>V-model side</th>
+<th>Phase</th>
+<th>Oracle</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>regression</code></td>
+<td>verification (left)</td>
+<td><strong>Build</strong> (inside <code>develop</code>)</td>
+<td>coupled / mock, headless</td>
+</tr>
+<tr class="even">
+<td><code>artifact</code></td>
+<td>validation (right)</td>
+<td><strong>System-Test</strong></td>
+<td>decoupled, durable (lab-produced; engine reads only the pass/fail signal)</td>
+</tr>
+<tr class="odd">
+<td><code>manual</code></td>
+<td>validation (right)</td>
+<td><strong>System-Test</strong></td>
+<td>human — a decision stop</td>
+</tr>
+</tbody>
+</table>
+<p>The phase names here are V-model <em>stages</em>, not step ids: the <code>develop</code> step does the Build-side <strong>verification</strong> of every <code>regression</code> criterion (that is its gate). The classification steers <strong>phase existence</strong>: a REQ with only <code>regression</code> criteria runs no System-Test phase; any <code>artifact</code> <em>or</em> <code>manual</code> criterion makes the System-Test (validation) phase apply. A human review <em>is</em> validation — system-level by definition — which is why <code>manual</code> lives inside the System-Test phase rather than as a stray module-level stop.</p>
+</section>
+<section id="the-system-test-phase-req-030" class="level2" data-number="4.3">
+<h2 data-number="4.3" class="anchored" data-anchor-id="the-system-test-phase-req-030"><span class="header-section-number">4.3</span> The System-Test phase (REQ-030)</h2>
+<p>A REQ that declares at least one <code>artifact</code> or <code>manual</code> criterion gets exactly one extra step, <strong><code>REQ-NNN:validate</code></strong>, between develop and the mechanical land; a REQ with only <code>regression</code> criteria gets none. The step order is <strong>develop → validate → land</strong>: the green develop gate then only <em>commits</em> the work on <code>dev</code> (a <code>develop_committed</code> event — no status flip yet), and the land fires when validation is green — <code>done</code> keeps meaning <em>verified and validated</em>, and dependents wait on the dep’s final step.</p>
+<p>The phase decouples the oracle. It runs as a <strong>fresh System Tester session</strong> (<code>/system-test</code>, model per <code>claude.steps.validate</code>, default Opus-high) that never sees the builder’s diff: it orients from the REQ, brings the lab up, drives the validation procedure, and captures artifacts into <code>.devsteward/evidence/REQ-NNN/&lt;timestamp&gt;/</code>. Then the <strong>engine</strong> runs each <code>artifact</code> criterion’s named <code>test:</code> command itself — the same skip-is-red / zero-collected-is-red teeth as the develop gate — and consumes only that pass/fail signal; the session’s report carries zero gate weight.</p>
+<p>Validation is a <strong>recorded evidence event</strong>, not a regression-suite member: the <code>validation</code> event in <code>events.jsonl</code> carries per-AC results, each artifact’s relative path + sha256, and any sign-offs; <code>verified_by</code> gets the engine-composed dated summary (the human supplies only the verdict + an optional one-line scope). A lab skip or a missing artifact is a hard red, never a pass.</p>
+<p>Mechanics around the gate:</p>
+<ul>
+<li><strong><code>manual</code> criteria are a guided human validation (REQ-034).</strong> Unattended, the step parks naming the pending human oracle. Attended, <code>steward validate REQ-NNN</code> from a plain shell runs a <strong>two-phase bookkeeping around a guided interactive session</strong>: it preps (evidence dir, branch ready), brings up an interactive System Tester <em>attached to the terminal</em> (the editor pattern — TTY inherited, not <code>claude -p</code>, never detached) that prepares the surfaces and operator entrypoint, walks the human through the procedure, and answers questions; then the engine takes the verdict and records the sign-off (date, reviewer, scope) as the evidence event. The human got the <em>beginning</em> of validation (preparation, guidance), not just the <code>y/N</code> at the end. <strong>Claude is never spawned from within Claude:</strong> the bring-up refuses inside a Claude session (<code>CLAUDECODE</code>) and points at a plain terminal tab or the in-session skill, which calls the discrete <strong>start</strong> and <strong>record</strong> halves itself. The engine-run gate + engine-recorded verdict are what keep the guided session from self-certifying, whatever it reports.</li>
+<li><strong>A pending validation is async QA, not a project freeze (REQ-034).</strong> When the human defers, the validation parks cleanly — a clean working tree on <code>dev</code>, the work already committed there (<code>develop_committed</code>) but not yet flipped to <code>done</code> — and <code>steward run</code> advances other eligible REQs; the waiting human is a standing work-item, not a blocked pipeline. <code>steward validate REQ-NNN</code> resumes it at any later time, and a green verdict fires the deferred land. A declined verdict is a red validation that routes to <code>steward rework</code> (below). The clear verb here is <code>steward validate</code>, <strong>not</strong> <code>steward decision answer</code> — answering the parked QA ticket as if it were a fork is refused and redirected (REQ-057), because flipping the validate step back to pending only re-parks it.</li>
+<li><strong>A red validation parks immediately — no repair loop.</strong> A red here means the develop was hollow or the lab is broken; both are human questions, so the engine never auto-loops on red (REQ-030 Decision 8).</li>
+<li><strong>A red validation names two return edges, keyed on the root cause (REQ-033, REQ-055).</strong> When the red is a real defect — the lab found one, or the validation test itself is wrong — <strong><code>steward rework REQ-NNN</code></strong> flips <code>REQ-NNN:develop</code> back to <code>RECOVER</code> and <code>REQ-NNN:validate</code> to <code>PENDING</code>, answers the parked decision, and records a <code>rework</code> event naming the red evidence dir (the <code>/advance</code> repair session reads it as context); the fix runs on <code>dev</code> and re-validates. When instead the develop work <strong>stands</strong> and an external lab/setup issue was fixed, <strong><code>steward revalidate REQ-NNN</code></strong> re-runs the validation only — it leaves <code>REQ-NNN:develop</code> at <code>DONE</code>, flips <code>REQ-NNN:validate</code> to <code>PENDING</code>, and records a <code>revalidate</code> event. One explicit verb per fix-and-revalidate cycle is the bound (it amends Decision 8 without repealing it). Both refuse on a <code>done</code> REQ (supersede instead — done is never weakened) and touch no REQ file. (<code>steward repeat</code> — REQ-054’s rename of the old <code>recover</code> — is for a step that actually <em>failed</em>; a red validation leaves no failed step.)</li>
+<li><strong>Lab availability is an eligibility dependency.</strong> While any <code>process.lab</code> REQ is not <code>done</code> the validate step is simply ineligible — <code>steward status</code> names the lab REQ being waited on; no red event, no parked decision.</li>
+<li><strong><code>steward validate REQ-NNN</code> is the single entry point.</strong> On an in-flight REQ it executes the pending validate step (green → the mechanical land proceeds); on a <code>done</code> REQ it appends a fresh evidence event and leaves the REQ file untouched — status <em>and</em> <code>verified_by</code> stay the frozen landing provenance (REQ-035). At the release gate (<code>dev → main</code> PR) a human decides which <code>artifact</code> REQs to re-run — there is deliberately no auto-staleness detection.</li>
+</ul>
+</section>
+<section id="labs-owned-fixtures-with-reality-derived-provenance" class="level2" data-number="4.4">
+<h2 data-number="4.4" class="anchored" data-anchor-id="labs-owned-fixtures-with-reality-derived-provenance"><span class="header-section-number">4.4</span> Labs — owned fixtures with reality-derived provenance</h2>
+<p>A <strong>lab</strong> is the decoupled oracle an <code>artifact</code> criterion runs against: an owned, versioned fixture with documented provenance, built by its own REQ — never a double authored in the same step as the code it certifies. The pattern (set by the first lab, FlowSteward’s IMAP lab):</p>
+<ul>
+<li><strong>Labs live in the consumer repo.</strong> The consumer owns the domain, the test accounts, and the credentials; and <code>process.lab</code> references are <strong>registry-local</strong>, so only a lab REQ in the same registry can gate that repo’s validate steps. DevSteward documents the pattern; it does not ship domain fixtures.</li>
+<li><strong>Prefer real systems over doubles.</strong> A lab that targets a real server (a dedicated test account, never production) over a live socket has the strongest provenance there is. Containerized doubles are a fallback, not the default.</li>
+<li><strong>Self-contained and dependency-free.</strong> A lab tool shares no code with the package it validates (stdlib-only, invoked by path), so the oracle stays decoupled and any caller — including another repo’s System Tester — can run it with its own interpreter.</li>
+<li><strong>Configuration is a hard failure, never a skip.</strong> Credentials are injected via an env/path seam (no real paths or secrets committed); a lab that cannot come up exits non-zero. A skipping lab is the false-green hole labs exist to close.</li>
+<li><strong>The corpus is reality-derived and versioned.</strong> Seed data is captured from real traffic and sanitized (provenance notes document source and transformations), with a manifest recording the golden expectation; version, manifest, and docs move together.</li>
+<li><strong>Fixtures are committed upstream; the System Tester never improvises (REQ-051).</strong> A REQ names the fixtures its validation needs in <code>process.fixtures</code> (repo-relative paths). The oracle is git cleanliness: before certifying, the engine refuses if a declared fixture is <strong>missing</strong> (not committed — a hard red naming the gap) or if <strong>untracked</strong> files sit under a declared fixtures path (the tester improvised — refused, and the improvised file is discarded so no uncommitted fixture is left in the tree). A missing fixture is a human question — commit it upstream — never something the Tester fills in. This is the same single-source-of-truth discipline as trunk-based commits: an uncommitted improvised fixture is precisely the divergence the model forbids.</li>
+</ul>
+</section>
+<section id="sequencing-whole-requirements" class="level2" data-number="4.5">
+<h2 data-number="4.5" class="anchored" data-anchor-id="sequencing-whole-requirements"><span class="header-section-number">4.5</span> Sequencing whole requirements</h2>
+<p><code>REQ-B:develop</code> depends on <code>REQ-A:develop</code> for each <code>REQ-A</code> in <code>REQ-B.depends_on</code>. So a requirement only starts once its prerequisites have fully landed, while <strong>independent requirements interleave freely</strong>. A dependency that is already <code>done</code> is satisfied and dropped; a dependency that is draft, dropped, or missing leaves the dependent correctly blocked (and <code>steward lint</code> flags it).</p>
+</section>
+<section id="branching-model-trunk-based-req-047" class="level2" data-number="4.6">
+<h2 data-number="4.6" class="anchored" data-anchor-id="branching-model-trunk-based-req-047"><span class="header-section-number">4.6</span> Branching model — trunk-based (REQ-047)</h2>
+<p>DevSteward uses a two-line model. <code>main</code> is <strong>production</strong> — release tags are cut here and consumers pin them. <code>dev</code> is the <strong>integration</strong> branch and the <strong>single working branch</strong>. <em>Everything</em> lands on <code>dev</code> in linear history: intake (REQ frontmatter, index row, roadmap), plans, the ledger, <strong>and</strong> implementation (code + acceptance tests + the flip to <code>done</code>) are all committed directly on <code>dev</code>. There are <strong>no feature branches, no worktrees, and no engine-initiated branch switching</strong> — the engine never creates, switches, or merges a branch. <code>dev</code> is promoted to <code>main</code> only by a human-gated PR; beta tags (<code>vX.Y.Z-beta.N</code>) may be cut on <code>dev</code>, stable tags on <code>main</code>.</p>
+<p>This is the <strong>REQ-047 pivot</strong>: an earlier model gave each implementation phase its own feature branch that the engine created, switched to, and merged back. That team-scale git topology was never asked for and could not be audited by a single owner; a string of firefighting fixes traced to it. The trunk-based model deletes the machinery — one co-located ledger that cannot diverge from itself, and information-flow constraints (e.g.&nbsp;the System Tester not seeing the builder’s diff) are enforced in the layer that owns them, never with a branch.</p>
+<p>The model is <strong>engine-enforced</strong>, not just convention: before any step runs, the executor checks the current branch, and if it is the production branch it <strong>refuses</strong> — it invokes no <code>claude</code>, commits nothing, leaves the step pending, and prints a guard message naming the branch and the fix. On <code>dev</code> it proceeds normally and commits there. The branch names are configurable in <code>.devsteward/config.yaml</code>:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb3"><pre class="sourceCode yaml code-with-copy"><code class="sourceCode yaml"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="fu">git</span><span class="kw">:</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">production_branch</span><span class="kw">:</span><span class="at"> main</span><span class="co">          # repos using `master`/`release` set it here</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">integration_branch</span><span class="kw">:</span><span class="at"> dev</span><span class="co">          # the single working branch</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>The production guard has no opt-out — strictness is the point — and it never opens PRs (<code>dev → main</code> stays a human PR). If <code>main</code> is ever hotfixed directly, merge it back into <code>dev</code>.</p>
+</section>
+<section id="two-drivers-one-bookkeeper" class="level2" data-number="4.7">
+<h2 data-number="4.7" class="anchored" data-anchor-id="two-drivers-one-bookkeeper"><span class="header-section-number">4.7</span> Two drivers, one bookkeeper</h2>
+<p><code>/advance</code> is one skill run two ways. The <strong>engine is the verifying bookkeeper in both</strong> — the REQ-028 gate and the mechanical land are identical whoever drove the cognition (the <code>checkpoint</code> event records which: <code>driver: interactive</code> or <code>headless</code>). What differs is only the driver and what happens at a fork. The switch is the <code>DEVSTEWARD_UNATTENDED</code> environment variable, which the engine sets when it shells out.</p>
+<ul>
+<li><strong>Interactive — <code>/advance</code> in a live session, closed by <code>steward checkpoint</code>.</strong> The <strong>default driving mode</strong> for a single developer. A person runs the skill directly in Claude Code; at a fork it asks via <code>AskUserQuestion</code> and continues — the interview stays live. The session does the cognition and leaves the tree dirty; the close is <strong><code>steward checkpoint</code></strong>, which re-runs the named acceptance tests through the same land-grade gate as batch and, on green, performs the same mechanical bookkeeping on <code>dev</code> — status flip, index sync, the one authoritative commit, ledger advance, and the trailing ledger follow-up. On red nothing lands: the red verify event and the <code>FAILED</code> step are the honest trail; fix and re-run <code>steward checkpoint</code> (no <code>repeat</code> needed — that verb re-arms a <em>failed batch</em> step, and a red interactive checkpoint left none). The gate cannot be talked into green — that property does not depend on who drove.</li>
+<li><strong>Batch lane — <code>steward advance</code> / <code>steward run</code>.</strong> The overnight lane for queues of <strong>well-specified, low-fork REQs</strong>. Both drive <code>claude -p</code> headless (<code>DEVSTEWARD_UNATTENDED=1</code>); there is no human channel, so a fork is never asked — it is <strong>parked</strong> and surfaced. The engine re-runs the acceptance tests itself, lands the REQ mechanically on green (repairing up to twice on red, then parking), and advances the ledger. <code>steward advance</code> does one checkpoint; <code>steward run</code> marches every eligible step, parking on forks and stopping on a usage limit or hard failure so a human can look.</li>
+</ul>
+<p><strong>One commit, one owner.</strong> The engine commits in both modes — the skill never does. In batch the executor makes the checkpoint commit; interactively <code>steward checkpoint</code> makes it. (Earlier the skill committed its own work, which double-committed under the engine and left the interactive ledger to a hand-edit; both holes are closed by the shared tail.)</p>
+</section>
+<section id="recovery-the-forward-path-out-of-every-red-or-parked-state" class="level2" data-number="4.8">
+<h2 data-number="4.8" class="anchored" data-anchor-id="recovery-the-forward-path-out-of-every-red-or-parked-state"><span class="header-section-number">4.8</span> Recovery — the forward path out of every red or parked state</h2>
+<p>Recovery is one model, not a grab-bag of verbs (REQ-053…056). Pick by <strong>what is actually stuck</strong> — and note that a <em>mechanical</em> go-fix-and-retry stop is never a “decision”: decisions are reserved for genuine human forks.</p>
+<ul>
+<li><strong>A FAILED step → <code>steward repeat REQ-NNN</code></strong> (REQ-026, renamed from <code>recover</code> by REQ-054). The common failure is transient — a flaky environment, an account swap — so the honest action is to <em>re-run the step</em>. <code>repeat</code> flips the FAILED step back to eligible; the next <code>steward run</code> (or <code>steward checkpoint</code>) re-attempts it <strong>against the partial tree the failed attempt left</strong> (the engine only commits on success, so the prior edits are still there — assess and reconcile them, don’t start clean). It succeeds regardless of which branch is checked out (single ledger; no branch or tree gate) and never weakens a <code>done</code> REQ.</li>
+<li><strong>An ineligible develop step (the old states D/H) → fix the cause, then <code>steward repeat</code>.</strong> A develop step held because no <code>docs/plans/</code> file names the REQ, or because it declared <code>develop: split</code> / <code>concept: true</code> (an attended need), is a <strong>mechanical stop, not a decision</strong> (REQ-056 took these off the decision list — parking them only generated a stalemate). <code>steward status</code> names the real cause; add the plan / drive it attended, then <code>steward repeat REQ-NNN</code> to re-arm it. No <code>decision answer</code> is involved.</li>
+<li><strong>A genuine fork → <code>steward decision answer DEC-NNN "&lt;answer&gt;"</code>.</strong> When a session hits a real human choice it can’t resolve from the REQ + repo, it parks a decision (batch) or asks (interactive). <code>decision answer</code> resolves a decision parked from a <strong>develop</strong> step; the next <code>steward run</code> resumes. It refuses on a validation hold and redirects you (next point).</li>
+<li><strong>A pending <code>manual</code>-AC validation (state F) → <code>steward validate REQ-NNN</code>, not <code>decision answer</code>.</strong> A standing QA ticket <em>is</em> a parked decision (a genuine human-present wait), but its clear verb is <code>steward validate</code> — running it attended records the sign-off and fires the deferred land. <code>steward decision answer</code> on such a ticket is <strong>refused and redirected</strong> (REQ-057): answering it would flip the validate step back to pending and, unattended, re-park — the same circular trap REQ-056 removed for D/H.</li>
+<li><strong>A red validation → <code>steward rework</code> or <code>steward revalidate</code>, keyed on the root cause.</strong> <code>rework</code> when the develop was hollow (internal cause — send it back to develop and fix it); <code>revalidate</code> when the develop stands and an external lab/setup issue was fixed (re-run the validation only). See the System-Test bullets above for the full mechanics. A red validation leaves no failed step, so <code>repeat</code> does not apply.</li>
+</ul>
+<p>Across all of these the engine never switches a branch and the operator never hand-edits the ledger or writes <code>status: done</code> — the verbs are the only sanctioned mutations.</p>
+</section>
+<section id="the-fixed-report" class="level2" data-number="4.9">
+<h2 data-number="4.9" class="anchored" data-anchor-id="the-fixed-report"><span class="header-section-number">4.9</span> The fixed report</h2>
+<p>Every checkpoint ends the same way, so orientation is instant:</p>
+<pre><code>Did:       what this checkpoint produced
+Cursor:    new ledger position
+Review:    one line — what to look at
+Decisions: parked forks, or "none"
+Next:      the next eligible step</code></pre>
+</section>
+<section id="a-day-in-the-life" class="level2" data-number="4.10">
+<h2 data-number="4.10" class="anchored" data-anchor-id="a-day-in-the-life"><span class="header-section-number">4.10</span> A day in the life</h2>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb5"><pre class="sourceCode sh code-with-copy"><code class="sourceCode bash"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="ex">steward</span> status                       <span class="co"># where are we?</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="ex">/intake</span> <span class="st">"let users export to CSV"</span>    <span class="co"># interview → draft REQ-014</span></span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a><span class="ex">steward</span> lint                         <span class="co"># green?</span></span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a><span class="ex">/advance</span>                             <span class="co"># interactive: plan + code + tests, asking at forks</span></span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a><span class="ex">steward</span> checkpoint REQ-014           <span class="co"># engine verifies and lands on `dev` — one transaction</span></span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a><span class="co"># or, the batch lane for a queue of well-specified REQs:</span></span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a><span class="ex">steward</span> run                          <span class="co"># march everything eligible; park on forks</span></span>
+<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a><span class="ex">steward</span> decision list                <span class="co"># anything parked?</span></span>
+<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a><span class="ex">steward</span> decision answer DEC-001 <span class="st">"use RFC 4180 quoting"</span></span>
+<span id="cb5-10"><a href="#cb5-10" aria-hidden="true" tabindex="-1"></a><span class="ex">steward</span> run                          <span class="co"># resume</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</section>
+</section>
+<section id="sec-skills" class="level1" data-number="5">
+<h1 data-number="5"><span class="header-section-number">5</span> The skills</h1>
+<p>Three skills carry the cognitive work the engine orchestrates. They ship in <code>templates/.claude/skills/</code> and are stamped into every consumer. The engine invokes them headless; a human can also invoke them directly in an interactive session.</p>
+<section id="intake-interview-an-idea-into-a-draft-req" class="level2" data-number="5.1">
+<h2 data-number="5.1" class="anchored" data-anchor-id="intake-interview-an-idea-into-a-draft-req"><span class="header-section-number">5.1</span> <code>/intake</code> — interview an idea into a draft REQ</h2>
+<p>The interrogation skill, and the one to protect. Takes a raw idea and interrogates it — problem, scope boundaries, alternatives, risks, dependencies, the acceptance tests, the English-code/localized-UI split — then emits a <strong>schema-valid draft REQ</strong> (<code>status: draft</code>), its index row, its roadmap entry, and any <code>SCN</code> scenarios. Leaves <code>steward lint</code> green. A sharp <code>/intake</code> is the highest-leverage moment in the method; never rush it.</p>
+</section>
+<section id="advance-one-checkpoint" class="level2" data-number="5.2">
+<h2 data-number="5.2" class="anchored" data-anchor-id="advance-one-checkpoint"><span class="header-section-number">5.2</span> <code>/advance</code> — one checkpoint</h2>
+<p>The generalized <code>/scaleup</code>. Orients from the ledger, does <strong>exactly one</strong> checkpoint — the fused <strong>Develop</strong> checkpoint (plan-first → code → acceptance tests) — stops at forks, and ends with the fixed report. It runs two ways under <strong>one bookkeeper</strong>: directly in a live session (the default — forks ask; the close is <code>steward checkpoint</code>, which verifies and lands through the same gate as batch) or headless under <code>steward advance</code> / <code>steward run</code> (the batch lane — forks park; the executor verifies and lands, repairing then parking on red). See the two-driver contract in <a href="#sec-workflow" class="quarto-xref">Section&nbsp;4</a>.</p>
+</section>
+<section id="bootstrap-bring-a-new-project-to-life" class="level2" data-number="5.3">
+<h2 data-number="5.3" class="anchored" data-anchor-id="bootstrap-bring-a-new-project-to-life"><span class="header-section-number">5.3</span> <code>/bootstrap</code> — bring a new project to life</h2>
+<p>Run once, right after <code>steward new</code>, while the scaffolding still has <code>{placeholders}</code>. Interviews for stack + build/test commands, co-authors the frozen <strong>REQ-001</strong> north star, fills the placeholders, writes <code>.devsteward/config.yaml</code>, makes the first commit, and initializes the ledger.</p>
+</section>
+<section id="system-test-the-system-tester-req-030" class="level2" data-number="5.4">
+<h2 data-number="5.4" class="anchored" data-anchor-id="system-test-the-system-tester-req-030"><span class="header-section-number">5.4</span> <code>/system-test</code> — the System Tester (REQ-030)</h2>
+<p>The independent validation session the engine spawns for a <code>validate</code> step (<code>steward validate</code> / <code>steward run</code>). Deliberately <strong>decoupled</strong>: it never reads the develop diff — it orients from the REQ alone, brings the lab up, drives the validation procedure, and captures artifacts into the evidence dir the engine names. It does no bookkeeping and carries no gate weight: the engine runs the <code>artifact</code> acceptance tests itself afterwards and consumes only their pass/fail signal; <code>manual</code> criteria stay a human decision stop.</p>
+</section>
+<section id="the-park-and-surface-contract" class="level2" data-number="5.5">
+<h2 data-number="5.5" class="anchored" data-anchor-id="the-park-and-surface-contract"><span class="header-section-number">5.5</span> The park-and-surface contract</h2>
+<p>The interviewing skills obey the same rule when <code>DEVSTEWARD_UNATTENDED=1</code> is set (batch mode): do <strong>not</strong> block on <code>AskUserQuestion</code>. Instead append a decision request to <code>.devsteward/state.yaml</code> under <code>decisions:</code> (<code>{id, step, question, status: open}</code>) and stop. The engine surfaces it and advances to the next independent step. Without the env var (interactive mode) the skills <em>do</em> ask via <code>AskUserQuestion</code> and continue — and the work still lands through the engine’s gate (<code>steward checkpoint</code>), so the certification is the same either way. <strong>The interview stays sacred</strong> — a fork is recorded or asked, never guessed.</p>
+</section>
+<section id="renaming" class="level2" data-number="5.6">
+<h2 data-number="5.6" class="anchored" data-anchor-id="renaming"><span class="header-section-number">5.6</span> Renaming</h2>
+<p>Skill names (<code>/intake</code>, <code>/advance</code>, <code>/bootstrap</code>) are conventions, not hard-coded. The REQ profile invokes <code>/advance</code>; if you rename it, update the profile’s command string.</p>
+</section>
+</section>
+
+</main>
+<!-- /main column -->
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+      const outerScaffold = trigger.parentElement.cloneNode(true);
+      const codeEl = outerScaffold.querySelector('code');
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp('/' + window.location.host + '/');
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+</div> <!-- /content -->
+
+
+
+
+</body></html>

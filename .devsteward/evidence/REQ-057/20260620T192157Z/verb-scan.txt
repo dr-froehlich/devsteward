@@ -1,0 +1,34 @@
+# Recovery-verb scan across documentation surfaces (REQ-057 system-test)
+## Live 'steward recover' command presented anywhere? (expect: none)
+(no 'steward recover' command found — PASS)
+
+## repeat / revalidate / rework occurrences (current verbs)
+### handbook
+devsteward/handbook/_03-workflow.qmd:98:  **`steward rework REQ-NNN`** flips `REQ-NNN:develop` back to `RECOVER` and
+devsteward/handbook/_03-workflow.qmd:102:  lab/setup issue was fixed, **`steward revalidate REQ-NNN`** re-runs the validation only —
+devsteward/handbook/_03-workflow.qmd:106:  never weakened) and touch no REQ file. (`steward repeat` — REQ-054's rename of the old
+devsteward/handbook/_03-workflow.qmd:230:- **A FAILED step → `steward repeat REQ-NNN`** (REQ-026, renamed from `recover` by REQ-054).
+devsteward/handbook/_03-workflow.qmd:237:- **An ineligible develop step (the old states D/H) → fix the cause, then `steward repeat`.**
+devsteward/handbook/_03-workflow.qmd:242:  `steward repeat REQ-NNN` to re-arm it. No `decision answer` is involved.
+devsteward/handbook/_03-workflow.qmd:253:- **A red validation → `steward rework` or `steward revalidate`, keyed on the root cause.**
+devsteward/handbook/_02-engine.qmd:86:repair loop, naming the root-cause edge (`steward rework` or `steward revalidate`). A
+### templates/STEWARD.md
+89:| A step is **FAILED** (a develop step errored or the gate stayed red) | The attempt left partial edits in the tree | `steward repeat REQ-NNN` |
+90:| **D/H** — a develop step ineligible (e.g. no plan artifact, or split/attended need) | **Not a decision.** A mechanical go-fix-and-retry stop | fix the cause, then `steward repeat REQ-NNN` |
+93:| A **red validation** (the lab found a defect, or the validation test is wrong) | A human question — no auto-repair loop | `steward rework` or `steward revalidate` (below) |
+95:- **`steward repeat REQ-NNN`** — the re-run verb (REQ-054, renamed from `recover`). The common
+104:- **`steward rework REQ-NNN`** — the return edge when a **red validation is a real defect**: it
+107:- **`steward revalidate REQ-NNN`** — the validate-layer mirror: when the develop work **stands**
+### skills
+.claude/skills/advance/SKILL.md:42:- **Recovery (`--repeat` in your command):** if the step command includes `--repeat`,
+.claude/skills/advance/SKILL.md:46:  - **Rework (a `rework` event for your step):** if the ledger's latest event for this
+.claude/skills/advance/SKILL.md:47:    develop step is `rework`, a red System-Test validation was returned to you for a fix
+.claude/skills/advance/SKILL.md:48:    (`steward rework`, REQ-033). The event names the red validation's `evidence` dir — read
+.claude/skills/advance/SKILL.md:97:  interactive`). On red nothing lands — fix and re-run `steward checkpoint`; no `repeat` needed
+
+## All bare 'recover' mentions, in context (prose only — none are the CLI verb)
+devsteward/handbook/_03-workflow.qmd:107:  `recover` — is for a step that actually *failed*; a red validation leaves no failed step.)
+devsteward/handbook/_03-workflow.qmd:230:- **A FAILED step → `steward repeat REQ-NNN`** (REQ-026, renamed from `recover` by REQ-054).
+devsteward/templates/STEWARD.md:6:source** to figure out how to use it or how to recover from a state — everything you need is
+devsteward/templates/STEWARD.md:95:- **`steward repeat REQ-NNN`** — the re-run verb (REQ-054, renamed from `recover`). The common
+devsteward/templates/STEWARD.md:105:  sends the validate step back to develop (`develop → recover`, `validate → pending`) so you fix
