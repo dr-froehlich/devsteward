@@ -305,6 +305,24 @@ validation. Driven **interactively** (not by `steward run`) in this order — se
   (guard, stamping+reference, verb strings) + 1 manual sign-off (revision complete + manual
   black-box-sufficient); fused, no lab. With REQ-007, REQ-034, REQ-047, REQ-054, REQ-055,
   REQ-056.
+- REQ-058 — **engine budget gate delegates to clauder** (draft, feature): bring the sibling
+  project **clauder** (the built combined-budget policy layer over cswap) into the engine and
+  retire DevSteward's hand-rolled per-account gate. Today `CswapAccountProvider.precheck()` reads
+  cswap's `usage.json` directly and gates each account against a fixed 70% margin — refusing a job
+  when the active account is low even if the pool could carry it. This delegates the per-step gate
+  to `clauder gate --threshold T --json` (combined-budget: proceed/switch/wait/unsatisfiable,
+  picks the best entry account, computes waits), treating clauder as an **optional external
+  black-box tool** shelled via its CLI (Q1). The engine gates at **every step boundary** but never
+  owns clauder's continuous `monitor` (operator-run, manually or as a service); it adds **no
+  second switcher** — all account interaction routes through the single `clauder gate` chokepoint,
+  never cswap directly, so the engine's gate and a background monitor cannot race (the lock that
+  serialises the shared switch is a **clauder-side** prerequisite, not a DevSteward dep). Drops the
+  direct-cswap machinery (`usage_snapshot`, the per-account loop) and the `use=N` slot-pin; absent
+  clauder degrades to proceed-without-check (Q3). In-flight reality: a running `claude -p` can't be
+  moved mid-session, so the gate enters each step on a healthy account and the monitor
+  pre-positions between calls. AC1/AC2 regression (verdict mapping, single chokepoint, degradation,
+  stubbed clauder) + AC3 manual (real cswap + ≥2 accounts + live monitor, no race); fused, no
+  owned lab. With REQ-008 (provider seam), REQ-025 (the gate behaviour it replaces).
 - REQ-053 — **process resilience: forward-path audit + rework/repeat model** (draft, design):
   the third strand of REQ-052's idea stub, split out as a process redesign. Audits whether,
   post-REQ-047 (state can no longer diverge), every red/failed/parked state has a clear,
@@ -352,6 +370,7 @@ REQ-001
  REQ-033 (rework edge) ── REQ-055 (draft, feature: steward revalidate — mirror of rework, external-cause re-validate; with REQ-047)
  REQ-053 (forward-path audit) ── REQ-056 (draft, fix: D/H off decisions → repeat; FAILED-step names its forward verb; with REQ-029, REQ-054)
  REQ-054 + REQ-055 + REQ-056 ── REQ-057 (draft, docs: complete post-REQ-047 handbook revision + Claude-targeted black-box steward manual shipped via templates + state-F decision-answer guard; with REQ-007, REQ-034, REQ-047)
+ REQ-008 (account provider seam) ── REQ-025 (visible rotation + quota gate) ── REQ-058 (draft, feature: engine budget gate delegates to clauder CLI; drop direct cswap; race-free with operator-run background monitor [clauder-side lock prereq])
  REQ-011 (done, production-branch guard) ── REQ-019 (done, integration-branch guard) ── REQ-020 (draft, branch lifecycle automation)
  REQ-024 (draft, onboard skill) ── orchestrates REQ-007 + REQ-009 + REQ-010/023 + REQ-021 + REQ-022 (memzy onboarding)
 ```
