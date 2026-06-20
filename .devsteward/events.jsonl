@@ -240,3 +240,5 @@
 {"ts": "2026-06-20T21:01:57+00:00", "event": "step_started", "step": "REQ-058:develop", "command": "/advance REQ-058 develop", "recover": false}
 {"ts": "2026-06-20T21:10:09+00:00", "event": "verify", "step": "REQ-058:develop", "ok": true, "detail": "[0] python -m pytest tests/test_accounts.py::test_clauder_gate_delegation\n    1 passed\n[0] python -m pytest tests/test_accounts.py::test_no_direct_cswap_and_degrades_without_clauder\n    1 passed\n[0] full suite clean (python -m pytest)"}
 {"ts": "2026-06-20T21:10:10+00:00", "event": "develop_committed", "step": "REQ-058:develop", "commit": "383a887d8428017f30a767a2380d56eaca3c0cff", "driver": "headless"}
+{"ts": "2026-06-20T21:10:10+00:00", "event": "step_started", "step": "REQ-058:validate", "command": "/system-test REQ-058"}
+{"ts": "2026-06-20T21:10:10+00:00", "event": "decision_parked", "decision": "DEC-008", "step": "REQ-058:validate", "question": "REQ-058 validation: manual AC AC3 awaits its human oracle — run `steward validate REQ-058` attended to record the sign-off."}
