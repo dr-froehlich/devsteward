@@ -68,6 +68,26 @@ validation. Driven **interactively** (not by `steward run`) in this order — se
 
 ## Next
 
+- REQ-059 — **interrupted run self-heals a stranded RUNNING step** (draft): the 2026-06-20
+  runtime stalemate. A `SIGINT` during a cswap quota-wait left `REQ-040:develop` stranded in
+  `RUNNING` (the requeue only fires on an up-front `precheck` fail or a clean `USAGE_LIMIT`
+  return, never on an interrupt of the blocking wait), and nothing reconciles it — the REQ
+  wedged with no verb to recover, only a hand-edit of `state.yaml`. `only_ineligibility_reason`
+  then misreported it as *"blocked on an unfinished dependency"* via an unconditional else. Fix:
+  a **startup sweep** at `run`/`advance` requeues any `RUNNING` step (→ `PENDING`, or `RECOVER`
+  to preserve the `--repeat` signal) and records an `interrupted` event, so the wedge self-heals
+  on re-run — no new verb; plus the diagnosis branches on actual statuses and only claims a
+  dependency block when a `depends_on` is genuinely not `done`. Regression-only; fused. With
+  REQ-025, REQ-026, REQ-053.
+- REQ-060 — **a caught-up project reports an honest terminal state** (draft): the clauder
+  observation. The persisted cursor is *"last step touched, never reset"*, so when every REQ is
+  done `steward status` prints `cursor: REQ-005:develop` (a done step it won't derive) above
+  *"no active steps"*, and `checkpoint` refuses with an *"is it active?"* question instead of
+  naming **done** — a cognitive dead-end with no "you're caught up, `/intake` the next" signal.
+  Fix is display-only (cursor semantics untouched): show the cursor only while it names a
+  derivable step, print a positive terminal line otherwise, and have `checkpoint` name *done* +
+  supersede. Sibling of REQ-059, unrelated mechanism. Regression-only; fused. With REQ-018,
+  REQ-047, REQ-056.
 - REQ-044 — **`steward supersede`** (draft): codifies the 2026-06-16 REQ-034 hand-recovery.
   REQ-037's `try_merge_no_ff` aborts a feature→`dev` merge on a code conflict and tells the
   operator to *"resolve by hand: `git merge --no-ff`"* — which bakes in "an aborted merge
@@ -368,7 +388,9 @@ REQ-001
                                      └─ REQ-053 (done, design: process-resilience forward-path audit + rework/repeat model)
  REQ-026 (recover verb) ── REQ-054 (draft, refactor: rename recover → repeat + --recover → --repeat; hard rename, no alias)
  REQ-033 (rework edge) ── REQ-055 (draft, feature: steward revalidate — mirror of rework, external-cause re-validate; with REQ-047)
- REQ-053 (forward-path audit) ── REQ-056 (draft, fix: D/H off decisions → repeat; FAILED-step names its forward verb; with REQ-029, REQ-054)
+ REQ-053 (forward-path audit) ──┬─ REQ-056 (draft, fix: D/H off decisions → repeat; FAILED-step names its forward verb; with REQ-029, REQ-054)
+                                └─ REQ-059 (draft, fix: interrupted run self-heals a stranded RUNNING step + honest ineligibility diagnosis; with REQ-025, REQ-026)
+ REQ-047 + REQ-056 ── REQ-060 (draft, fix: caught-up project reports an honest terminal state — cursor never names a done step; with REQ-018)
  REQ-054 + REQ-055 + REQ-056 ── REQ-057 (draft, docs: complete post-REQ-047 handbook revision + Claude-targeted black-box steward manual shipped via templates + state-F decision-answer guard; with REQ-007, REQ-034, REQ-047)
  REQ-008 (account provider seam) ── REQ-025 (visible rotation + quota gate) ── REQ-058 (draft, feature: engine budget gate delegates to clauder CLI; drop direct cswap; race-free with operator-run background monitor [clauder-side lock prereq])
  REQ-011 (done, production-branch guard) ── REQ-019 (done, integration-branch guard) ── REQ-020 (draft, branch lifecycle automation)
