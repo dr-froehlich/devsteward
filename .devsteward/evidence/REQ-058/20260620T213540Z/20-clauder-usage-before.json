@@ -1,0 +1,39 @@
+{
+  "source_available": true,
+  "active_slot": 2,
+  "fetched_at": 1781991765.4061193,
+  "age_seconds": 0.2023463249206543,
+  "accounts": [
+    {
+      "slot": 1,
+      "status": "ok",
+      "active": false,
+      "pct_5h": 88.0,
+      "pct_7d": 1.0,
+      "reset_5h_countdown": "1h 37m",
+      "reset_5h_clock": "Jun 21 01:20",
+      "minutes_to_5h_reset": 97,
+      "reset_7d_countdown": "6d 21h",
+      "reset_7d_clock": "Jun 27 21:00",
+      "minutes_to_7d_reset": 9900
+    },
+    {
+      "slot": 2,
+      "status": "ok",
+      "active": true,
+      "pct_5h": 76.0,
+      "pct_7d": 36.0,
+      "reset_5h_countdown": "2h 57m",
+      "reset_5h_clock": "Jun 21 02:39",
+      "minutes_to_5h_reset": 177,
+      "reset_7d_countdown": "7h 17m",
+      "reset_7d_clock": "Jun 21 06:59",
+      "minutes_to_7d_reset": 437
+    }
+  ],
+  "combined": {
+    "pct_5h_headroom": 36.0,
+    "available": 2,
+    "partial": false
+  }
+}

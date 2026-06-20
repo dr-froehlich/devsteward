@@ -1,0 +1,64 @@
+# clauder gate verdict spectrum — the delegation seam the engine shells (AC3)
+# (--dry-run: advise only, no cswap switch) captured 21:44:34Z, monitor running concurrently
+# verdict -> engine ClauderAccountProvider mapping: proceed/switch=ok(0) | wait=sleep&re-gate(75) | unsatisfiable=stop(69)
+
+===== clauder gate --threshold 10 --dry-run --json =====
+{
+  "decision": "proceed",
+  "account": 2,
+  "reason": "proceed-active",
+  "wait_seconds": null,
+  "partial": false
+}
+exit_code=0
+
+===== clauder gate --threshold 24 --dry-run --json =====
+{
+  "decision": "wait",
+  "account": null,
+  "reason": "wait-reset",
+  "wait_seconds": 5700,
+  "partial": false
+}
+exit_code=75
+
+===== clauder gate --threshold 30 --dry-run --json =====
+{
+  "decision": "wait",
+  "account": null,
+  "reason": "wait-reset",
+  "wait_seconds": 5700,
+  "partial": false
+}
+exit_code=75
+
+===== clauder gate --threshold 39 --dry-run --json =====
+{
+  "decision": "wait",
+  "account": null,
+  "reason": "wait-reset",
+  "wait_seconds": 5700,
+  "partial": false
+}
+exit_code=75
+
+===== clauder gate --threshold 50 --dry-run --json =====
+{
+  "decision": "wait",
+  "account": null,
+  "reason": "wait-reset",
+  "wait_seconds": 5700,
+  "partial": false
+}
+exit_code=75
+
+===== clauder gate --threshold 90 --dry-run --json =====
+{
+  "decision": "wait",
+  "account": null,
+  "reason": "wait-reset",
+  "wait_seconds": 5700,
+  "partial": false
+}
+exit_code=75
+
