@@ -4,7 +4,8 @@
   Generic profile = an explicit list; REQ profile = derived from REQ files.
 * :class:`Verifier` — *did it succeed.* Runs named acceptance tests; green ⇒ done.
 * :class:`DecisionGate` — *what to do at a fork.* Park-and-surface when unattended.
-* :class:`AccountProvider` — *which credentials / quota.* claude-swap, or single-account.
+* :class:`AccountProvider` — *which credentials / quota.* Delegates the budget gate to the
+  external ``clauder`` CLI (REQ-058), or single-account.
 * :class:`GitTopology` — *trunk-based git access (REQ-048).* Read the current branch (the
   only guard left is "never commit on ``main``") and make the code + ledger commits on the
   integration branch; real ``git`` (``GitCli``) or an in-memory fake.
@@ -47,7 +48,8 @@ class AccountProvider(Protocol):
         """Return ``(ok, reason)``. ``ok=False`` means stop (out of quota)."""
 
     def claude_argv(self) -> list[str]:
-        """Return the argv prefix, e.g. ``["claude"]`` or ``["cswap", "exec", "claude"]``."""
+        """Return the argv prefix — ``["claude"]``. The provider may switch the active
+        account in :meth:`precheck` (clauder/cswap are switchers), but the launch is plain."""
 
 
 @runtime_checkable

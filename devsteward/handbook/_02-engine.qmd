@@ -26,7 +26,7 @@ Knows nothing about requirements. For each eligible step it:
 | `StepSource` | what are the steps? | explicit list in `state.yaml` | derived from REQ files |
 | `Verifier` | did it succeed? | run named tests | run named tests |
 | `DecisionGate` | what at a fork? | park-and-surface | park-and-surface |
-| `AccountProvider` | which quota? | single-account | claude-swap, degrades |
+| `AccountProvider` | which quota? | single-account | `clauder gate` delegation, degrades |
 
 ### Why the engine owns verification and forks
 
@@ -122,10 +122,15 @@ The ledger holds *no requirement content* — only where the cursor is and what 
 
 ## Account / quota (`core/accounts.py`)
 
-Lifted and generalized from the proven `run_batch*.py` quota machinery. With `cswap` on
-PATH, `claude` is routed through claude-swap (two-account, `--use N` pinning, adaptive
-gate). Without it, the provider degrades to plain single-account and logs "proceeding
-without quota check" — it never hard-fails on a missing tool.
+The budget gate is **delegated to the external `clauder` CLI** (REQ-058). At every step
+boundary the provider shells `clauder gate --threshold T --json`; `clauder` decides
+proceed / switch / wait against the **combined** remaining budget across all accounts and
+tells cswap when to switch. The engine reads only `clauder`'s JSON + exit code (0 proceed/
+switch, 75 wait, 69 unsatisfiable) and never touches cswap or its `usage.json` directly —
+one chokepoint, **no second switcher**, so it cannot race a background `clauder monitor`
+(which the operator runs out-of-band; the engine never spawns it). When `clauder` is absent
+from PATH the gate degrades to "proceeding without quota check" — it never hard-fails on a
+missing tool.
 
 ## Park-and-surface
 

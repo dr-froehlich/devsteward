@@ -9,11 +9,14 @@ index_file: docs/requirements/REQUIREMENTS_INDEX.md
 roadmap_file: docs/requirements/ROADMAP.md
 
 # Account / quota provider for headless runs.
-#   cswap  — route claude through claude-swap (two-account, --use N pinning, adaptive
-#            gate); degrades to single-account when cswap is absent.
-#   single — plain `claude`, no quota machinery.
+#   clauder — delegate the per-step budget gate to the external `clauder` CLI (REQ-058):
+#             `clauder gate` decides proceed/switch/wait against the combined budget across
+#             accounts and tells cswap when to switch. The engine never touches cswap
+#             directly and never runs `clauder monitor` (operator-started, out-of-band).
+#             Degrades to "proceed, no quota check" when `clauder` is absent from PATH.
+#   single  — plain `claude`, no quota machinery.
 accounts:
-  provider: cswap
+  provider: clauder
 
 # How a headless `claude -p` run is allowed to act on the repo. Headless sessions have
 # no interactive approver, so without this every edit stalls and the run does nothing.

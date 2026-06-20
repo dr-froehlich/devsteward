@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from .config import Config
-from .core.accounts import CswapAccountProvider, SingleAccountProvider
+from .core.accounts import ClauderAccountProvider, SingleAccountProvider
 from .core.executor import Executor
 from .core.git import GitCli
 from .core.verify import CommandVerifier
@@ -69,11 +69,14 @@ def build_accounts(
     announce=None,
     should_stop=None,
 ):
-    provider = (cfg.accounts or {}).get("provider", "cswap")
+    provider = (cfg.accounts or {}).get("provider", "clauder")
     if provider == "single":
         return SingleAccountProvider()
-    return CswapAccountProvider(
-        use=use,
+    # REQ-058: the budget gate delegates to the external `clauder` CLI. The legacy `cswap`
+    # provider value maps here too — DevSteward no longer drives cswap directly. `use` (the
+    # old slot-pin, REQ-025 D6) is dropped: clauder selects the entry account from the
+    # combined budget (REQ-058 D5), so it is no longer forwarded to the provider.
+    return ClauderAccountProvider(
         threshold=cfg.threshold if threshold is None else threshold,
         announce=announce,
         should_stop=should_stop,
