@@ -206,6 +206,50 @@ def test_full_close_out_lands_on_dev(tmp_path):
     assert parse_req(tmp_path / "docs/requirements/REQ-001.md").status == "done"
 
 
+# -- REQ-060: an honest terminal state, no misleading checkpoint refusal ------
+
+
+def test_checkpoint_done_req_names_done(tmp_path, monkeypatch):
+    """REQ-060 AC2 — `steward checkpoint REQ-NNN` on a *done* REQ fails with a message that
+    names it as done and points at supersede, not the generic 'is REQ active (not draft/
+    done) and is the phase develop?' question."""
+    _project_with_req(tmp_path, "REQ-001", status="done")
+    _index(tmp_path, ("REQ-001", "REQ-001 title", "DONE", "–"))
+    Ledger.init(tmp_path)
+    ex = _executor(tmp_path)
+    cfg = SimpleNamespace(req_dir=tmp_path / "docs" / "requirements")
+
+    monkeypatch.setattr(cli, "_load_or_die", lambda: cfg)
+    monkeypatch.setattr(cli, "build_executor", lambda c, **kw: ex)
+    result = CliRunner().invoke(main, ["checkpoint", "REQ-001"])
+
+    assert result.exit_code != 0, result.output
+    assert "REQ-001 is done" in result.output
+    assert "supersede" in result.output
+    # not the interrogating question the user already knows the answer to
+    assert "active (not draft/done)" not in result.output
+
+
+def test_checkpoint_no_arg_stale_cursor_nothing_in_flight(tmp_path, monkeypatch):
+    """REQ-060 AC3 — no-arg `steward checkpoint` whose cursor names a done/non-derivable
+    step reports 'nothing in flight to checkpoint', not the 'not a derivable step' error."""
+    _project_with_req(tmp_path, "REQ-001", status="done")
+    _index(tmp_path, ("REQ-001", "REQ-001 title", "DONE", "–"))
+    Ledger.init(tmp_path)
+    ex = _executor(tmp_path)
+    ex.ledger.set_cursor("REQ-001:develop")  # stale: pinned to the now-done final step
+    ex.ledger.save()
+    cfg = SimpleNamespace(req_dir=tmp_path / "docs" / "requirements")
+
+    monkeypatch.setattr(cli, "_load_or_die", lambda: cfg)
+    monkeypatch.setattr(cli, "build_executor", lambda c, **kw: ex)
+    result = CliRunner().invoke(main, ["checkpoint"])
+
+    assert result.exit_code != 0, result.output
+    assert "nothing in flight to checkpoint" in result.output
+    assert "not a derivable step" not in result.output
+
+
 # -- AC5 ----------------------------------------------------------------------
 
 

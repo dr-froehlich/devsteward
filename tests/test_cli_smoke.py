@@ -194,6 +194,44 @@ def test_status_failed_step_names_repeat(tmp_path, monkeypatch):
     assert "No parked decisions." in decisions.output  # the failure parked none
 
 
+def test_status_all_done_terminal_state(tmp_path, monkeypatch):
+    """REQ-060 AC1 — a caught-up project reports an honest terminal state: with its only REQ
+    `done` and the cursor pinned to that now-done step, `steward status` prints the
+    all-caught-up line pointing at `/intake` and does NOT print a `cursor:` line naming the
+    done/non-derivable step."""
+    from devsteward.core.ledger import Ledger
+    from devsteward.core.model import StepStatus
+    from test_transaction_boundary import _index, _init_git, _write_req
+
+    req_dir = tmp_path / "docs" / "requirements"
+    _write_req(req_dir, "REQ-001", [("AC1", "true", "regression")], status="done")
+    _index(req_dir, ("REQ-001", "DONE"))
+    plans = tmp_path / "docs" / "plans"
+    plans.mkdir(parents=True, exist_ok=True)
+    (plans / "0001-plan.md").write_text("# Plan 0001\n\nCovers REQ-001.\n", encoding="utf-8")
+    (tmp_path / ".devsteward").mkdir(parents=True, exist_ok=True)
+    (tmp_path / ".devsteward" / "config.yaml").write_text(
+        "accounts:\n  provider: single\n", encoding="utf-8"
+    )
+    Ledger.init(tmp_path, profile="req")
+    _init_git(tmp_path)
+    monkeypatch.chdir(tmp_path)
+
+    # the real-world stale cursor: pinned to the now-done final step, never cleared
+    led = Ledger(tmp_path)
+    led.set_status("REQ-001:develop", StepStatus.DONE)
+    led.set_cursor("REQ-001:develop")
+    led.save()
+
+    status = CliRunner().invoke(main, ["status"])
+    assert status.exit_code == 0, status.output
+    # honest terminal: the forward path is named ...
+    assert "/intake" in status.output
+    # ... and the stale cursor naming the done step is NOT surfaced
+    assert "cursor:" not in status.output
+    assert "REQ-001:develop" not in status.output
+
+
 def test_validate_wires_announce_and_stop(monkeypatch):
     """REQ-025: `validate` must thread the visibility sink + graceful-stop controller into
     build_executor like run/advance — otherwise a cswap quota wait sleeps with no output and

@@ -290,11 +290,30 @@ def status() -> None:
     # REQ-040 Decision 1: bind the read path too — from another checked-out branch (e.g.
     # `main`) an unbound read returns a stale snapshot, not the live integration-branch cursor.
     led = ex.live_ledger()
-    click.echo(f"profile: {led.profile}    cursor: {led.cursor_step or '—'}")
-
     steps = ex.steps()
+    # REQ-060: the cursor orients toward pending work, so surface it only while it still
+    # names a step the engine derives (an active REQ). A cursor pinned to a *done* step the
+    # engine refuses to derive is strictly misleading — suppress it in favour of the honest
+    # terminal line below rather than echo the last finished step.
+    cursor = led.cursor_step
+    if cursor and cursor in {s.id for s in steps}:
+        click.echo(f"profile: {led.profile}    cursor: {cursor}")
+    else:
+        click.echo(f"profile: {led.profile}")
+
     if not steps:
-        click.echo("no active steps (all requirements done, draft, or none defined).")
+        # REQ-060: a caught-up project names its forward path (the [[REQ-056]] principle
+        # applied to the *done* terminal) — activation when drafts are waiting, else
+        # `/intake` for the next REQ — instead of the bare "no active steps" dead-end.
+        from .profiles.req.reqfile import load_reqs
+
+        if any(r.status == "draft" for r in load_reqs(cfg.req_dir)):
+            click.echo(
+                "all active requirements done — activate a waiting draft with "
+                "`steward activate REQ-NNN`."
+            )
+        else:
+            click.echo("all requirements done — nothing to do; add the next with `/intake`.")
     else:
         eligible = {s.id for s in ex.eligible_steps()}
         click.echo("\nsteps:")
@@ -526,17 +545,30 @@ def checkpoint(req_id: str | None, phase: str | None) -> None:
         # REQ-041: resolve the cursor from the live integration-branch ledger, not an
         # unbound snapshot of another branch (REQ-040 Decision 1, completed across read sites).
         step_id = ex.live_ledger().cursor_step
-        if not step_id:
+        # REQ-060: an unset cursor — or one pinned to a done/non-derivable step (the
+        # all-caught-up terminal) — means nothing is in flight. Say so plainly rather than
+        # push a stale cursor into the "not a derivable step" error below.
+        if not step_id or ex.step_by_id(step_id) is None:
             raise click.ClickException(
-                "no cursor step to checkpoint — pass the target explicitly: "
+                "nothing in flight to checkpoint — pass a target explicitly: "
                 "`steward checkpoint REQ-NNN [PHASE]`"
             )
     else:
         step_id = f"{req_id}:{phase or 'develop'}"
     step = ex.step_by_id(step_id)
     if step is None:
+        # REQ-060: name *why* an explicit target is not derivable — tell, don't interrogate.
+        # The common case is a finished REQ, which has a clear forward action (supersede).
+        from .profiles.req.reqfile import load_reqs
+
+        req = step_id.partition(":")[0]
+        target = next((r for r in load_reqs(cfg.req_dir) if r.id == req), None)
+        if target is not None and target.status == "done":
+            raise click.ClickException(
+                f"{req} is done — nothing to checkpoint; supersede it to change direction"
+            )
         raise click.ClickException(
-            f"{step_id} is not a derivable step — is {step_id.partition(':')[0]} active "
+            f"{step_id} is not a derivable step — is {req} active "
             f"(not draft/done) and is the phase 'develop'?"
         )
     if step.phase == "validate":
