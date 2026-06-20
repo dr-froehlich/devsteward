@@ -216,3 +216,5 @@
 {"ts": "2026-06-20T11:59:31+00:00", "event": "step_started", "step": "REQ-056:develop", "command": "/advance REQ-056 develop", "recover": false}
 {"ts": "2026-06-20T12:07:55+00:00", "event": "verify", "step": "REQ-056:develop", "ok": true, "detail": "[0] python -m pytest tests/test_phase_model.py::test_repair_exhausted_fails_not_parks\n    1 passed\n[0] python -m pytest tests/test_phase_model.py::test_land_refused_fails_not_parks\n    1 passed\n[0] python -m pytest tests/test_phase_model.py::test_repeat_recovers_dirty_fail_with_signal\n    1 passed\n[0] python -m pytest tests/test_cli_smoke.py::test_status_failed_step_names_repeat\n    1 passed\n[0] full suite clean (python -m pytest)"}
 {"ts": "2026-06-20T12:07:59+00:00", "event": "checkpoint", "step": "REQ-056:develop", "commit": "7ac7e7072d1de18d301e25b9f87a94eb1f71beb7", "driver": "headless"}
+{"ts": "2026-06-20T17:39:27+00:00", "event": "step_started", "step": "REQ-057:develop", "command": "/advance REQ-057 develop", "recover": false}
+{"ts": "2026-06-20T17:39:44+00:00", "event": "quota_block", "step": "REQ-057:develop", "reason": "stop requested"}
