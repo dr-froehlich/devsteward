@@ -94,7 +94,8 @@ End with the fixed report (below) **after** handling the land per your mode:
   artifact exists, flips the REQ + index to `done`, makes the one authoritative code commit
   (frontmatter + index + code together, co-author trailer), advances the ledger, and commits
   the trailing ledger write as a follow-up on `dev` (the checkpoint event records `driver:
-  interactive`). On red nothing lands — fix and re-run; no `recover` needed. Do **not** commit
+  interactive`). On red nothing lands — fix and re-run `steward checkpoint`; no `repeat` needed
+  (that verb re-arms a *FAILED* batch step; a red interactive `checkpoint` left no failed step). Do **not** commit
   separately and do **not** hand-edit `state.yaml` — `checkpoint` is the committer (committing
   first would double-commit; editing the ledger by hand is what let it drift out of sync with
   a committed `done`).

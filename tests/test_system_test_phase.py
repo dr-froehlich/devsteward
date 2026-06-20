@@ -19,7 +19,7 @@ from devsteward.cli import main as cli_main
 from devsteward.core.accounts import SingleAccountProvider
 from devsteward.core.executor import Executor, RunOutcome
 from devsteward.core.ledger import Ledger
-from devsteward.core.model import StepStatus
+from devsteward.core.model import Decision, DecisionStatus, StepStatus
 from devsteward.profiles.req import ReqStepSource
 from devsteward.profiles.req.checkpoint import PlanArtifactGate, ReqDoneFlipper
 from devsteward.profiles.req.reqfile import parse_req
@@ -432,3 +432,48 @@ def test_lab_dependency_blocks_validation(tmp_path, monkeypatch):
     assert fresh.depends_on == ("REQ-001:develop",)
     assert fresh.blocked_note == ""
     assert "REQ-001:validate" in [s.id for s in ex.eligible_steps()]
+
+
+# -- REQ-057 AC1: state F's circular-answer trap is closed -----------------------
+
+
+def test_pending_validation_decision_answer_redirects(tmp_path, monkeypatch):
+    """REQ-057 AC1: `steward decision answer` on a pending-validation (manual-AC) hold refuses
+    and redirects to `steward validate REQ`, leaving the validate step BLOCKED — it does NOT
+    flip to PENDING / re-park (the circular trap REQ-056 removed for D/H). A genuine develop
+    fork is unaffected: it still answers and unblocks."""
+    # A real git+config scaffold so the CLI's build_executor / transaction path works.
+    from test_transaction_boundary import _init_git, _scaffold
+
+    _scaffold(tmp_path, acs=(("AC1", "true", "manual"),))
+    _init_git(tmp_path)
+    monkeypatch.chdir(tmp_path)
+
+    # A state-F hold: a manual-AC validation parked on the validate step (as _park_manual does).
+    led = Ledger(tmp_path)
+    led.park_decision(Decision(
+        id=led.next_decision_id(), step="REQ-001:validate", req="REQ-001",
+        question="REQ-001 validation: manual AC AC1 awaits its human oracle.",
+    ))
+    assert Ledger(tmp_path).status_of("REQ-001:validate") is StepStatus.BLOCKED
+
+    refused = CliRunner().invoke(cli_main, ["decision", "answer", "DEC-001", "looks good"])
+    assert refused.exit_code != 0
+    assert "steward validate REQ-001" in refused.output
+    # Refused before any mutation: still BLOCKED, decision still OPEN (not re-armed / re-parked).
+    reloaded = Ledger(tmp_path)
+    assert reloaded.status_of("REQ-001:validate") is StepStatus.BLOCKED
+    (still_open,) = reloaded.open_decisions()
+    assert still_open.id == "DEC-001" and still_open.status is DecisionStatus.OPEN
+
+    # A genuine develop-phase fork is unaffected — answered, its step unblocked to PENDING.
+    led2 = Ledger(tmp_path)
+    led2.park_decision(Decision(
+        id=led2.next_decision_id(), step="REQ-001:develop", req="REQ-001",
+        question="Which CSV quoting?",
+    ))
+    answered = CliRunner().invoke(cli_main, ["decision", "answer", "DEC-002", "RFC 4180"])
+    assert answered.exit_code == 0, answered.output
+    final = Ledger(tmp_path)
+    assert final.status_of("REQ-001:develop") is StepStatus.PENDING
+    assert final.find_decision("DEC-002").status is DecisionStatus.ANSWERED

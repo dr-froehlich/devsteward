@@ -19,7 +19,7 @@ from .core.executor import RunOutcome, StepResult
 from .core.invariants import check_invariants
 from .core.ledger import Ledger
 from .core.stop import StopController
-from .core.model import StepStatus
+from .core.model import DecisionStatus, StepStatus
 from .core.transaction import transaction
 from .lifecycle import (
     LifecycleError,
@@ -801,10 +801,23 @@ def decision_answer(decision_id: str, answer: str) -> None:
     # stranding (a parked decision stuck on the wrong branch, no command able to recover it)
     # is unreachable: single-ledger (INV-1) only, no branch/tree gate.
     check_invariants(ex, allow_any_head=True)
+    d = ex.ledger.find_decision(decision_id)
+    if d is None or d.status is not DecisionStatus.OPEN:
+        raise click.ClickException(f"no open decision {decision_id}")
+    # REQ-057 Decision 5: a validation-phase hold is *not* a fork to answer here. A `manual`-AC
+    # await (state F) or a red validation parks on a `:validate` step and has dedicated verbs.
+    # Answering it would flip the validate step BLOCKED -> PENDING; unattended it re-runs, still
+    # can't reach the human, and re-parks — the circular trap REQ-056 removed for D/H. Refuse
+    # *before* any mutation (so the step stays BLOCKED, no re-park) and redirect to the real verb.
+    if d.step.endswith(":validate"):
+        req = d.req or d.step.split(":", 1)[0]
+        raise click.ClickException(
+            f"{decision_id} is a validation hold on {d.step}, not a fork to answer. "
+            f"Record the human sign-off with `steward validate {req}` "
+            f"(or, for a red validation, `steward rework {req}` / `steward revalidate {req}`)."
+        )
     with transaction(ex.git, label=f"decision answer {decision_id}"):
         d = ex.ledger.answer_decision(decision_id, answer)
-    if d is None:
-        raise click.ClickException(f"no open decision {decision_id}")
     click.echo(f"Answered {decision_id}; {d.step} unblocked. Run `steward run` to resume.")
 
 

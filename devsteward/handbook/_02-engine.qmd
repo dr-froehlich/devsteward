@@ -16,8 +16,8 @@ Knows nothing about requirements. For each eligible step it:
 5. **verifies** — runs the step's named acceptance tests; green is mandatory (a step with
    no tests marker-trusts, which a profile may forbid where it matters — see below);
 6. **lands** — on green, the engine itself commits and advances the ledger to `done` (in the
-   REQ profile this is the mechanical land: status flip, index sync, commit, `--no-ff`
-   merge — no Claude); on red, it may spawn a bounded repair session before parking.
+   REQ profile this is the mechanical land: status flip, index sync, the single commit on
+   `dev` — no Claude); on red, it may spawn a bounded repair session before parking.
 
 ### The four seams (`core/seams.py`)
 
@@ -40,8 +40,8 @@ These guarantees hold **in both driving modes** (REQ-018). In batch (`steward ad
 `steward run`, driving `claude -p` headless) the executor runs the whole loop. A human
 driving `/advance` in a live session — the default mode — closes with **`steward
 checkpoint`**, which runs the *same* gate and the *same* mechanical land: verification is
-never the session's to assert, and the close-out (trailing ledger follow-up + `--no-ff`
-merge) is the engine's too. The `checkpoint` event records the **driver**
+never the session's to assert, and the close-out (the commit on `dev` + the trailing ledger
+follow-up) is the engine's too. The `checkpoint` event records the **driver**
 (`interactive` or `headless`) — who did the cognition — while certification is the
 engine's either way. The one interactive difference: at a fork the skill *asks*
 (`AskUserQuestion`) instead of parking. See the two-driver contract in @sec-workflow.
@@ -61,7 +61,7 @@ let a REQ with no tests at all reach `done` because every phase marker-trusted. 
 false-done path is closed.)
 
 On a **green** develop gate the engine performs the **mechanical land** itself — status
-flip, index `DONE`-sync, the single commit, the `--no-ff` merge, ledger advance — invoking
+flip, index `DONE`-sync, the single commit on `dev`, ledger advance — invoking
 **no Claude** (paying Opus to watch pytest run bought nothing; the verifier is the
 authority). The same mechanical-land routine is what interactive `steward checkpoint` runs,
 so a REQ lands identically however it was driven. The land also refuses when **no file in
@@ -78,17 +78,17 @@ rather than simulating the human's presence.
 
 **The System-Test phase (REQ-030)** slots between develop and the land when the REQ
 declares an `artifact` or `manual` criterion: the develop gate then runs the `regression`
-tests and only **commits** the work (`develop_committed` — no flip, no merge; an empty
-named-test list is acceptable here because the runnable gate lives at validation), and a
-`REQ-NNN:validate` step follows — a fresh, diff-free System Tester session captures
+tests and only **commits** the work on `dev` (`develop_committed` — no status flip yet; an
+empty named-test list is acceptable here because the runnable gate lives at validation), and
+a `REQ-NNN:validate` step follows — a fresh, diff-free System Tester session captures
 artifacts, the engine runs the `artifact` tests itself, manual criteria take a human
 sign-off, and on green the *same* mechanical land fires. A red validation parks with no
-repair loop. A `manual` criterion is a **guided** human validation (REQ-034): `steward
-validate` runs a two-phase bookkeeping around a foreground *interactive* session attached
-to the terminal (the editor pattern — never `claude -p`, never spawned from within Claude),
-and a pending verdict parks as **async QA** — clean tree, HEAD back on the integration
-branch, the feature branch intact and unmerged — so the project keeps moving and the
-validation resumes (reconciling the branch) later. See @sec-workflow for the full phase.
+repair loop, naming the root-cause edge (`steward rework` or `steward revalidate`). A
+`manual` criterion is a **guided** human validation (REQ-034): `steward validate` runs a
+two-phase bookkeeping around a foreground *interactive* session attached to the terminal (the
+editor pattern — never `claude -p`, never spawned from within Claude), and a pending verdict
+parks as **async QA** — a clean working tree on `dev` — so the project keeps moving and the
+validation resumes later. See @sec-workflow for the full phase.
 
 The gate's *green* is sharper than exit-0 (REQ-028): exit-0 cannot tell a pass from a
 skip or a zero-collection, so the gate reads pytest's per-test outcomes. A named acceptance
