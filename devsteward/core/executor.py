@@ -223,21 +223,98 @@ class Executor:
         elig = self.eligible_steps(only=only)
         return elig[0] if elig else None
 
+    # -- self-healing reconcile (REQ-059) --------------------------------------
+
+    def _reconcile_stranded_running(self) -> None:
+        """Self-heal every step the ledger holds in ``RUNNING`` (REQ-059 Decision 1).
+
+        Run at the start of ``run``/``advance_once`` — after :func:`check_invariants`,
+        before step selection. The engine is single-process and synchronous over one
+        ledger (trunk-based, single-writer), so a ``RUNNING`` status observed at the start
+        of a fresh top-level command provably has no live owner: a prior ``SIGINT``/crash/
+        power-loss died between the ``step_started`` event and any terminal event, leaving
+        the inline compensation (:meth:`run_step` lines 280/301) unrun. Requeue each such
+        step the way that inline compensation would have — to ``RECOVER`` when its
+        interrupted attempt was itself a recovery (so the ``--repeat`` resume signal
+        survives, Decision 2), else ``PENDING`` — and append an ``interrupted`` event
+        naming the step. This makes the wedge self-healing: re-running ``steward run``
+        proceeds, so no recovery verb is needed (subtraction over the report's #3). It is
+        the line-276 requeue applied at load, not new transaction machinery."""
+        led = self.ledger
+        stranded = [
+            sid for sid, st in led.all_statuses().items() if st is StepStatus.RUNNING
+        ]
+        for sid in stranded:
+            requeue = (
+                StepStatus.RECOVER if self._was_recovering(sid) else StepStatus.PENDING
+            )
+            led.set_status(sid, requeue)
+            led.save()
+            led.append_event("interrupted", step=sid, requeued=requeue.value)
+
+    def _was_recovering(self, step_id: str) -> bool:
+        """Whether the interrupted attempt on ``step_id`` was a recovery — read from the
+        ``recover`` flag of the *last* ``step_started`` event for the step (REQ-059
+        Decision 2). The status itself was overwritten to ``RUNNING`` when the attempt
+        started, so the event log is the only surviving record of the recovery signal."""
+        recovering = False
+        for ev in self.ledger.events():
+            if ev.get("event") == "step_started" and ev.get("step") == step_id:
+                recovering = bool(ev.get("recover", False))
+        return recovering
+
     def only_ineligibility_reason(self, req_id: str) -> str:
-        """Name *why* ``--only req_id`` selected nothing (REQ-026 D8): not active, already
-        done, or blocked on an unfinished dependency."""
+        """Name *why* ``--only req_id`` selected nothing (REQ-026 D8) from the actual step
+        statuses — never fabricating a dependency cause (REQ-059 Decision 3).
+
+        Beyond not-active and already-done, the obstruction is diagnosed on the first
+        not-yet-``DONE`` step: a ``RUNNING`` strand as interrupted, a ``BLOCKED`` step as
+        parked, a ``FAILED`` step as failed — and *"blocked on an unfinished dependency"*
+        **only** when a ``depends_on`` entry is genuinely not ``DONE``, naming it."""
         steps = [s for s in self.steps() if s.req == req_id]
         if not steps:
             return (
                 f"{req_id} has no eligible step — it is not active "
                 f"(activate it first with `steward activate {req_id}`, or it does not exist)."
             )
-        statuses = [self.ledger.status_of(s.id) for s in steps]
-        if all(st is StepStatus.DONE for st in statuses):
+        statuses = {s.id: self.ledger.status_of(s.id) for s in steps}
+        if all(st is StepStatus.DONE for st in statuses.values()):
             return f"{req_id} has no eligible step — it is already done."
-        return (
-            f"{req_id} has no eligible step — it is blocked on an unfinished dependency."
-        )
+        by_id = {s.id: s for s in self.steps()}
+        for s in steps:
+            st = statuses[s.id]
+            if st is StepStatus.DONE:
+                continue
+            if st is StepStatus.RUNNING:
+                return (
+                    f"{req_id} has no eligible step — {s.id} is stranded RUNNING from an "
+                    f"interrupted prior run. Re-run `steward run {req_id}`: the startup "
+                    f"sweep requeues it and the run proceeds (no hand-edit of state.yaml)."
+                )
+            if st is StepStatus.BLOCKED:
+                return (
+                    f"{req_id} has no eligible step — {s.id} is parked on an open decision. "
+                    f"Answer it with `steward decision answer` to unblock it."
+                )
+            if st is StepStatus.FAILED:
+                return (
+                    f"{req_id} has no eligible step — {s.id} failed. Re-arm it with "
+                    f"`steward repeat {req_id}` to retry."
+                )
+            # PENDING/RECOVER is runnable, so it was held out only by a dependency — name
+            # the offending one. This is the *only* path that may state a dependency block,
+            # and only after confirming a depends_on entry is genuinely not DONE.
+            unmet = [
+                d
+                for d in s.depends_on
+                if d not in by_id or self.ledger.status_of(d) is not StepStatus.DONE
+            ]
+            if unmet:
+                return (
+                    f"{req_id} has no eligible step — {s.id} is blocked on an unfinished "
+                    f"dependency: {', '.join(unmet)}."
+                )
+        return f"{req_id} has no eligible step."
 
     # -- execution -------------------------------------------------------------
 
@@ -824,6 +901,7 @@ class Executor:
         of ``REQ-NNN`` even when a lower-id REQ is also eligible.
         """
         check_invariants(self)  # REQ-049: refuse up front on production / mid-merge (raises)
+        self._reconcile_stranded_running()  # REQ-059: self-heal a strand before selection
         step = self.next_eligible(only=only)
         if step is None:
             return None
@@ -843,6 +921,7 @@ class Executor:
         whole run to one REQ's steps (REQ-026).
         """
         check_invariants(self)  # REQ-049: refuse up front on production / mid-merge (raises)
+        self._reconcile_stranded_running()  # REQ-059: self-heal any strand before selection
         results: list[StepResult] = []
         count = 0
         while True:

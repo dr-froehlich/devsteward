@@ -291,3 +291,92 @@ def test_graceful_stop_after_current_step(project, monkeypatch):
         ctrl._on_sigint()
     assert exc.value.code == 130
     assert killed == [4242]
+
+
+# -- REQ-059: self-healing sweep + honest ineligibility -----------------------
+
+
+def test_stranded_running_swept_to_pending_on_run(project):
+    """REQ-059 AC1: a step stranded RUNNING by an interrupted prior run (a `step_started`
+    with no terminal event) self-heals on the next run — the sweep requeues it to PENDING and
+    appends an `interrupted` event naming it *before* selecting work, so the run then drives
+    it to DONE with no hand-edit of state.yaml."""
+    step = Step(id="REQ-9:develop", command="/advance REQ-9 develop",
+                verify=("true",), req="REQ-9")
+    ex = _executor(project, [step], FakeRunner(default=ok_result()))
+    # Strand it: RUNNING with a step_started but no terminal event (the SIGINT window).
+    ex.ledger.set_status("REQ-9:develop", StepStatus.RUNNING)
+    ex.ledger.save()
+    ex.ledger.append_event("step_started", step="REQ-9:develop",
+                           command="/advance REQ-9 develop", recover=False)
+
+    results = ex.run()
+
+    led = Ledger(project)
+    assert led.status_of("REQ-9:develop") is StepStatus.DONE  # requeued, then driven to done
+    assert [r.step.id for r in results] == ["REQ-9:develop"]
+    kinds = [e["event"] for e in led.events() if e.get("step") == "REQ-9:develop"]
+    assert "interrupted" in kinds
+    # The reconcile fired before the run re-started the step (and before its land).
+    assert kinds.index("interrupted") < kinds.index("checkpoint")
+    interrupted = [e for e in led.events() if e["event"] == "interrupted"]
+    assert interrupted[-1]["requeued"] == "pending"
+
+
+def test_stranded_running_recover_preserves_signal(project):
+    """REQ-059 AC2: a step stranded out of RECOVER (an interrupted `steward repeat` re-arm,
+    whose last `step_started` carries recover:true) requeues to RECOVER — not PENDING — so the
+    driven re-run issues its develop command with --repeat and the partial work in the tree is
+    assessed rather than restarted clean."""
+    step = Step(id="REQ-9:develop", command="/advance REQ-9 develop",
+                verify=("true",), req="REQ-9")
+    runner = FakeRunner(default=ok_result())
+    ex = _executor(project, [step], runner)
+    # Strand a *recovering* attempt: RECOVER → run_step flipped it RUNNING and wrote
+    # step_started recover=True, then a SIGINT killed it before any terminal event.
+    ex.ledger.set_status("REQ-9:develop", StepStatus.RUNNING)
+    ex.ledger.save()
+    ex.ledger.append_event("step_started", step="REQ-9:develop",
+                           command="/advance REQ-9 develop --repeat", recover=True)
+
+    ex.run()
+
+    # The sweep must not downgrade it to a clean restart: it requeued to RECOVER.
+    interrupted = [e for e in Ledger(project).events() if e["event"] == "interrupted"]
+    assert interrupted[-1]["requeued"] == "recover"
+    # ...so the driven re-run carries the resume signal to the skill.
+    assert "--repeat" in runner.calls[-1]["command"]
+
+
+def test_only_ineligibility_names_real_cause(project):
+    """REQ-059 AC3: only_ineligibility_reason names the real obstruction and never fabricates
+    a dependency — a RUNNING strand is named as interrupted, a BLOCKED step as parked (never a
+    dependency block), and the unfinished-dependency message is returned only when a
+    depends_on entry is genuinely not DONE, naming that dependency."""
+    # (a) RUNNING strand → named as interrupted, not a dependency block.
+    running = Step(id="REQ-R:develop", command="/advance REQ-R develop", req="REQ-R")
+    ex = _executor(project, [running], FakeRunner(default=ok_result()))
+    ex.ledger.set_status("REQ-R:develop", StepStatus.RUNNING)
+    ex.ledger.save()
+    msg = ex.only_ineligibility_reason("REQ-R")
+    assert "REQ-R:develop" in msg and "RUNNING" in msg
+    assert "dependency" not in msg
+
+    # (b) BLOCKED (parked on a decision) → named as parked, never a dependency block.
+    blocked = Step(id="REQ-B:develop", command="/advance REQ-B develop", req="REQ-B")
+    ex = _executor(project, [blocked], FakeRunner(default=ok_result()))
+    ex.ledger.set_status("REQ-B:develop", StepStatus.BLOCKED)
+    ex.ledger.save()
+    msg = ex.only_ineligibility_reason("REQ-B")
+    assert "parked" in msg and "dependency" not in msg
+
+    # (c) a genuinely unfinished dependency → the dependency block message, naming the dep.
+    # REQ-X:develop depends on REQ-W:develop, which is not DONE (PENDING), and REQ-X has no
+    # other eligible step — so --only REQ-X selects nothing for a real dependency reason.
+    dep = Step(id="REQ-W:develop", command="/advance REQ-W develop", req="REQ-W")
+    blocked_by_dep = Step(id="REQ-X:develop", command="/advance REQ-X develop",
+                          depends_on=("REQ-W:develop",), req="REQ-X")
+    ex = _executor(project, [dep, blocked_by_dep], FakeRunner(default=ok_result()))
+    assert ex.next_eligible(only="REQ-X") is None  # the dep gates it
+    msg = ex.only_ineligibility_reason("REQ-X")
+    assert "unfinished dependency" in msg and "REQ-W:develop" in msg

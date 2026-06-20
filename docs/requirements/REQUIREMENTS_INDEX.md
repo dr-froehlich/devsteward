@@ -62,7 +62,7 @@ commit** as its frontmatter and the code.
 | REQ-056 | Repair-exhausted and land-refused fail to a repeatable step, not a decision park (states D/H) | DONE | [REQ-056](REQ-056.md) | REQ-029, REQ-053, REQ-054 |
 | REQ-057 | Post-REQ-047 documentation refresh + a Claude-targeted `steward` black-box manual | OPEN | [REQ-057](REQ-057.md) | REQ-007, REQ-034, REQ-047, REQ-054, REQ-055, REQ-056 |
 | REQ-058 | Engine budget gate delegates to clauder — per-step `clauder gate`, no direct cswap, race-free with a background monitor | OPEN | [REQ-058](REQ-058.md) | REQ-008, REQ-025 |
-| REQ-059 | An interrupted run self-heals a stranded RUNNING step, and ineligibility names the real cause | OPEN | [REQ-059](REQ-059.md) | REQ-025, REQ-026, REQ-053 |
+| REQ-059 | An interrupted run self-heals a stranded RUNNING step, and ineligibility names the real cause | DONE | [REQ-059](REQ-059.md) | REQ-025, REQ-026, REQ-053 |
 | REQ-060 | A caught-up project reports an honest terminal state — the cursor never names a done step | OPEN | [REQ-060](REQ-060.md) | REQ-018, REQ-047, REQ-056 |
 
 New requirement template: [`_templates/req.md`](../../devsteward/templates/docs/requirements/_templates/req.md)
