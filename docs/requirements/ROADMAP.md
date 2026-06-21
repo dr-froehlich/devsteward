@@ -88,6 +88,18 @@ validation. Driven **interactively** (not by `steward run`) in this order — se
   derivable step, print a positive terminal line otherwise, and have `checkpoint` name *done* +
   supersede. Sibling of REQ-059, unrelated mechanism. Regression-only; fused. With REQ-018,
   REQ-047, REQ-056.
+- REQ-061 — **re-wire the account pin** (draft, feature): REQ-058 delegated the budget gate to
+  clauder and dropped the slot-pin (D5: *"revisit if slot-pinning is still wanted"*) on the bet
+  that combined-budget selection supersedes it. It is wanted — the combined gate optimises the
+  shared 5h pool but is blind to the accounts' 7d windows, which reset at different times; an
+  about-to-reset account's unused 7d budget evaporates unless drained first. The `--use N` seam
+  is still half-built: the flag parses and threads `use` to `build_accounts`, which silently
+  drops it. clauder REQ-006 (**done**) added `clauder gate --pin N` (judge admission on N alone,
+  no fallback); this REQ reconnects the dead seam, **hard-renaming** `--use` → `--pin` so the
+  word agrees with clauder (whose `--use` is burn-percent). Operator supplies the index; no
+  auto-selection (that re-opens REQ-058 D5 and the `clauder usage` 7d-reading REQ-058 deleted).
+  Regression-only (argv assertion + CLI rename threading); fused, no lab. With REQ-058; clauder
+  REQ-006 is an external PATH prerequisite, not an edge.
 - REQ-044 — **`steward supersede`** (draft): codifies the 2026-06-16 REQ-034 hand-recovery.
   REQ-037's `try_merge_no_ff` aborts a feature→`dev` merge on a code conflict and tells the
   operator to *"resolve by hand: `git merge --no-ff`"* — which bakes in "an aborted merge
@@ -392,7 +404,7 @@ REQ-001
                                 └─ REQ-059 (draft, fix: interrupted run self-heals a stranded RUNNING step + honest ineligibility diagnosis; with REQ-025, REQ-026)
  REQ-047 + REQ-056 ── REQ-060 (draft, fix: caught-up project reports an honest terminal state — cursor never names a done step; with REQ-018)
  REQ-054 + REQ-055 + REQ-056 ── REQ-057 (draft, docs: complete post-REQ-047 handbook revision + Claude-targeted black-box steward manual shipped via templates + state-F decision-answer guard; with REQ-007, REQ-034, REQ-047)
- REQ-008 (account provider seam) ── REQ-025 (visible rotation + quota gate) ── REQ-058 (draft, feature: engine budget gate delegates to clauder CLI; drop direct cswap; race-free with operator-run background monitor [clauder-side lock prereq])
+ REQ-008 (account provider seam) ── REQ-025 (visible rotation + quota gate) ── REQ-058 (draft, feature: engine budget gate delegates to clauder CLI; drop direct cswap; race-free with operator-run background monitor [clauder-side lock prereq]) ── REQ-061 (draft, feature: re-wire account pin — steward --pin N forwards clauder gate --pin N [clauder REQ-006 PATH prereq]; hard-rename --use→--pin; drain a 7d window before reset)
  REQ-011 (done, production-branch guard) ── REQ-019 (done, integration-branch guard) ── REQ-020 (draft, branch lifecycle automation)
  REQ-024 (draft, onboard skill) ── orchestrates REQ-007 + REQ-009 + REQ-010/023 + REQ-021 + REQ-022 (memzy onboarding)
 ```
