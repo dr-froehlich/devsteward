@@ -82,8 +82,12 @@ Decide these now — they must not be made headless later — and record them in
 optional `process:` frontmatter block (omit the block when every value is the default
 and no lab is needed):
 
-- `concept:` — is a **concept phase** (risk buy-down / spike where final test specs and
-  lab needs are frozen) warranted before develop? Default `false`.
+- `concept:` — is a **concept phase** (architecture / risk buy-down / spike) warranted
+  before develop? Default `false`. Setting it makes the develop step *attended* (batch
+  parks it) and the develop land **refuses** unless a concept doc at `docs/concepts/REQ-NNN.md`
+  exists and the REQ's `concept_refs:` names it (REQ-039 — the doc-gate, mirroring `docs/plans/`).
+  There is no separate `steward concept` step; the attended develop session *is* the concept
+  phase.
 - `lab:` — which REQs own the **lab assets** the System-Test phase will require?
   Default `[]`.
 - `develop:` — `fused`, one design+build session (the **default**), or `split`, an

@@ -132,6 +132,13 @@ class Config:
         return self.root / "docs" / "plans"
 
     @property
+    def concepts_dir(self) -> Path:
+        """Where concept docs live (REQ-039 — when a REQ declares ``process.concept``, the
+        develop land refuses to land it unless ``docs/concepts/REQ-NNN.md`` exists and the
+        REQ's ``concept_refs`` reference it). Conventionally ``docs/concepts/``."""
+        return self.root / "docs" / "concepts"
+
+    @property
     def index_path(self) -> Path:
         return self.root / self.index_file
 

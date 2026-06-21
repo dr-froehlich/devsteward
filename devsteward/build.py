@@ -9,7 +9,12 @@ from .core.git import GitCli
 from .core.verify import CommandVerifier
 from .profiles.generic import GenericStepSource
 from .profiles.req import ReqStepSource
-from .profiles.req.checkpoint import PlanArtifactGate, ReqDoneFlipper
+from .profiles.req.checkpoint import (
+    CompositeLandGate,
+    ConceptArtifactGate,
+    PlanArtifactGate,
+    ReqDoneFlipper,
+)
 from .profiles.req.validate import ReqValidateRoutine
 from .profiles.req.verify import ReqVerifier
 
@@ -34,10 +39,14 @@ def build_on_verified(cfg: Config):
 
 def build_land_gate(cfg: Config):
     """The REQ profile refuses the mechanical land when no plan names the REQ (REQ-029
-    Decision 6); the generic profile has no plan discipline."""
+    Decision 6) and, when a REQ declared ``process.concept``, when no concept doc names it
+    (REQ-039); the generic profile has no artifact discipline."""
     if cfg.profile == "generic":
         return None
-    return PlanArtifactGate(cfg.plans_dir)
+    return CompositeLandGate(
+        PlanArtifactGate(cfg.plans_dir),
+        ConceptArtifactGate(cfg.concepts_dir, cfg.req_dir),
+    )
 
 
 def build_validate_runner(cfg: Config):

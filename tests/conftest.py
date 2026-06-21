@@ -134,12 +134,13 @@ def project(tmp_path: Path) -> Path:
 
 
 def write_req(req_dir: Path, rid: str, *, status="open", depends_on=(), acceptance=True,
-              title=None, kind="feature", check="regression", process=None):
+              title=None, kind="feature", check="regression", process=None, concept_refs=()):
     """Write a minimal, schema-valid REQ file into ``req_dir``.
 
     ``check`` classifies the single acceptance criterion (REQ-027); ``None`` omits the
     line (an undeclared check). ``process`` is an optional dict rendered as the
-    ``process:`` frontmatter block.
+    ``process:`` frontmatter block. ``concept_refs`` populates the ``concept_refs:`` list
+    (REQ-039 — the develop land gate for a concept REQ checks it references the doc).
     """
     req_dir.mkdir(parents=True, exist_ok=True)
     title = title or f"{rid} title"
@@ -167,6 +168,7 @@ def write_req(req_dir: Path, rid: str, *, status="open", depends_on=(), acceptan
             else:
                 lines.append(f"  {key}: {value}")
         proc = "\n".join(lines) + "\n"
+    refs = "[" + ", ".join(concept_refs) + "]"
     text = (
         f"---\n"
         f"id: {rid}\n"
@@ -177,7 +179,7 @@ def write_req(req_dir: Path, rid: str, *, status="open", depends_on=(), acceptan
         f"completed: null\n"
         f"verified_by: null\n"
         f"depends_on: {deps}\n"
-        f"concept_refs: []\n"
+        f"concept_refs: {refs}\n"
         f"scenario_refs: []\n"
         f"supersedes: null\n"
         f"tags: []\n"

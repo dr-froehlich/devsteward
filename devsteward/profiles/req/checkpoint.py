@@ -18,6 +18,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from collections.abc import Callable
+
 from ...core.model import Step
 from . import index as index_mod
 from .reqfile import load_reqs, set_frontmatter_status
@@ -75,3 +77,60 @@ class PlanArtifactGate:
             f"refusing to land {req} — no file in {self.plans_dir.name}/ names {req} "
             f"(plan-first discipline; write the plan before landing)"
         )
+
+
+class ConceptArtifactGate:
+    """REQ-039 — when a REQ declared ``process.concept``, the develop land additionally
+    refuses unless a concept document exists at ``docs/concepts/REQ-NNN.md`` *and* the REQ's
+    ``concept_refs`` reference it.
+
+    The left-arm counterpart of the validate phase done the *lightweight* way: there is no
+    dedicated concept step, CLI verb, or skill. ``process.concept`` already makes the develop
+    step attended (so batch parks it); the concept session is that ordinary attended develop
+    session, and this gate is the engine-owned firewall that the architecture deliverable was
+    actually produced before any code lands. Mirrors :class:`PlanArtifactGate`'s grep-shaped
+    *existence* check (never concept *quality*); conditioned on the flag, so a REQ that did not
+    declare a concept phase is untouched. A generic/phase-less step (no ``req``) is not gated.
+    """
+
+    def __init__(self, concepts_dir: Path, req_dir: Path):
+        self.concepts_dir = Path(concepts_dir)
+        self.req_dir = Path(req_dir)
+
+    def __call__(self, step: Step) -> str | None:
+        req_id = step.req
+        if not req_id:
+            return None
+        req = {r.id: r for r in load_reqs(self.req_dir)}.get(req_id)
+        if req is None or not req.process.get("concept"):
+            return None  # no concept phase declared — not gated
+        doc = self.concepts_dir / f"{req_id}.md"
+        if not doc.is_file():
+            return (
+                f"refusing to land {req_id} — it declared a concept phase but no "
+                f"{self.concepts_dir.name}/{req_id}.md concept document exists "
+                f"(run the attended concept session and capture the architecture first)"
+            )
+        if not any(f"{req_id}.md" in str(ref) for ref in req.concept_refs):
+            return (
+                f"refusing to land {req_id} — its concept document exists but the REQ's "
+                f"concept_refs does not reference {self.concepts_dir.name}/{req_id}.md "
+                f"(link the deliverable in concept_refs)"
+            )
+        return None
+
+
+class CompositeLandGate:
+    """Run several land gates in order, first refusal wins (REQ-039 composes the plan-artifact
+    gate with the concept-artifact gate). ``None`` entries are skipped; an all-clear returns
+    ``None`` so the land proceeds."""
+
+    def __init__(self, *gates: Callable[[Step], str | None] | None):
+        self.gates = [g for g in gates if g is not None]
+
+    def __call__(self, step: Step) -> str | None:
+        for gate in self.gates:
+            refusal = gate(step)
+            if refusal is not None:
+                return refusal
+        return None

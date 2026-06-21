@@ -60,6 +60,13 @@ Everything tagged *(batch)* or *(interactive)* below applies to that mode only.
 
 The fused **Develop** checkpoint, in order, in one session:
 
+- **Concept first, if declared (REQ-039).** If the REQ set `process.concept: true`, this
+  attended develop session *is* its concept phase: do the architecture / risk buy-down /
+  spike work first and capture the conclusion (chosen design path, rejected alternatives,
+  spike findings) in a **concept document** at `docs/concepts/REQ-NNN.md`, referenced from
+  the REQ's `concept_refs:`. Spikes are throwaway — never commit prototype code, only the
+  doc. The land **refuses** unless that doc exists and `concept_refs:` names it. Then write
+  the implementation plan *against* the approved concept. (REQs without the flag skip this.)
 - **Plan first.** Turn the REQ into a concrete approach and capture it in `docs/plans/`
   (data shapes, interfaces, the files you'll touch, the tests you'll write). The plan
   artifact is **required**: the engine refuses to land a REQ when no file in `docs/plans/`

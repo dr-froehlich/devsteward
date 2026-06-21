@@ -66,7 +66,10 @@ flip, index `DONE`-sync, the single commit on `dev`, ledger advance — invoking
 authority). The same mechanical-land routine is what interactive `steward checkpoint` runs,
 so a REQ lands identically however it was driven. The land also refuses when **no file in
 `docs/plans/` names the REQ id** (plan-first, enforced at the one moment it is cheap and
-load-bearing — never plan *quality*).
+load-bearing — never plan *quality*). For a REQ that declared `concept: true` the same gate
+*additionally* refuses unless a **concept doc** at `docs/concepts/REQ-NNN.md` exists and the
+REQ's `concept_refs:` names it (REQ-039 — concept-first, the same existence check one altitude
+up; the attended develop session *is* the concept phase, so there is no separate concept step).
 
 On a **red** gate the engine spawns at most **two** bounded repair sessions — each a *fresh*
 session (no `--resume`) fed the failure brief (failed test ids + verifier detail), on the

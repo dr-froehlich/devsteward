@@ -50,6 +50,8 @@ steward checkpoint        # close it: the engine re-runs the tests and lands on 
   be talked into green; certification is the engine's, never yours to assert.
 
 Plan-first is enforced: the land **refuses** unless a file in `docs/plans/` names the REQ id.
+Concept-first is enforced the same way for a REQ that declared `process.concept: true`: the land
+also **refuses** unless `docs/concepts/REQ-NNN.md` exists and the REQ's `concept_refs:` names it.
 
 ## The batch lane (headless queues)
 

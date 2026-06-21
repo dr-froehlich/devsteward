@@ -69,6 +69,12 @@ class ReqFile:
         return list(self.frontmatter.get("depends_on") or [])
 
     @property
+    def concept_refs(self) -> list[str]:
+        """The ``concept_refs:`` frontmatter list (REQ-039 — links a concept REQ to its
+        ``docs/concepts/REQ-NNN.md`` deliverable that the develop land gate requires)."""
+        return list(self.frontmatter.get("concept_refs") or [])
+
+    @property
     def title(self) -> str:
         return str(self.frontmatter.get("title", ""))
 

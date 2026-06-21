@@ -19,10 +19,12 @@ marking the requirement done.
 
 On a **green** develop gate the engine performs the **mechanical land** itself — status
 flip, index sync, the single commit on `dev`, ledger advance — with **no
-Claude** (and it refuses unless a file in `docs/plans/` names the REQ). On a **red** gate it
-spawns up to **two** fresh repair sessions (failure brief, default Sonnet), then parks. A
-REQ that declared `develop: split` or `concept: true` is parked in batch, naming the
-attended need, rather than driven headless. (See @sec-engine for the gate's teeth.)
+Claude** (and it refuses unless a file in `docs/plans/` names the REQ; for a `concept: true`
+REQ it also refuses unless `docs/concepts/REQ-NNN.md` exists and `concept_refs:` names it).
+On a **red** gate it spawns up to **two** fresh repair sessions (failure brief, default
+Sonnet), then parks. A REQ that declared `develop: split` or `concept: true` is parked in
+batch, naming the attended need, rather than driven headless — and for `concept: true` the
+attended develop session *is* the concept phase. (See @sec-engine for the gate's teeth.)
 
 ## The V-model mapping: `check:` steers the phases
 
