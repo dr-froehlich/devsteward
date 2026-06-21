@@ -100,8 +100,12 @@ and no lab is needed):
   filled frontmatter (including the `process:` block when it deviates from defaults or
   declares a lab), a real Context/Decisions/Requirement, and a `yaml acceptance` block
   where **every** criterion has an `id`, a `test:`, and a `check:`.
-- Add its row to `REQUIREMENTS_INDEX.md` (status `DRAFT`).
-- Add it under **Next** in `ROADMAP.md` and to the dependency graph.
+- Add its row to `REQUIREMENTS_INDEX.md` (status `DRAFT`). The index ↔ frontmatter pair is the
+  **single source of truth** for status (`steward lint` keeps them in lockstep).
+- Add it to `ROADMAP.md` (the ordering/dependency view) and the dependency graph — **ordering,
+  deps, and one-line rationale only; never a status label** (no `(draft)`/`(open)`/`(done)`).
+  Status lives in the index, not here; a status copy in the roadmap has no writer at land and
+  only drifts.
 - If scenarios help, add `SCN-NNN` files and reference them in `scenario_refs`.
 - Run `steward lint` and fix anything it reports. Leave it green.
 

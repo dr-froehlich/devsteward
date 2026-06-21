@@ -35,6 +35,11 @@ When you design or change anything here, hold to these:
   must be isolated/translatable — never inline in logic.
 - **Same-commit discipline:** a REQ's frontmatter, its row in `REQUIREMENTS_INDEX.md`,
   and the code that satisfies it move in the *same* commit.
+- **Status has one source — the index ↔ frontmatter pair** (kept in lockstep by `steward
+  lint`; `steward status` reads it live). `ROADMAP.md` is the *ordering/dependency* view **only**
+  and must **never** carry a REQ status label (`(draft)`/`(open)`/`(done)`/…): a status copy there
+  has no writer at land — the mechanical land touches frontmatter + index, not the roadmap — so it
+  silently drifts. Intake adds an *ordering + rationale* roadmap entry, never a status one.
 - **Branching model — trunk-based (REQ-047 → REQ-048, landed).** All work lands on **`dev`**:
   intake (REQ frontmatter, index row, roadmap), plans, the ledger, **and** implementation
   (code + acceptance tests + the status-flip to `done` + index `DONE`-sync) are all committed

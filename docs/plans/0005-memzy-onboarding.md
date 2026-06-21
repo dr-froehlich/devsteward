@@ -8,6 +8,33 @@ schema** (not renumbering memzy).
 the dialect normalizer + fixtures; this plan covers the *rest* of bringing memzy fully under
 `steward`, plus the one divergence REQ-010's gap table did not anticipate.
 
+---
+
+## Status & build order (updated 2026-06-21) — the authoritative sequence
+
+This plan is the orientation anchor every onboarding REQ points to. The five pieces below were
+since decomposed into REQs; the open questions are answered. **Build order:**
+
+1. **Piece 1 — schema relaxation → [[REQ-021]] (DONE).** Lettered ids (`REQ-028p`) validate.
+2. **Piece 2 — convert in place → [[REQ-010]] (DONE) + [[REQ-023]] (draft, index splice).** The
+   destructive whole-index overwrite is the open question, **answered: splice** (REQ-023 replaces
+   only the REQ table, preserves Planned/Scenarios). Build REQ-023 first — smallest, unblocks
+   running the converter on memzy in place.
+3. **Piece 3 — seed the ledger → [[REQ-022]] (draft, `steward seed-ledger`).** The "build the
+   reusable seeder?" open question is **answered: yes, a package command** (dialect-independent).
+   NB the phase model is now one `develop` step (REQ-029), not the old design/build/land triple —
+   seed the `develop` step (and `validate` when present), see REQ-022.
+4. **Pieces 4–5 — stamp + reconcile → [[REQ-024]] (draft, the `onboard` skill)** orchestrates the
+   whole pipeline (convert → seed → stamp → reconcile) with verification gates and
+   merge-not-overwrite.
+5. **The live proof → [[REQ-062]] (draft).** Running `onboard` against memzy end-to-end is its own
+   tracked REQ with a `manual` sign-off (symmetric to REQ-031, the first lab) — not an untracked
+   operator act. memzy is the **first** retrofit; ExamEngineer (the deferred [[REQ-017]] prose
+   path) is later, not first.
+
+Scenarios (`SCN-*`) stay living docs (open question **answered: out of scope**). The original
+five-piece narrative and the live verification record below are preserved as written.
+
 ## What was actually verified (not assumed)
 
 The REQ-010 converter was run against memzy's **live** `docs/requirements/` into a throwaway
@@ -139,9 +166,12 @@ posture, the no-PII invariant). This is an edit/merge, not a stamp.
    ledger seeder (Piece 3a) if reusable — likely its own REQ ("onboard an existing project").
 3. (memzy) Pieces 2→5 in order, each verified by `steward lint` / `steward status` from memzy.
 
-## Open questions for the operator
+## Open questions for the operator — RESOLVED (2026-06-21)
 
-- **Index overwrite (Piece 2):** splice rows, or let conversion own the whole index file and
-  relocate memzy's Planned/Scenarios? (Blocks running the converter in place.)
-- **Ledger seeder (Piece 3):** build the reusable seeder, or hand-author memzy's ledger once?
-- **Scenarios (`SCN-*`):** leave as living docs, or schedule a converter REQ for them too?
+- **Index overwrite (Piece 2):** ~~splice rows, or own the whole index?~~ → **splice** ([[REQ-023]]).
+- **Ledger seeder (Piece 3):** ~~reusable seeder, or hand-author once?~~ → **reusable package
+  command** ([[REQ-022]] `steward seed-ledger`).
+- **Scenarios (`SCN-*`):** ~~convert, or leave?~~ → **leave as living docs** (out of scope).
+
+See **Status & build order** at the top for the current REQ sequence (REQ-023 → REQ-022 →
+REQ-024 → REQ-062).
