@@ -132,6 +132,16 @@ one chokepoint, **no second switcher**, so it cannot race a background `clauder 
 from PATH the gate degrades to "proceeding without quota check" — it never hard-fails on a
 missing tool.
 
+The combined-budget gate optimises the shared **5-hour** pool and is blind to each account's
+**7-day** window, which reset at different times — remaining 7d budget on an
+about-to-reset account simply evaporates. To spend it first, `steward advance`/`run` accept
+an optional **`--pin N`** (REQ-061): the per-step gate then forwards `clauder gate --pin N`,
+and `clauder` judges admission on account N alone (and performs any switch to N), draining
+its 7d window before the boundary. Without `--pin` the gate is the combined-budget default
+above. The engine only forwards the index — *which* account to pin (readable from
+`clauder usage`'s 7d figures) is the operator's call; DevSteward reads no usage and adds no
+selection strategy or fallback (`clauder` owns that).
+
 ## Park-and-surface
 
 When the engine shells out headless it sets `DEVSTEWARD_UNATTENDED=1`. Skills then *write

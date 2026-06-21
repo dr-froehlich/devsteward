@@ -63,7 +63,7 @@ def build_verifier(cfg: Config):
 
 def build_accounts(
     cfg: Config,
-    use: int | None = None,
+    pin: int | None = None,
     *,
     threshold: float | None = None,
     announce=None,
@@ -73,11 +73,13 @@ def build_accounts(
     if provider == "single":
         return SingleAccountProvider()
     # REQ-058: the budget gate delegates to the external `clauder` CLI. The legacy `cswap`
-    # provider value maps here too — DevSteward no longer drives cswap directly. `use` (the
-    # old slot-pin, REQ-025 D6) is dropped: clauder selects the entry account from the
-    # combined budget (REQ-058 D5), so it is no longer forwarded to the provider.
+    # provider value maps here too — DevSteward no longer drives cswap directly. REQ-061
+    # reconnects the operator pin (renamed `--use` → `--pin`): when `pin` is set it is
+    # forwarded as `clauder gate --pin N` (admit on account N alone, to drain its 7d window);
+    # when None the gate is the REQ-058 combined-budget default unchanged.
     return ClauderAccountProvider(
         threshold=cfg.threshold if threshold is None else threshold,
+        pin=pin,
         announce=announce,
         should_stop=should_stop,
     )
@@ -86,7 +88,7 @@ def build_accounts(
 def build_executor(
     cfg: Config,
     *,
-    use: int | None = None,
+    pin: int | None = None,
     threshold: float | None = None,
     model: str | None = None,
     effort: str | None = None,
@@ -114,7 +116,7 @@ def build_executor(
         verifier=build_verifier(cfg),
         accounts=build_accounts(
             cfg,
-            use=use,
+            pin=pin,
             threshold=threshold,
             announce=announce,
             should_stop=(stop.should_stop if stop is not None else None),

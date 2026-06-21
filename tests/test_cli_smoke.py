@@ -62,8 +62,8 @@ def test_only_not_eligible_errors(monkeypatch):
 
 
 def test_run_account_and_model_options(monkeypatch):
-    """REQ-025 AC10: run/advance accept --threshold/--model/--effort (+ --use) and thread
-    them to the provider/runner via build_executor."""
+    """REQ-025 AC10: run/advance accept --threshold/--model/--effort and thread them to the
+    provider/runner via build_executor. (The account pin is its own test below.)"""
     monkeypatch.setattr(cli, "_load_or_die", lambda: SimpleNamespace())
 
     for command in ("run", "advance"):
@@ -76,17 +76,39 @@ def test_run_account_and_model_options(monkeypatch):
         monkeypatch.setattr(cli, "build_executor", fake_build)
         result = CliRunner().invoke(
             main,
-            [command, "--use", "2", "--threshold", "80", "--model", "claude-x",
+            [command, "--threshold", "80", "--model", "claude-x",
              "--effort", "low", "--quiet"],
         )
         assert result.exit_code == 0, result.output
-        assert captured["use"] == 2
         assert captured["threshold"] == 80.0
         assert captured["model"] == "claude-x"
         assert captured["effort"] == "low"
         # The graceful-stop controller and visibility sink are wired in too.
         assert captured["stop"] is not None
         assert callable(captured["announce"])
+
+
+def test_run_advance_thread_pin(monkeypatch):
+    """REQ-061 AC3: `advance`/`run --pin N` thread N through build_executor (which carries it
+    onto ClauderAccountProvider); and the removed `--use` flag is no longer accepted."""
+    monkeypatch.setattr(cli, "_load_or_die", lambda: SimpleNamespace())
+
+    for command in ("run", "advance"):
+        captured: dict = {}
+
+        def fake_build(cfg, **kwargs):
+            captured.update(kwargs)
+            return _FakeExecutor()
+
+        monkeypatch.setattr(cli, "build_executor", fake_build)
+        result = CliRunner().invoke(main, [command, "--pin", "2", "--quiet"])
+        assert result.exit_code == 0, result.output
+        assert captured["pin"] == 2
+
+        # The old `--use` flag was hard-renamed (Decision 2) — it is now an unknown option.
+        rejected = CliRunner().invoke(main, [command, "--use", "2", "--quiet"])
+        assert rejected.exit_code != 0
+        assert "--use" in rejected.output or "no such option" in rejected.output.lower()
 
 
 def test_positional_target_scopes_like_only(monkeypatch):

@@ -482,7 +482,7 @@ def _print_steer_hint(ex, command: str) -> None:
 
 @main.command()
 @click.argument("req_id", required=False, default=None)
-@click.option("--use", type=int, default=None, help="Pin a claude-swap account index.")
+@click.option("--pin", type=int, default=None, help="Pin one clauder account (drain its 7d budget); forwards `clauder gate --pin N`.")
 @click.option("--threshold", type=float, default=None, help="Quota gate (fraction or percent; default 70).")
 @click.option("--model", default=None, help="Claude model (default claude-opus-4-8).")
 @click.option("--effort", default=None, help="Reasoning effort (default high).")
@@ -490,7 +490,7 @@ def _print_steer_hint(ex, command: str) -> None:
 @click.option("--quiet", is_flag=True, help="Suppress live claude output; show only the report.")
 def advance(
     req_id: str | None,
-    use: int | None, threshold: float | None, model: str | None, effort: str | None,
+    pin: int | None, threshold: float | None, model: str | None, effort: str | None,
     only: str | None, quiet: bool,
 ) -> None:
     """Do exactly one checkpoint headless, then print the fixed report.
@@ -507,7 +507,7 @@ def advance(
     ctrl = StopController()
     ctrl.install()
     ex = build_executor(
-        cfg, use=use, threshold=threshold, model=model, effort=effort,
+        cfg, pin=pin, threshold=threshold, model=model, effort=effort,
         announce=_stderr_announcer, stop=ctrl,
     )
     if target is None:
@@ -713,7 +713,7 @@ def validate(req_id: str, quiet: bool) -> None:
 
 @main.command()
 @click.argument("req_id", required=False, default=None)
-@click.option("--use", type=int, default=None, help="Pin a claude-swap account index.")
+@click.option("--pin", type=int, default=None, help="Pin one clauder account (drain its 7d budget); forwards `clauder gate --pin N`.")
 @click.option("--threshold", type=float, default=None, help="Quota gate (fraction or percent; default 70).")
 @click.option("--model", default=None, help="Claude model (default claude-opus-4-8).")
 @click.option("--effort", default=None, help="Reasoning effort (default high).")
@@ -722,7 +722,7 @@ def validate(req_id: str, quiet: bool) -> None:
 @click.option("--quiet", is_flag=True, help="Suppress live claude output; show only results.")
 def run(
     req_id: str | None,
-    use: int | None, threshold: float | None, model: str | None, effort: str | None,
+    pin: int | None, threshold: float | None, model: str | None, effort: str | None,
     only: str | None, max_steps: int | None, quiet: bool,
 ) -> None:
     """Unattended: march eligible steps headless; park on forks.
@@ -738,7 +738,7 @@ def run(
     ctrl = StopController()
     ctrl.install()
     ex = build_executor(
-        cfg, use=use, threshold=threshold, model=model, effort=effort,
+        cfg, pin=pin, threshold=threshold, model=model, effort=effort,
         announce=_stderr_announcer, stop=ctrl,
     )
     if target is None:

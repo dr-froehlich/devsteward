@@ -46,6 +46,12 @@ class ClauderAccountProvider:
       then **re-gate**; a stop requested during the wait returns ``ok=False``.
     * exit 69 (``unsatisfiable``) → ``ok=False`` — the run stops.
 
+    An optional ``pin=N`` (REQ-061) narrows the gate to ``clauder gate --pin N``: clauder
+    then judges admission on account N alone and performs any switch to N, so the operator
+    can drain N's 7-day budget before it resets. The provider only forwards N — it reads no
+    usage and adds no fallback (clauder REQ-006 owns the pinned switch). With ``pin`` omitted
+    the invocation is the combined-budget gate unchanged.
+
     All account interaction routes through this single ``clauder gate`` chokepoint: the
     provider issues no direct ``cswap`` call and reads no ``usage.json`` (Decision 3 — no
     second switcher). When ``clauder`` is not on PATH — or a gate invocation fails — the gate
@@ -63,6 +69,7 @@ class ClauderAccountProvider:
         self,
         *,
         threshold: float = 70.0,
+        pin: int | None = None,
         announce: Callable[[str], None] | None = None,
         should_stop: Callable[[], bool] | None = None,
         poll_seconds: int = 60,
@@ -70,6 +77,12 @@ class ClauderAccountProvider:
         sleep: Callable[[float], None] | None = None,
     ):
         self.threshold = _normalize_threshold(threshold)
+        # REQ-061: optional account pin. When set, every gate is `clauder gate --pin N`;
+        # clauder judges admission on account N alone (so the operator can drain N's 7d
+        # window before it resets). DevSteward only forwards N — it interprets nothing and
+        # adds no fallback (clauder REQ-006 owns the pinned switch). When None, the gate is
+        # the REQ-058 combined-budget invocation, byte-for-byte unchanged.
+        self.pin = pin
         self.announce = announce or (lambda _msg: None)
         self.should_stop = should_stop or (lambda: False)
         # Fallback poll cadence for a ``wait`` verdict that carries no ``wait_seconds``.
@@ -99,7 +112,10 @@ class ClauderAccountProvider:
         A launch failure / timeout degrades **open** (exit 0, ``proceed``) — clauder is
         optional and must never hard-fail a run. A malformed JSON body still honours the
         exit code; the missing fields just fall back to their defaults."""
-        argv = [self.clauder, "gate", "--threshold", f"{self.threshold:g}", "--json"]
+        argv = [self.clauder, "gate", "--threshold", f"{self.threshold:g}"]
+        if self.pin is not None:
+            argv += ["--pin", str(self.pin)]  # REQ-061: judge admission on account N alone
+        argv.append("--json")
         try:
             proc = self._run(argv, capture_output=True, text=True, timeout=self._TIMEOUT)
         except (subprocess.SubprocessError, OSError):

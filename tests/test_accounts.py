@@ -132,6 +132,59 @@ def test_no_direct_cswap_and_degrades_without_clauder(monkeypatch):
     assert ok is True and "proceeding without quota check" in reason
 
 
+# -- REQ-061: the optional account pin -----------------------------------------
+
+
+def test_pin_forwards_to_clauder_gate(monkeypatch):
+    """AC1: with ``pin=N`` every gate invocation carries ``--pin N`` (alongside
+    ``--threshold T --json``); a proceed verdict still admits. The pin is forwarded to
+    clauder, not interpreted by DevSteward (no usage read, no fallback)."""
+    calls: list = []
+    p = _provider(
+        monkeypatch,
+        threshold=80,
+        pin=3,
+        calls=calls,
+        scripted=[(0, {"decision": "proceed", "account": 3, "reason": "pinned-3"})],
+    )
+    ok, reason = p.precheck()
+    assert ok is True and "proceed" in reason
+    argv = calls[0]
+    assert argv[:2] == ["/usr/bin/clauder", "gate"]
+    # `--pin 3` rides alongside the threshold gate; clauder judges admission on account 3.
+    assert "--pin" in argv and argv[argv.index("--pin") + 1] == "3"
+    assert "--threshold" in argv and "80" in argv and "--json" in argv
+
+    # A pinned wait/unsatisfiable already reflects N alone (clauder REQ-006) — DevSteward
+    # adds no fallback; it just maps the verdict. Every gate in the loop keeps the pin.
+    calls.clear()
+    ok, reason = _provider(
+        monkeypatch,
+        pin=2,
+        calls=calls,
+        scripted=[(75, {"decision": "wait", "wait_seconds": 5, "reason": "pinned-saturated"}),
+                  (0, {"decision": "proceed", "reason": "pinned-clear"})],
+    ).precheck()
+    assert ok is True
+    assert all("--pin" in argv and "2" in argv for argv in calls)
+
+
+def test_no_pin_omits_flag_default_unchanged(monkeypatch):
+    """AC2: opt-in only — with ``pin`` omitted (default None) the argv carries no ``--pin``
+    and is byte-for-byte the REQ-058 combined-budget invocation, proving the pin adds
+    nothing to the default path."""
+    calls: list = []
+    ok, _ = _provider(
+        monkeypatch,
+        threshold=70,
+        calls=calls,
+        scripted=[(0, {"decision": "proceed", "reason": "combined"})],
+    ).precheck()
+    assert ok is True
+    assert calls[0] == ["/usr/bin/clauder", "gate", "--threshold", "70", "--json"]
+    assert "--pin" not in calls[0]
+
+
 # -- the minimal single-account provider stays -----------------------------------
 
 
