@@ -29,7 +29,7 @@ commit** as its frontmatter and the code.
 | REQ-021 | Lettered REQ ids — accept a single-letter suffix for split-umbrella requirements | DONE | [REQ-021](REQ-021.md) | REQ-002 |
 | REQ-022 | steward seed-ledger — seed a ledger for an already-built corpus so historic REQs read as done | DONE | [REQ-022](REQ-022.md) | REQ-003, REQ-004, REQ-021 |
 | REQ-023 | Converter index splice — preserve a project's surrounding index prose | DONE | [REQ-023](REQ-023.md) | REQ-010 |
-| REQ-024 | onboard skill — orchestrate migrating an existing project under the steward engine | OPEN | [REQ-024](REQ-024.md) | REQ-007, REQ-009, REQ-010, REQ-021, REQ-022, REQ-023 |
+| REQ-024 | onboard skill — orchestrate migrating an existing project under the steward engine | DONE | [REQ-024](REQ-024.md) | REQ-007, REQ-009, REQ-010, REQ-021, REQ-022, REQ-023 |
 | REQ-025 | Visible account rotation, fixed-quota gating, and graceful stop for unattended runs | DONE | [REQ-025](REQ-025.md) | REQ-003, REQ-012 |
 | REQ-026 | Lifecycle CLI — activate a REQ, recover a failed step, and target one REQ with --only | DONE | [REQ-026](REQ-026.md) | REQ-002, REQ-003 |
 | REQ-027 | Acceptance test taxonomy — regression/artifact/manual that steers the V-model flow, seeded by intake | DONE | [REQ-027](REQ-027.md) | REQ-002, REQ-004, REQ-009 |
