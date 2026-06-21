@@ -7,6 +7,7 @@ every verdict and all prose, injects only what the schema requires, and is idemp
 
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 
 import convert_reqs as cv
@@ -16,6 +17,52 @@ from devsteward.profiles.req.index import read_statuses as _index_rows
 from devsteward.profiles.req.reqfile import parse_req
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "memzy_reqs"
+
+# An index richer than the REQ-010 fixtures: a REQ table plus a Planned table and a Scenarios
+# section, with intro prose around it — the shape REQ-023's splice must protect. The Planned
+# rows are three-pipe (so INDEX_ROW_RE never matches them); one REQ row carries a historic
+# multi-word status the row regex itself would skip; REQ-999 is a stale row with no backing
+# file (it must disappear when the table is replaced).
+_PLANNED_BLOCK = """\
+## Planned (spawned by REQ-001 roadmap, not yet written)
+
+| Proposed | Title |
+|----------|-------|
+| REQ-010 | GDPR operations (later) |
+| REQ-014 | Multi-teacher pool & handover (umbrella) |"""
+
+_SCENARIOS_BLOCK = """\
+## Scenarios
+
+End-to-end journeys used to find gaps that fall between individual REQs.
+
+| ID | Title | Status | File | Touches |
+|----|-------|--------|------|---------|
+| SCN-001 | Roster lifecycle | draft | [SCN-001](../scenarios/SCN-001.md) | REQ-003, REQ-004 |"""
+
+_INTRO = "Intro prose describing the project. See [ROADMAP.md](ROADMAP.md) for ordering."
+
+EXISTING_INDEX = f"""\
+# Requirements Index — Memzy
+
+{_INTRO}
+
+| ID | Title | Status | File | Depends on |
+|----|-------|--------|------|------------|
+| REQ-001 | Stale title that must be overwritten | open | [REQ-001](REQ-001.md) | – |
+| REQ-018 | A historic superseded row | superseded *(by REQ-020)* | [REQ-018](REQ-018.md) | – |
+| REQ-999 | A stale row with no backing file | done | [REQ-999](REQ-999.md) | – |
+
+{_PLANNED_BLOCK}
+
+{_SCENARIOS_BLOCK}
+"""
+
+
+def _seed_corpus(dst: Path):
+    """Copy the fixture REQ files into ``dst`` (for an in-place src == dst conversion)."""
+    for p in FIXTURES.glob("REQ-*.md"):
+        shutil.copy(p, dst / p.name)
 
 
 def _convert_to(tmp_path: Path, name: str):
@@ -137,3 +184,73 @@ def test_memzy_fixture_corpus_lints_clean(tmp_path):
     cfg = Config(root=tmp_path, requirements_dir=".",
                  index_file="REQUIREMENTS_INDEX.md")
     assert lint(cfg) == []
+
+
+# --- REQ-023 AC1 -----------------------------------------------------------------------
+
+
+def test_index_splice_preserves_surrounding_prose(tmp_path):
+    # an index with a Planned table + Scenarios section is in place before conversion.
+    index = tmp_path / "REQUIREMENTS_INDEX.md"
+    index.write_text(EXISTING_INDEX, encoding="utf-8")
+    cv.convert_corpus(FIXTURES, tmp_path)
+    out = index.read_text(encoding="utf-8")
+
+    # the surrounding sections survive byte-for-byte.
+    assert _INTRO in out
+    assert _PLANNED_BLOCK in out
+    assert _SCENARIOS_BLOCK in out
+
+    # the REQ table is replaced: the stale, file-less row is gone and the corpus is in.
+    assert "REQ-999" not in out
+    assert "Stale title that must be overwritten" not in out
+    assert "| REQ-001 | System architecture" in out
+
+
+# --- REQ-023 AC2 -----------------------------------------------------------------------
+
+
+def test_spliced_index_rows_parseable_and_synced(tmp_path):
+    index = tmp_path / "REQUIREMENTS_INDEX.md"
+    index.write_text(EXISTING_INDEX, encoding="utf-8")
+    reqs = cv.convert_corpus(FIXTURES, tmp_path)
+
+    rows = _index_rows(index)
+    # exactly the corpus ids — the stale REQ-999 is gone, and the three-pipe Planned rows
+    # (REQ-010/REQ-014) are not mistaken for REQ-table rows.
+    assert set(rows) == {r.id for r in reqs}
+    assert "REQ-999" not in rows
+    for r in reqs:
+        assert rows[r.id] == r.status.lower()
+
+
+# --- REQ-023 AC3 -----------------------------------------------------------------------
+
+
+def test_index_whole_file_when_absent(tmp_path):
+    # no pre-existing index → a whole file exactly as before.
+    reqs = cv.convert_corpus(FIXTURES, tmp_path)
+    out = (tmp_path / "REQUIREMENTS_INDEX.md").read_text(encoding="utf-8")
+    assert out == cv.build_index(reqs)
+    assert out.startswith("# Requirements Index")
+    cfg = Config(root=tmp_path, requirements_dir=".", index_file="REQUIREMENTS_INDEX.md")
+    assert lint(cfg) == []
+
+
+# --- REQ-023 AC4 -----------------------------------------------------------------------
+
+
+def test_index_splice_idempotent(tmp_path):
+    # in-place conversion (src == dst) with a rich pre-existing index, run twice.
+    _seed_corpus(tmp_path)
+    (tmp_path / "REQUIREMENTS_INDEX.md").write_text(EXISTING_INDEX, encoding="utf-8")
+
+    cv.convert_corpus(tmp_path, tmp_path)
+    once = (tmp_path / "REQUIREMENTS_INDEX.md").read_text(encoding="utf-8")
+    cv.convert_corpus(tmp_path, tmp_path)
+    twice = (tmp_path / "REQUIREMENTS_INDEX.md").read_text(encoding="utf-8")
+
+    assert once == twice  # byte-stable
+    # the preserved prose is still intact after the second pass.
+    assert _PLANNED_BLOCK in twice
+    assert _SCENARIOS_BLOCK in twice

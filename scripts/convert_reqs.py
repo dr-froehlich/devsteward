@@ -41,6 +41,7 @@ from ruamel.yaml import YAML
 # (Python puts scripts/ on sys.path[0], not the repo root, when invoked as a file).
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from devsteward.profiles.req.index import INDEX_ROW_RE  # noqa: E402
 from devsteward.profiles.req.reqfile import ReqFile, parse_req  # noqa: E402
 
 _yaml = YAML()
@@ -252,22 +253,65 @@ def convert_req_text(text: str) -> str:
     return f"---\n{fm_out}\n---\n{body_out}"
 
 
-def build_index(reqs: list[ReqFile]) -> str:
-    """Emit a ``REQUIREMENTS_INDEX.md`` whose rows ``lint._index_rows`` matches, each in
-    sync with its REQ's frontmatter status."""
+def _render_table(reqs: list[ReqFile]) -> str:
+    """The machine-generated REQ table: column header, separator, one row per REQ.
+
+    Rows are emitted in the shape ``lint``/``index.INDEX_ROW_RE`` matches, each status in sync
+    with its REQ's frontmatter. This is the only region of the index the converter owns.
+    """
     lines = [
-        "# Requirements Index", "",
         "| ID | Title | Status | File | Depends on |",
         "|----|-------|--------|------|------------|",
     ]
     for r in sorted(reqs, key=lambda r: r.id):
         deps = ", ".join(r.depends_on) or "–"
         lines.append(f"| {r.id} | {r.title} | {r.status} | [{r.id}]({r.id}.md) | {deps} |")
-    return "\n".join(lines) + "\n"
+    return "\n".join(lines)
+
+
+def build_index(reqs: list[ReqFile]) -> str:
+    """Emit a whole ``REQUIREMENTS_INDEX.md`` — the greenfield / no-pre-existing-index path."""
+    return "# Requirements Index\n\n" + _render_table(reqs) + "\n"
+
+
+def splice_index(existing: str, reqs: list[ReqFile]) -> str:
+    """Replace only the machine-generated REQ table in ``existing`` with a freshly rendered
+    one, preserving every other section (intro, a Planned table, Scenarios) byte-for-byte
+    (REQ-023).
+
+    The REQ table is located by its data rows — the ``| REQ-NNN | … | STATUS |`` rows
+    :data:`index.INDEX_ROW_RE` matches (Decision 2), not by heading text. A Planned table's
+    ``| REQ-NNN | title |`` rows have only three pipes and so never match; the anchor lands in
+    the real REQ table. The region is then grown over the contiguous block of ``|``-rows
+    around the anchor, so the column header, the separator, and *every* data row are replaced
+    — including a historic row whose status cell is not a bare word (e.g.
+    ``superseded *(by REQ-020)*``), which the row regex itself would skip. Contiguity stops at
+    the blank line before the next section, so surrounding prose is never touched. With no REQ
+    table at all, the whole file is rebuilt (Decision 3).
+    """
+    anchor = next(
+        (i for i, ln in enumerate(existing.splitlines()) if INDEX_ROW_RE.match(ln)), None
+    )
+    if anchor is None:
+        return build_index(reqs)
+    lines = existing.splitlines()
+    start = end = anchor
+    while start > 0 and lines[start - 1].lstrip().startswith("|"):
+        start -= 1
+    while end + 1 < len(lines) and lines[end + 1].lstrip().startswith("|"):
+        end += 1
+    spliced = lines[:start] + _render_table(reqs).split("\n") + lines[end + 1:]
+    text = "\n".join(spliced)
+    return text + "\n" if existing.endswith("\n") else text
 
 
 def convert_corpus(src_dir: Path, dst_dir: Path) -> list[ReqFile]:
-    """Convert every ``REQ-*.md`` in ``src_dir`` into ``dst_dir`` and rewrite the index."""
+    """Convert every ``REQ-*.md`` in ``src_dir`` into ``dst_dir`` and write the index.
+
+    A pre-existing index is *spliced* (its REQ table replaced, the rest preserved); with none,
+    a whole file is written. In-place onboarding runs with ``src_dir == dst_dir``, so the index
+    already exists and is spliced.
+    """
     src_dir, dst_dir = Path(src_dir), Path(dst_dir)
     dst_dir.mkdir(parents=True, exist_ok=True)
     converted: list[ReqFile] = []
@@ -275,7 +319,13 @@ def convert_corpus(src_dir: Path, dst_dir: Path) -> list[ReqFile]:
         dest = dst_dir / path.name
         dest.write_text(convert_req_text(path.read_text(encoding="utf-8")), encoding="utf-8")
         converted.append(parse_req(dest))
-    (dst_dir / "REQUIREMENTS_INDEX.md").write_text(build_index(converted), encoding="utf-8")
+    index_path = dst_dir / "REQUIREMENTS_INDEX.md"
+    out = (
+        splice_index(index_path.read_text(encoding="utf-8"), converted)
+        if index_path.exists()
+        else build_index(converted)
+    )
+    index_path.write_text(out, encoding="utf-8")
     return converted
 
 
