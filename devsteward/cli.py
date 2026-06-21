@@ -867,5 +867,26 @@ def init(profile: str) -> None:
     click.echo(f"Initialized .devsteward/ ({profile} profile) in {root}")
 
 
+# -- seed-ledger (onboard an already-built corpus) ----------------------------
+
+
+@main.command(name="seed-ledger")
+def seed_ledger_cmd() -> None:
+    """Mark every terminal REQ's phase-step(s) done — seed a ledger for built history.
+
+    For onboarding an already-finished project (REQ-022): run after the per-project
+    converter has produced schema-valid REQs. Reads only frontmatter (id, status), so it is
+    dialect-independent and idempotent. Requires an already-initialized ledger.
+    """
+    from .profiles.req.seed import seed_ledger
+
+    cfg = _load_or_die()
+    seeded = seed_ledger(Ledger(cfg.root), cfg.req_dir)
+    if seeded:
+        click.echo(f"Seeded {len(seeded)} terminal REQ(s): {', '.join(seeded)}")
+    else:
+        click.echo("Nothing to seed (no un-seeded terminal REQs).")
+
+
 if __name__ == "__main__":
     main()
