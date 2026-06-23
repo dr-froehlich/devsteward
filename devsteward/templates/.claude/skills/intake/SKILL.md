@@ -76,6 +76,26 @@ yet, record the follow-on REQ that owns the asset in `process.lab` — **never d
 the check to `regression` to make it runnable today, and never fake the lab with an
 inline double.
 
+**Environment-bound `regression` — the silent-skip trap (REQ-064):** screen **every**
+`check: regression` criterion with one question — *does its oracle need a service, secret,
+or network that is **not** present in a clean repo checkout?* (a database, a `.env`, a
+running service). If yes, its "green" silently rides hidden environment: the same test that
+passes with that environment present **skips** without it, so the green is *environment-bound*,
+not self-contained — the exact shape that discarded a whole session in the FlowSteward
+REQ-043 postmortem (an all-`pg_required` AC, filed `regression`, whose green rode a gitignored
+`.env`). Do **not** leave it a silent `regression`; route by **oracle coupling** (§2a):
+
+- the oracle is **decoupled** (a live service / golden output the test compares against) → it
+  is really an `artifact`: reclassify it `check: artifact` and name the REQ that owns the lab
+  asset in `process.lab`.
+- the oracle is **coupled** to the code and only needs a **runtime** present → keep it
+  `regression`, but **record the required environment** in the REQ prose (Context/Notes —
+  "required environment: …") so the batch lane / operator wires it up.
+
+This does not *forbid* an environment-bound `regression` — the engine tolerates such a skip at
+land (REQ-063) — it makes the author's choice **deliberate**, never a silent default that only
+surfaces when a paid-for session is lost.
+
 ### 2c. The three process declarations (while the human is present)
 
 Decide these now — they must not be made headless later — and record them in the

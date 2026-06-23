@@ -40,3 +40,22 @@ def test_handbook_documents_taxonomy_and_example():
     # the optional process: block is documented with its defaults (01 · format).
     assert "`process:` block" in fmt
     assert "develop: fused" in fmt and "concept: false" in fmt
+
+
+def test_handbook_documents_environment_bound_regression():
+    """REQ-064 AC2: the handbook taxonomy documents the environment-bound-`regression` smell,
+    the screening question, and the oracle-coupling routing, with the FlowSteward REQ-043
+    case as the worked example."""
+    fmt = _read("_01-format.qmd")
+
+    # the smell is named and tied to the worked example.
+    assert "environment-bound" in fmt
+    assert "REQ-043" in fmt
+
+    # the screening dimension: a service/secret/network absent from a clean checkout.
+    assert "secret" in fmt and "network" in fmt
+    assert "skip-or-pass" in fmt
+
+    # routing by oracle coupling.
+    assert "decoupled" in fmt and "process.lab" in fmt
+    assert "runtime" in fmt and "required environment" in fmt

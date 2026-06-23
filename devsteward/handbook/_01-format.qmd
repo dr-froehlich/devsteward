@@ -77,6 +77,18 @@ from the *fixture* (inputs/environment) and the *system under test*. A coupled o
 (authored alongside the code it checks) cannot disconfirm; what separates the three
 `check:` values is the oracle's coupling, not the test's name.
 
+**The environment-bound `regression` smell (REQ-064).** A `regression` whose oracle needs a
+service, secret, or network that is absent from a clean repo checkout (a database, a `.env`,
+a live service) can only **skip-or-pass** depending on hidden environment — so its green is
+*environment-bound*, not self-contained. That is the shape behind the FlowSteward REQ-043
+postmortem: an all-`pg_required` AC, filed `regression`, whose green rode a gitignored `.env`,
+which then tripped the commit-integrity gate. `/intake` screens every `regression` criterion
+for it and routes by oracle coupling: a **decoupled** oracle (a live service / golden output)
+is really an `artifact` — reclassify it and name the owning lab REQ in `process.lab`; an oracle
+**coupled** to the code that merely needs a **runtime** stays `regression`, with the
+required environment recorded in the REQ prose (so the batch lane wires it up). The engine tolerates
+such a skip at land (REQ-063), so this is a clarity guardrail, not a ban.
+
 The `status` field is **engine-owned**: the verifier writes `pass`/`fail` back after
 running the test. Do not hand-edit it. `steward lint` fails if any active REQ has a
 criterion without a test id or without a valid `check:`.
