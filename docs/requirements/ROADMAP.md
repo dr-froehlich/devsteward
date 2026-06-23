@@ -447,6 +447,7 @@ REQ-001
                                      └─ REQ-050 (commit-integrity gate; Stage C) ── REQ-063 (fix: non-destructive — certification is the atomic unit, the work commit is durable + surfaced, env-skip ≠ capture gap; from FlowSteward REQ-043 postmortem; with REQ-049)
  REQ-026 (recover verb) ── REQ-054 (refactor: rename recover → repeat + --recover → --repeat; hard rename, no alias)
  REQ-033 (rework edge) ── REQ-055 (feature: steward revalidate — mirror of rework, external-cause re-validate; with REQ-047)
+ REQ-029 + REQ-039 + REQ-056 ── REQ-065 (fix: validate pre-flight gate + steward reland — formality checks before session, recovery without re-validation)
  REQ-053 (forward-path audit) ──┬─ REQ-056 (fix: D/H off decisions → repeat; FAILED-step names its forward verb; with REQ-029, REQ-054)
                                 └─ REQ-059 (fix: interrupted run self-heals a stranded RUNNING step + honest ineligibility diagnosis; with REQ-025, REQ-026)
  REQ-047 + REQ-056 ── REQ-060 (fix: caught-up project reports an honest terminal state — cursor never names a done step; with REQ-018)
