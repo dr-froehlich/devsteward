@@ -77,6 +77,26 @@ validation. Driven **interactively** (not by `steward run`) in this order — se
 
 ## Next
 
+- REQ-063 — **non-destructive capture gate** (fix; the urgent one): from FlowSteward's
+  2026-06-23 REQ-043 postmortem (Defect 2), where the REQ-050 commit-integrity gate
+  `git reset --hard`'d a green, correct, paid-for develop session away because its
+  all-`pg_required` ACs *skipped* in the bare `git archive` extract (the lab Postgres rides a
+  gitignored `.env`), and surfaced no SHA. Roots two defects in the gate. (1) **The atomicity
+  conflation introduced with REQ-047** (REQ-050 = its Stage C): a *failed post-commit quality
+  judgment* was treated as a *failed mutation* and rolled back through a hand-coded
+  `reset --hard` that reaches around the REQ-049 boundary — destroying verified work. Fix:
+  **certification** (the `done` flip + index sync + cursor + ledger advance) becomes the atomic
+  unit; the **work commit is durable once `verify` is green** and never in the rollback set —
+  commit pure code → capture-check → certify; a gap leaves the code commit on `dev`, fails to a
+  repeatable step, and **surfaces the SHA** (the commit is the salvage — no new topology). (2)
+  The gate **can't tell an environment skip from a source-capture gap**: redefine the gap as
+  fail/error/zero-collection only — a *skip* (which `verify` already forbids, so the test ran
+  for real) means a missing runtime env, the same category the validate phase is already
+  exempt for. Retains REQ-050's guarantee (a real source/test gap is still refused, now
+  non-destructively). Engine + black-box manual/handbook note; no new skill (the gate is
+  engine-owned). Regression-only ACs (real-git teeth in `test_commit_integrity.py`); **develop
+  split** (attended — it reworks the core land path that just lost work). With REQ-050,
+  REQ-049, REQ-047.
 - REQ-059 — **interrupted run self-heals a stranded RUNNING step**: the 2026-06-20
   runtime stalemate. A `SIGINT` during a cswap quota-wait left `REQ-040:develop` stranded in
   `RUNNING` (the requeue only fires on an up-front `precheck` fail or a clean `USAGE_LIMIT`
@@ -408,7 +428,8 @@ REQ-001
            ├─ REQ-036 (steward sync-skills: refresh stamped bundled skills + provenance manifest + drift signal; with REQ-007)
            └─ REQ-039 (concept phase: interactive leading architecture session that gates develop — left-arm counterpart of validate; with REQ-027, REQ-029, REQ-034)
  REQ-047 (trunk-based pivot) ──┬─ REQ-052 (post-pivot code + skill review → sign-off report)
-                                     └─ REQ-053 (design: process-resilience forward-path audit + rework/repeat model)
+                                     ├─ REQ-053 (design: process-resilience forward-path audit + rework/repeat model)
+                                     └─ REQ-050 (commit-integrity gate; Stage C) ── REQ-063 (fix: non-destructive — certification is the atomic unit, the work commit is durable + surfaced, env-skip ≠ capture gap; from FlowSteward REQ-043 postmortem; with REQ-049)
  REQ-026 (recover verb) ── REQ-054 (refactor: rename recover → repeat + --recover → --repeat; hard rename, no alias)
  REQ-033 (rework edge) ── REQ-055 (feature: steward revalidate — mirror of rework, external-cause re-validate; with REQ-047)
  REQ-053 (forward-path audit) ──┬─ REQ-056 (fix: D/H off decisions → repeat; FAILED-step names its forward verb; with REQ-029, REQ-054)
