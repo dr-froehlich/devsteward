@@ -97,6 +97,21 @@ validation. Driven **interactively** (not by `steward run`) in this order — se
   engine-owned). Regression-only ACs (real-git teeth in `test_commit_integrity.py`); **develop
   split** (attended — it reworks the core land path that just lost work). With REQ-050,
   REQ-049, REQ-047.
+- REQ-064 — **intake screens environment-bound `regression` ACs** (docs; the left-shift
+  complement to REQ-063): the *prevention* side of the same FlowSteward REQ-043 postmortem.
+  Defect 1's category — an AC written so its green silently rides hidden environment (an
+  all-`pg_required` file classified `regression`, its green selected by a gitignored `.env`) —
+  is any consumer's to reproduce. Adds an `/intake` **environment-binding screen**: every
+  `check: regression` AC is screened for an oracle needing a service/secret/network absent from
+  a clean checkout, and the resolution routes by REQ-027's **oracle-coupling** rule — decoupled
+  oracle → reclassify `artifact` + declare the lab in `process.lab`; coupled-but-needs-runtime
+  → keep `regression` and record the required environment. Does **not** forbid env-bound
+  regression (REQ-063 makes the engine tolerate the skip); it makes the choice deliberate.
+  Stays out of `steward lint` (REQ-027 D5: lint never judges test quality; tech-agnostic engine
+  can't statically detect env-binding). Dogfoods the taxonomy: 2 regression presence ACs (skill
+  text + handbook) + 1 manual sign-off (a real intake run surfaces the screen + honest
+  classification). Intake skill + handbook only — not the engine, not lint, not the black-box
+  manual; fused. Sibling of REQ-063 (independent — either lands first). With REQ-027.
 - REQ-059 — **interrupted run self-heals a stranded RUNNING step**: the 2026-06-20
   runtime stalemate. A `SIGINT` during a cswap quota-wait left `REQ-040:develop` stranded in
   `RUNNING` (the requeue only fires on an up-front `precheck` fail or a clean `USAGE_LIMIT`
@@ -413,7 +428,7 @@ REQ-001
               ├─ REQ-008 ── REQ-012 ── REQ-025 (account rotation + quota gate + graceful stop; with REQ-003)
               ├─ REQ-018 (revised: checkpoint = verifying bookkeeper + close-out; with REQ-020, REQ-028, REQ-029)
               ├─ REQ-026 (lifecycle CLI: activate / recover / --only; with REQ-002) ── REQ-042 (positional REQ target for advance/run — ergonomics over --only; with REQ-002)
-              └─ REQ-004 ── REQ-027 (acceptance taxonomy + intake seeding; with REQ-002, REQ-009)
+              └─ REQ-004 ── REQ-027 (acceptance taxonomy + intake seeding; with REQ-002, REQ-009) ── REQ-064 (docs: intake screens env-bound regression ACs — route by oracle coupling; left-shift complement to REQ-063)
  REQ-028 ── REQ-029 (develop fusion + mechanical land + repair-on-red; with REQ-004, REQ-020, REQ-027)
  REQ-029 ──┬─ REQ-018 (revised — see above)
            └─ REQ-030 (System-Test phase + evidence events; with REQ-005, REQ-027) ── REQ-031 (first lab: IMAP + FlowSteward re-drive)
