@@ -70,6 +70,16 @@ The target already has a `.claude/` and an 8 KB CLAUDE.md — so this is a **mer
 
 A stamp that overwrites the target's accumulated knowledge is a regression, not a migration.
 
+**Seed the engine-owned artifacts with `steward sync` (REQ-066).** `onboard` does not run
+`steward new`, so it never seeded the provenance lock — that is *why* a project onboarded
+before REQ-057 (e.g. FlowSteward) ended with neither a `STEWARD.md` manual nor a
+`.devsteward/stamped.lock`. Run **`steward sync`** as part of this step: it stamps the missing
+engine-owned artifacts (the bundled skills **and** the root `STEWARD.md`) from the installed
+template and writes a populated `.devsteward/stamped.lock`, giving the retrofitted project the
+same baseline a fresh `steward new` project gets. `sync`'s customized-refusal **preserves any
+same-named artifact the project already owns** (reported customized, refused without `--force`)
+— so this honours "merge, never overwrite" while closing the manual gap.
+
 ## 4. Reconcile CLAUDE.md — fold in, don't flatten
 
 Fold the **house conventions** into the target's existing CLAUDE.md *without discarding its domain

@@ -121,12 +121,14 @@ def _stamp(src: Path, dst: Path) -> int:
             out = out.with_name(out.name[: -len(".tmpl")])
         out.parent.mkdir(parents=True, exist_ok=True)
         data = path.read_bytes()
-        # REQ-036: bundled skills are pure engine *behavior* and must byte-match the
-        # template they were stamped from (the drift model's whole premise) — copy them
-        # verbatim, never substituting. A skill like bootstrap carries `{{TODAY}}` as
-        # literal instruction text, so substituting there would both corrupt the
-        # instruction and break every drift comparison.
-        if rel.parts[: len(skillsync.SKILLS_RELDIR.parts)] == skillsync.SKILLS_RELDIR.parts:
+        # REQ-036/066: engine-owned stamped artifacts (the bundled skills and the root
+        # STEWARD.md manual) are pure engine *behavior* and must byte-match the template they
+        # were stamped from (the drift model's whole premise) — copy them verbatim, never
+        # substituting. A skill like bootstrap carries `{{TODAY}}` as literal instruction
+        # text, so substituting there would both corrupt the instruction and break every
+        # drift comparison.
+        is_skill = rel.parts[: len(skillsync.SKILLS_RELDIR.parts)] == skillsync.SKILLS_RELDIR.parts
+        if is_skill or rel == Path(skillsync.MANUAL_FILENAME):
             out.write_bytes(data)
             count += 1
             continue
@@ -376,33 +378,37 @@ def status() -> None:
         for d in decisions:
             click.echo(f"  {d.id} [{d.step}] {d.question}")
 
-    # REQ-036 Decision 3: stamped bundled skills drifting from the installed engine is an
-    # informational warning — visible (the fix for "silent"), never a blocking gate.
+    # REQ-036 Decision 3 / REQ-066 Decision 3: a stamped engine-owned artifact (a bundled
+    # skill or the STEWARD.md manual) drifting from the installed engine is an informational
+    # warning — visible (the fix for "silent"), never a blocking gate; the hint names the
+    # generalized `steward sync` verb.
     drifted = skillsync.drift(cfg.root, _package_templates())
     if drifted:
-        click.echo(click.style("\nskills:", fg="yellow"))
+        click.echo(click.style("\nstamped artifacts:", fg="yellow"))
         for d in drifted:
             click.echo(
                 click.style(f"  ⚠ {d.name:<14} {d.bucket.value}", fg="yellow")
-                + "  — run `steward sync-skills`"
+                + "  — run `steward sync`"
             )
 
 
-# -- sync-skills (bundled-skill drift) ----------------------------------------
+# -- sync (engine-owned stamped-artifact drift) -------------------------------
 
 
-@main.command("sync-skills")
+@main.command("sync")
 @click.option(
     "--force", is_flag=True,
-    help="Refresh a *customized* skill too, backing the local copy up (.orig) first.",
+    help="Refresh a *customized* artifact too, backing the local copy up (.orig) first.",
 )
-def sync_skills(force: bool) -> None:
-    """Refresh stale bundled skills from the installed template; re-record the lock (REQ-036).
+def sync(force: bool) -> None:
+    """Refresh stale/missing engine-owned stamped artifacts from the template (REQ-036/066).
 
-    A *stale* bundled skill (untouched since stamp, template advanced) is refreshed to
-    byte-match the installed engine and the provenance lock updated. A *customized* skill
-    (edited locally) is left untouched and reported unless ``--force`` is given, in which
-    case its current bytes are backed up to ``SKILL.md.orig`` before the refresh.
+    Covers the bundled skills **and** the root ``STEWARD.md`` manual. A *stale* artifact
+    (untouched since stamp, template advanced) or a *missing* one (e.g. a consumer that never
+    had ``STEWARD.md``) is refreshed to byte-match the installed engine and the provenance
+    lock updated. A *customized* artifact (edited locally) is left untouched and reported
+    unless ``--force`` is given, in which case its current bytes are backed up to
+    ``<name>.orig`` before the refresh. ``sync-skills`` is a back-compat alias.
     """
     cfg = _load_or_die()
     res = skillsync.sync(cfg.root, _package_templates(), force=force)
@@ -417,7 +423,13 @@ def sync_skills(force: bool) -> None:
             f"  ⚠ {name}: customized — left untouched (use --force to overwrite)", fg="yellow"
         ))
     if not res.changed and not res.refused:
-        click.echo(click.style("all bundled skills in-sync.", fg="green"))
+        click.echo(click.style("all engine-owned artifacts in-sync.", fg="green"))
+
+
+# REQ-066 Decision 3: keep the pre-rename verb working for muscle memory and any scripted or
+# documented `sync-skills` invocations (older stamped copies, handbook prose) — a true alias
+# to the same command, not a re-implementation.
+main.add_command(sync, name="sync-skills")
 
 
 # -- live progress ------------------------------------------------------------
