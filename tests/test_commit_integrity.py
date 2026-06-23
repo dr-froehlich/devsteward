@@ -1,16 +1,25 @@
-"""REQ-050 — commit integrity: a land refuses a green the recorded commit doesn't capture.
+"""REQ-063 — non-destructive commit integrity: a capture gap never discards the work.
 
-Stage C of REQ-047 (plan ``docs/plans/0026-single-source-of-truth-trunk-based.md``), built on
-the REQ-049 transaction boundary. Real-git teeth (the plan-0021 lesson, reinforced by the
-task brief: a fake can't certify a ``.gitignore``d-file gap). A throwaway ``git init`` repo on
-``dev``, only ``claude`` faked (``FakeRunner``); the executor commits for real and the
-assertions read real git state.
+The REQ-050 gate proved a develop commit reproduces its own green, but did it *after*
+committing and ``reset --hard``'d the work away on a gap — discarding a green, paid-for
+session (FlowSteward REQ-043 postmortem). REQ-063 re-architects the land path: the check runs
+against the **staged tree before the commit**, so a gap is handled non-destructively — the
+pure code is committed and its SHA surfaced, the step is left repeatable, nothing is reset.
+And an **environment skip** (a test that passed verify but only skips from the bare extract,
+its DB/secret absent) is no longer a capture gap.
 
-* **AC4** (``test_land_refuses_uncaptured_green``) — a develop whose pass depends on a
-  ``.gitignore``d / never-staged file is refused at land with the gap named; the REQ does
-  **not** flip ``done`` and ``dev`` is left clean (no stranded work commit).
-* A control (``test_land_certifies_a_self_sufficient_green``) — a green that depends only on
-  *committed* source still lands ``DONE`` (the self-check raises no false positive).
+Real-git teeth (the plan-0021 lesson): a throwaway ``git init`` repo on ``dev``, only
+``claude`` faked (``FakeRunner``). The develop "work" is written **uncommitted** into the tree
+(the fake runner makes no edits), so the engine commits it for real — exactly the live shape.
+
+* **AC1** (``test_capture_gap_preserves_work_and_surfaces_sha``) — a real source-capture gap
+  withholds certification but **preserves** the work commit and surfaces its SHA.
+* **AC2** (``test_environment_skip_is_not_a_capture_gap``) — the all-skip shape certifies.
+* **AC3** (``test_self_sufficient_green_certifies``) — a self-sufficient green lands ``DONE``,
+  the flip riding the one code commit (same-commit discipline); no false positive.
+* **AC4** (``test_withhold_recovery_is_honest_and_names_sha``) — the withhold message names the
+  preserved SHA and frames the cause as a source file, never "commit the secret".
+* Two controls: the validate land stays exempt; the develop land of the *self-sufficient* case.
 """
 
 from __future__ import annotations
@@ -18,10 +27,7 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
-import pytest
-
 from devsteward.core.accounts import SingleAccountProvider
-from devsteward.core.errors import PreconditionError
 from devsteward.core.executor import Executor, RunOutcome
 from devsteward.core.git import GitCli
 from devsteward.core.ledger import Ledger
@@ -114,6 +120,10 @@ def _porcelain(root: Path) -> str:
     return _git(root, "status", "--porcelain").strip()
 
 
+def _log_shas(root: Path) -> list[str]:
+    return _git(root, "log", "--format=%H").split()
+
+
 def _executor(root: Path) -> Executor:
     req_dir = root / "docs" / "requirements"
     return Executor(
@@ -130,53 +140,12 @@ def _executor(root: Path) -> Executor:
     )
 
 
-# -- AC4 -----------------------------------------------------------------------
-
-# A named test that reads a sibling file — green only if that file is present.
+# A named test that reads a sibling file — green only if that file is present in the cwd.
 _DEP_TEST = (
     "from pathlib import Path\n"
     "def test_needs_secret():\n"
     "    assert Path('secret.txt').read_text().strip() == 'load-bearing'\n"
 )
-
-
-def test_land_refuses_uncaptured_green(tmp_path):
-    """AC4: the develop gate passes because a ``.gitignore``d ``secret.txt`` sits in the
-    working tree — but ``commit_code`` (``git add -A`` minus ``.devsteward/``) cannot stage an
-    ignored file, so the recorded commit can't reproduce the green. The land re-runs the named
-    test against a clean extract of the commit, sees it go red, rolls the work commit back, and
-    refuses with the gap named — REQ-001 never flips ``done`` and ``dev`` is left clean."""
-    _scaffold(tmp_path, test="python -m pytest tests/test_dep.py")
-    tests = tmp_path / "tests"
-    tests.mkdir()
-    (tests / "test_dep.py").write_text(_DEP_TEST, encoding="utf-8")
-    (tmp_path / ".gitignore").write_text("secret.txt\n", encoding="utf-8")
-    _init_git(tmp_path)  # commits the test + .gitignore — but never secret.txt (ignored)
-
-    # The load-bearing file exists in the tree (so the develop gate is green) yet is ignored.
-    (tmp_path / "secret.txt").write_text("load-bearing\n", encoding="utf-8")
-
-    before_head = _head(tmp_path)
-    ex = _executor(tmp_path)
-
-    with pytest.raises(PreconditionError) as exc:
-        ex.advance_once()
-
-    # The refusal names the gap and tells the operator how to close it.
-    assert "does not reproduce its green" in str(exc.value)
-    assert "gitignore" in exc.value.recovery.lower()
-
-    # Nothing certified, nothing advanced: the work commit was rolled back, the REQ is still
-    # open, no checkpoint event, and the tree is clean (no stranded half-state).
-    assert _head(tmp_path) == before_head
-    assert _porcelain(tmp_path) == ""
-    assert "status: open" in (tmp_path / "docs" / "requirements" / "REQ-001.md").read_text()
-    led = Ledger(tmp_path)
-    assert led.status_of("REQ-001:develop") is not StepStatus.DONE
-    assert not any(e["event"] == "checkpoint" for e in led.events())
-
-
-# -- control: a self-sufficient green still lands ------------------------------
 
 # A named test that reads a *tracked* (committed) sibling file — captured by the commit.
 _CAPTURED_TEST = (
@@ -185,17 +154,99 @@ _CAPTURED_TEST = (
     "    assert Path('data.txt').read_text().strip() == 'captured'\n"
 )
 
+# An environment-bound test as the real ones are shaped: it skips when a runtime artifact is
+# absent. With the artifact present (the session's env) it passes; from a bare extract the
+# (gitignored) artifact is never there, so it skips — an environment absence, not a source gap.
+_LIVE_LAB_TEST = (
+    "from pathlib import Path\n"
+    "import pytest\n"
+    "def test_over_live_lab_corpus():\n"
+    "    if not Path('lab_present.flag').exists():\n"
+    "        pytest.skip('live lab absent')\n"
+    "    assert True\n"
+)
 
-def test_land_certifies_a_self_sufficient_green(tmp_path):
-    """The self-check raises no false positive: a green that depends only on *committed*
-    source (``data.txt`` is tracked, so the commit captures it) re-runs green from the extract
-    and the REQ lands ``DONE``."""
+
+# -- AC1: a capture gap preserves the work and surfaces the SHA ----------------
+
+
+def test_capture_gap_preserves_work_and_surfaces_sha(tmp_path):
+    """AC1: the develop gate passes (the gitignored ``secret.txt`` is in the tree), but the
+    recorded commit can't carry it, so the staged-tree check sees the named test go red. The
+    land **withholds certification without destroying the work**: the pure code is committed
+    (its SHA surfaced and reachable on ``dev``), the REQ stays ``open``, the step is left
+    ``FAILED`` (repeatable), and nothing is ``reset --hard``'d."""
     _scaffold(tmp_path, test="python -m pytest tests/test_dep.py")
-    tests = tmp_path / "tests"
-    tests.mkdir()
-    (tests / "test_dep.py").write_text(_CAPTURED_TEST, encoding="utf-8")
-    (tmp_path / "data.txt").write_text("captured\n", encoding="utf-8")  # tracked, not ignored
+    (tmp_path / ".gitignore").write_text("secret.txt\n", encoding="utf-8")
+    _init_git(tmp_path)  # commits the scaffold + .gitignore; the work is added below
+
+    # The develop session's work, left uncommitted in the tree (the engine commits it). The
+    # load-bearing file exists so the gate is green, yet is gitignored so the commit drops it.
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "tests" / "test_dep.py").write_text(_DEP_TEST, encoding="utf-8")
+    (tmp_path / "secret.txt").write_text("load-bearing\n", encoding="utf-8")
+
+    before_head = _head(tmp_path)
+    ex = _executor(tmp_path)
+    res = ex.advance_once()
+
+    # Withheld, not destroyed: a non-stopping VERIFY_FAILED naming a real, reachable work commit.
+    assert res.outcome is RunOutcome.VERIFY_FAILED
+    assert res.commit and res.commit != before_head
+    assert res.commit in _log_shas(tmp_path)  # on the dev history — preserved, not dangling
+    assert "test_dep.py" in _git(tmp_path, "show", "--stat", res.commit)
+    assert before_head in _log_shas(tmp_path)  # history extended, not rewritten
+
+    # Nothing certified: the REQ is still open, no checkpoint event, a capture_gap event, and
+    # the tree is clean at rest (the ledger close was committed).
+    assert "status: open" in (tmp_path / "docs" / "requirements" / "REQ-001.md").read_text()
+    assert _porcelain(tmp_path) == ""
+    led = Ledger(tmp_path)
+    assert led.status_of("REQ-001:develop") is StepStatus.FAILED
+    assert not any(e["event"] == "checkpoint" for e in led.events())
+    assert any(e["event"] == "capture_gap" for e in led.events())
+
+
+# -- AC2: an environment skip is not a capture gap ----------------------------
+
+
+def test_environment_skip_is_not_a_capture_gap(tmp_path):
+    """AC2: the named test passes in verify (the gitignored ``lab_present.flag`` is in the
+    tree) and only **skips** from the bare extract (the flag, like a DB/secret, is never in the
+    commit). That is environment absence, not a source-capture gap, so the develop land
+    certifies ``DONE`` — the FlowSteward REQ-043 all-skip shape, no longer discarded."""
+    _scaffold(tmp_path, test="python -m pytest tests/test_lab.py")
+    (tmp_path / ".gitignore").write_text("lab_present.flag\n", encoding="utf-8")
     _init_git(tmp_path)
+
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "tests" / "test_lab.py").write_text(_LIVE_LAB_TEST, encoding="utf-8")
+    (tmp_path / "lab_present.flag").write_text("up\n", encoding="utf-8")  # gitignored env
+
+    ex = _executor(tmp_path)
+    res = ex.advance_once()
+
+    assert res.outcome is RunOutcome.DONE
+    assert _porcelain(tmp_path) == ""
+    assert "status: done" in (tmp_path / "docs" / "requirements" / "REQ-001.md").read_text()
+    led = Ledger(tmp_path)
+    assert led.status_of("REQ-001:develop") is StepStatus.DONE
+    assert any(e["event"] == "checkpoint" for e in led.events())
+
+
+# -- AC3: a self-sufficient green certifies (no false positive) ----------------
+
+
+def test_self_sufficient_green_certifies(tmp_path):
+    """AC3: a green depending only on *committed* source (``data.txt`` is tracked) reproduces
+    from the extract and lands ``DONE`` — the re-architecture raises no false positive — with
+    the ``done`` flip + index sync riding the one code commit (same-commit discipline)."""
+    _scaffold(tmp_path, test="python -m pytest tests/test_dep.py")
+    _init_git(tmp_path)
+
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "tests" / "test_dep.py").write_text(_CAPTURED_TEST, encoding="utf-8")
+    (tmp_path / "data.txt").write_text("captured\n", encoding="utf-8")  # tracked, not ignored
 
     ex = _executor(tmp_path)
     res = ex.advance_once()
@@ -206,20 +257,41 @@ def test_land_certifies_a_self_sufficient_green(tmp_path):
     assert led.status_of("REQ-001:develop") is StepStatus.DONE
     assert any(e["event"] == "checkpoint" for e in led.events())
 
+    # Same-commit discipline: the one code commit carries the work AND the REQ flip + index.
+    shown = _git(tmp_path, "show", "--stat", res.commit)
+    assert "data.txt" in shown
+    assert "REQ-001.md" in shown
+    assert "REQUIREMENTS_INDEX.md" in shown
+    assert "status: done" in (tmp_path / "docs" / "requirements" / "REQ-001.md").read_text()
 
-# -- the validate land is exempt: artifact green lives in the live lab, not the commit --------
 
-# An artifact AC test as the real ones are shaped: it skips when the live lab artifact is absent
-# (REQ-037's ``test_..._membership_over_lab_corpus`` is skip-if-absent without lab credentials).
-# From a bare ``git archive`` extract the lab flag is never present, so it skips.
-_LIVE_LAB_TEST = (
-    "from pathlib import Path\n"
-    "import pytest\n"
-    "def test_over_live_lab_corpus():\n"
-    "    if not Path('lab_present.flag').exists():\n"
-    "        pytest.skip('live lab absent')\n"
-    "    assert True\n"
-)
+# -- AC4: the withhold message is honest and names the SHA ---------------------
+
+
+def test_withhold_recovery_is_honest_and_names_sha(tmp_path):
+    """AC4: on a real source-capture gap the surfaced detail names the **preserved** work
+    commit and frames the cause as an uncaptured *source/test* file — explicitly *never* the
+    postmortem's wrong "commit them / fix .gitignore" advice applied to a secret."""
+    _scaffold(tmp_path, test="python -m pytest tests/test_dep.py")
+    (tmp_path / ".gitignore").write_text("secret.txt\n", encoding="utf-8")
+    _init_git(tmp_path)
+
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "tests" / "test_dep.py").write_text(_DEP_TEST, encoding="utf-8")
+    (tmp_path / "secret.txt").write_text("load-bearing\n", encoding="utf-8")
+
+    ex = _executor(tmp_path)
+    res = ex.advance_once()
+
+    assert res.outcome is RunOutcome.VERIFY_FAILED
+    msg = res.detail
+    assert "does not reproduce its green" in msg
+    assert res.commit and res.commit in msg          # names the preserved SHA
+    assert "source/test file" in msg                 # frames it as a source file...
+    assert "never a secret" in msg                    # ...not "commit the secret"
+
+
+# -- control: the validate land stays exempt ----------------------------------
 
 
 def _validate_step(verify: str) -> Step:
@@ -234,21 +306,15 @@ def _validate_step(verify: str) -> Step:
 
 
 def test_validate_land_certifies_despite_live_lab_skip(tmp_path):
-    """The commit-integrity gate is a develop-land invariant and must **not** fire on the
+    """Control: the commit-integrity check is a develop-land invariant and must not fire on the
     validate land. A validate step's ``verify`` is the ``artifact`` AC test, whose green was
-    established against the *live lab* during the session — it skips from a bare commit extract
-    by design (the lab is never in ``git archive``). Re-running it there would wrongly read the
-    skip as an uncaptured-green gap and roll a legitimately-validated REQ back. Assert the
-    validate land certifies ``DONE`` instead (REQ-050 × REQ-030: the validate phase is exempt)."""
+    established against the live lab and skips from a bare extract by design — so the validate
+    phase is exempt and certifies ``DONE`` (REQ-050 × REQ-030, preserved by REQ-063)."""
     _scaffold(tmp_path, test="python -m pytest tests/test_lab.py")
-    tests = tmp_path / "tests"
-    tests.mkdir()
-    (tests / "test_lab.py").write_text(_LIVE_LAB_TEST, encoding="utf-8")
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "tests" / "test_lab.py").write_text(_LIVE_LAB_TEST, encoding="utf-8")
     (tmp_path / ".gitignore").write_text("lab_present.flag\n", encoding="utf-8")
     _init_git(tmp_path)  # commits the test — but never the lab flag (ignored)
-
-    # The live-lab artifact is present in the working tree during the session (so the green is
-    # real) yet is not, and cannot be, captured by the commit.
     (tmp_path / "lab_present.flag").write_text("up\n", encoding="utf-8")
 
     ex = _executor(tmp_path)
@@ -259,28 +325,3 @@ def test_validate_land_certifies_despite_live_lab_skip(tmp_path):
     led = Ledger(tmp_path)
     assert led.status_of("REQ-001:validate") is StepStatus.DONE
     assert any(e["event"] == "checkpoint" for e in led.events())
-
-
-def test_develop_land_still_refuses_a_skip_gap(tmp_path):
-    """The exemption is phase-scoped, not a blanket softening: the *develop* land still treats
-    ``skip ≠ green``. The identical skip-if-absent test on a develop step is refused with the
-    gap named and rolled back — proving only the validate phase is exempt."""
-    _scaffold(tmp_path, test="python -m pytest tests/test_lab.py")
-    tests = tmp_path / "tests"
-    tests.mkdir()
-    (tests / "test_lab.py").write_text(_LIVE_LAB_TEST, encoding="utf-8")
-    (tmp_path / ".gitignore").write_text("lab_present.flag\n", encoding="utf-8")
-    _init_git(tmp_path)
-    (tmp_path / "lab_present.flag").write_text("up\n", encoding="utf-8")
-
-    before_head = _head(tmp_path)
-    ex = _executor(tmp_path)
-
-    with pytest.raises(PreconditionError) as exc:
-        ex.advance_once()  # the develop step — gate still bites
-
-    assert "does not reproduce its green" in str(exc.value)
-    assert _head(tmp_path) == before_head
-    assert _porcelain(tmp_path) == ""
-    led = Ledger(tmp_path)
-    assert led.status_of("REQ-001:develop") is not StepStatus.DONE

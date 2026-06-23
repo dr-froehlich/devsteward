@@ -34,7 +34,6 @@ from pathlib import Path
 from typing import Callable
 
 from . import claude as claude_mod
-from .errors import PreconditionError
 from .git import GitCli
 from .invariants import check_invariants
 from .ledger import Ledger
@@ -505,7 +504,8 @@ class Executor:
         the engine's in both modes.
 
         The caller must have already verified the step green; this routine assumes it.
-        Returns ``PARKED`` if the land gate refuses (nothing committed), else ``DONE``.
+        Returns ``PARKED`` if the land gate refuses (nothing committed), ``VERIFY_FAILED`` on a
+        capture gap (the work commit is **preserved** — REQ-063), else ``DONE``.
         """
         led = self.ledger
         if self.land_gate is not None:
@@ -523,17 +523,7 @@ class Executor:
                 led.append_event("land_refused", step=step.id, detail=refusal)
                 self._commit_ledger_close(step, "ledger close — land refused")
                 return StepResult(step, RunOutcome.VERIFY_FAILED, refusal)
-        if self.on_verified is not None:
-            self.on_verified(step)
-        snapshot = self.git.head_sha()
-        sha = self._commit(step)
-        self._assert_green_captured(step, sha, snapshot)  # REQ-050: roll back + refuse on a gap
-        led.set_cursor(step.id)
-        led.set_status(step.id, StepStatus.DONE)
-        led.save()
-        led.append_event("checkpoint", step=step.id, commit=sha, driver=driver)
-        self._commit_ledger_close(step, "ledger checkpoint")
-        return StepResult(step, RunOutcome.DONE, detail, commit=sha)
+        return self._land_checked(step, detail, driver, certify=True)
 
     def commit_deferred(
         self, step: Step, detail: str = "", driver: str = "headless"
@@ -544,19 +534,53 @@ class Executor:
         active: no ``done`` flip, no index touch, no land gate. Those fire from the trailing
         ``validate`` step's green (:meth:`mechanical_land`).
         """
+        return self._land_checked(step, detail, driver, certify=False)
+
+    def _land_checked(
+        self, step: Step, detail: str, driver: str, *, certify: bool
+    ) -> StepResult:
+        """The shared post-green tail: commit the work, but only after proving the committed
+        code reproduces its own green — and **never** destroying it on a gap (REQ-063).
+
+        REQ-050 ran this check *after* committing and ``reset --hard``'d the work away on a gap,
+        conflating a failed quality judgment with a failed mutation. Here the check runs against
+        the **staged tree** *before* the commit (:meth:`_capture_gap`), so there is nothing to
+        roll back:
+
+        * **clean** → certify. ``certify`` lands the REQ (the ``on_verified`` ``done`` flip + the
+          index ``DONE``-sync ride the one code commit — same-commit discipline), advances the
+          cursor to ``DONE`` and records ``checkpoint``; ``certify=False`` (a develop step with a
+          trailing validate) commits the pure code and records ``develop_committed``, deferring
+          the flip to :meth:`mechanical_land` at validate time.
+        * **gap** → withhold certification **without** discarding the work: commit the pure code
+          (no ``done`` flip — no false claim) so the session's work is durable and **surfaced**,
+          set the step ``FAILED`` (repeatable), record a ``capture_gap`` event naming the commit,
+          commit the ledger close (clean tree at rest, REQ-032), and return a non-stopping
+          ``VERIFY_FAILED`` — the REQ-056 shape (a mechanical failure, not a destructive
+          exception). ``steward repeat`` resumes it once the missing source is tracked.
+        """
         led = self.ledger
-        snapshot = self.git.head_sha()
+        gap = self._capture_gap(step)
+        if gap is not None:
+            sha = self._commit(step)  # pure code — preserve the session's work, never reset
+            led.set_status(step.id, StepStatus.FAILED)
+            led.save()
+            led.append_event("capture_gap", step=step.id, commit=sha, detail=gap)
+            self._commit_ledger_close(step, "ledger close — capture gap")
+            return StepResult(
+                step, RunOutcome.VERIFY_FAILED, self._capture_gap_message(step, sha, gap),
+                commit=sha,
+            )
+        if certify and self.on_verified is not None:
+            self.on_verified(step)
         sha = self._commit(step)
-        self._assert_green_captured(step, sha, snapshot)  # REQ-050: roll back + refuse on a gap
         led.set_cursor(step.id)
         led.set_status(step.id, StepStatus.DONE)
         led.save()
-        led.append_event(
-            "develop_committed", step=step.id, commit=sha, driver=driver
-        )
-        # REQ-032: the trailing ledger write (status done + develop_committed event) is
-        # committed as a follow-up to the work commit, so the tree is clean at rest while
-        # the develop step waits for its validate sibling (Decision 1 — no dirty handoff).
+        event = "checkpoint" if certify else "develop_committed"
+        led.append_event(event, step=step.id, commit=sha, driver=driver)
+        # REQ-032: the trailing ledger write lands as a follow-up commit, so a terminal step
+        # outcome leaves a clean tree.
         self._commit_ledger_close(step, "ledger checkpoint")
         return StepResult(step, RunOutcome.DONE, detail, commit=sha)
 
@@ -729,61 +753,80 @@ class Executor:
         ref = (step.req or step.id) if step is not None else "ledger"
         return self.git.commit_ledger(f"{ref}: {subject}\n\n{_TRAILER}")
 
-    # -- commit integrity (REQ-050) --------------------------------------------
+    # -- commit integrity (REQ-050, made non-destructive by REQ-063) -----------
 
-    def _assert_green_captured(self, step: Step, sha: str | None, snapshot: str) -> None:
-        """Refuse a land whose green the recorded commit does not reproduce (REQ-050).
+    def _capture_gap(self, step: Step) -> str | None:
+        """Whether the code about to be committed reproduces its own named green (REQ-063).
 
-        After the work commit, re-run the step's named acceptance gate against a *clean
-        extract of the commit* (``git archive`` — only its tracked content, with no
-        ``.gitignore``d or never-staged working-tree state). If a named test no longer
-        passes, the green the verifier just certified depended on files the commit did not
-        capture; roll the work commit back to ``snapshot`` and refuse with a typed
-        :class:`PreconditionError` naming the gap — nothing certified, nothing advanced.
+        Run *before* the commit, against the **staged tree** (:meth:`_stage_and_write_tree` —
+        exactly what ``commit_code`` will commit: tracked/staged content, no ``.gitignore``d or
+        never-staged working-tree state): re-run the step's named acceptance tests against a
+        clean ``git archive`` extract of that tree. Return a one-line gap description if a named
+        test no longer passes, else ``None``.
 
-        The rollback is **explicit**: a ``PreconditionError`` passes *through* the
-        transaction boundary without one (REQ-049), so relying on the boundary would strand
-        the work commit — the half-state Stage C exists to forbid. We restore the snapshot
-        ourselves, *then* raise the (now pass-through) precondition with its precise recovery.
+        Pre-commit by design (REQ-063 Decision 1): REQ-050 ran this *after* committing and
+        ``reset --hard``'d the work away on a gap — conflating a failed quality judgment with a
+        failed mutation and destroying a paid-for session. Checking the staged tree first means
+        a gap is a plain return value the caller handles non-destructively; there is nothing to
+        roll back.
 
-        Real-git only and a safety net: with no repo (the in-memory fake), no named tests,
-        or no usable extraction, there is nothing to reproduce, so it is a no-op.
+        Real-git only and a safety net: a no-op (``None``) when there is no repo (the in-memory
+        fake), no named tests, an unusable env, or no extraction tooling — a self-check that
+        cannot run must not block a legitimate land.
 
-        **Not the validate land.** This is a *develop*-land invariant: a regression AC's green
-        is pure tracked source/test content, so re-running it from a clean commit extract is a
-        faithful capture check. A *validate* step's ``verify`` is the ``artifact`` AC tests
-        (``check: artifact``), whose green is established once against the **live lab** and
-        recorded as captured evidence — it legitimately does *not* live in ``git archive``
-        content, so a bare-extract re-run can only skip-or-worse. Applying the tracked-content
-        gate there is a category error (it contradicts the REQ-030 artifact model and would
-        reject every lab-backed validation), so the validate phase is exempt — its integrity
-        contract (the evidence was captured and committed) is owned by the validate profile and
-        its ledger close, not by this commit-extract reproduction.
+        **Not the validate land.** A *develop* regression AC's green is pure tracked source/test
+        content, faithfully reproduced from a tree extract. A *validate* step's ``verify`` is the
+        ``artifact`` AC tests, whose green is established against the **live lab** and recorded as
+        captured evidence — it legitimately does *not* live in ``git archive`` content, so the
+        validate phase is exempt (its integrity is the evidence contract owned by the validate
+        profile, not this reproduction).
         """
-        if sha is None or not step.verify:
-            return
-        if step.phase == "validate":
-            return
+        if not step.verify or step.phase == "validate":
+            return None
         if not (self.root / ".git").is_dir():
-            return  # the in-memory fake / no repo — nothing to extract
-        gap = self._green_gap_at(step, sha)
-        if gap is None:
-            return
-        if snapshot:
-            self.git.reset_hard(snapshot)
-        raise PreconditionError(
-            f"the commit recorded for {step.req or step.id} does not reproduce its "
-            f"green — {gap}",
-            recovery=(
-                "the green depends on uncaptured files (gitignored or never staged) — "
-                "commit them, or fix .gitignore so they are tracked, then re-run. The work "
-                "commit was rolled back; nothing was certified."
-            ),
+            return None  # the in-memory fake / no repo — nothing to extract
+        tree = self._stage_and_write_tree()
+        if tree is None:
+            return None
+        return self._green_gap_at(step, tree)
+
+    def _stage_and_write_tree(self) -> str | None:
+        """Stage the code (``git add -A`` minus ``.devsteward/`` — what :meth:`GitCli.commit_code`
+        stages) and serialize the index to a tree object, returning its sha. The capture check
+        runs against this tree, so it sees exactly what the work commit will hold — *before* the
+        commit. Fail-open (``None``) if the git tooling is unavailable."""
+        try:
+            subprocess.run(
+                ["git", "-C", str(self.root), "add", "-A", "--", ":(exclude).devsteward"],
+                capture_output=True,
+                check=True,
+            )
+            out = subprocess.run(
+                ["git", "-C", str(self.root), "write-tree"],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+        except (OSError, subprocess.CalledProcessError):
+            return None
+        return out.stdout.strip() or None
+
+    def _capture_gap_message(self, step: Step, sha: str | None, gap: str) -> str:
+        """The surfaced detail for a withheld certification (REQ-063 Decision 4): name the
+        **preserved** work commit and frame the cause as an uncaptured *source/test* file —
+        explicitly *never* "commit the secret", the postmortem's actively-wrong advice."""
+        where = f"preserved as commit {sha} on {self.integration_branch}" if sha else "preserved"
+        return (
+            f"the commit recorded for {step.req or step.id} does not reproduce its green — {gap}. "
+            f"The work was {where} (nothing was discarded) and {step.id} was left repeatable. "
+            f"The cause is an uncaptured source/test file the commit can't hold — track it "
+            f"(add it, or fix .gitignore so a *source* file is tracked — never a secret), then "
+            f"`steward repeat {step.req or step.id}`."
         )
 
-    def _green_gap_at(self, step: Step, sha: str) -> str | None:
-        """Run the step's named acceptance tests against a clean extract of commit ``sha``;
-        return a one-line gap description if any no longer passes, else ``None``.
+    def _green_gap_at(self, step: Step, ref: str) -> str | None:
+        """Run the step's named acceptance tests against a clean extract of ``ref`` (a commit or
+        tree); return a one-line gap description if any no longer passes, else ``None``.
 
         The interpreter is resolved against the *real* repo: the environment (the venv) is
         never part of a commit's self-sufficiency — only its source/test files are — so the
@@ -796,7 +839,7 @@ class Executor:
             return None
         timeout = float(getattr(self.verifier, "timeout", 1800.0))
         with tempfile.TemporaryDirectory(prefix="devsteward-selfcheck-") as tmp:
-            if not self._extract_commit(sha, tmp):
+            if not self._extract_commit(ref, tmp):
                 return None
             for cmd in step.verify:
                 resolved = _rebind_python(cmd, interpreter)
@@ -810,13 +853,13 @@ class Executor:
         if the verifier exposes one (the REQ profile's :class:`ReqVerifier` does)."""
         return getattr(self.verifier, "python", None)
 
-    def _extract_commit(self, sha: str, dest: str) -> bool:
-        """Extract only the tracked content of ``sha`` into ``dest`` — no gitignored or
-        untracked working-tree state — via ``git archive`` piped to ``tar``. Returns
-        ``False`` (fail-open) if the extraction tooling is unavailable."""
+    def _extract_commit(self, ref: str, dest: str) -> bool:
+        """Extract only the tracked content of ``ref`` (a commit or tree) into ``dest`` — no
+        gitignored or untracked working-tree state — via ``git archive`` piped to ``tar``.
+        Returns ``False`` (fail-open) if the extraction tooling is unavailable."""
         try:
             archive = subprocess.run(
-                ["git", "-C", str(self.root), "archive", sha],
+                ["git", "-C", str(self.root), "archive", ref],
                 capture_output=True,
                 check=True,
             )
@@ -833,20 +876,23 @@ class Executor:
     def _reproduces_green(
         self, cmd: str, resolved: str, cwd: str, timeout: float
     ) -> str | None:
-        """Return a gap description if ``resolved`` does not *pass* from ``cwd`` (the commit
-        extract), else ``None``. A pytest command is judged by its per-test outcome (a
-        zero-collection, skip, failure, or error is a gap, mirroring the land gate's
-        ``skip ≠ green``); a non-pytest command by exit code."""
+        """Return a gap description if ``resolved`` does not reproduce from ``cwd`` (the tree
+        extract), else ``None``. A pytest command is judged by its per-test outcome: a
+        **failure**, **error**, or **zero-collection** is a capture gap (a source/test file the
+        commit can't hold); a **skip is not** (REQ-063 Decision 2). ``verify`` already forbids
+        skips (REQ-028), so a named test that passed verify but only skips from the bare extract
+        is missing a *runtime environment* (a DB/secret/service), not a source file — the same
+        category the validate phase is exempted for. A non-pytest command is judged by exit code."""
         if _is_pytest_command(resolved):
             o = _pytest_outcome(resolved, cwd, timeout)
             if o.collected == 0:
                 return f"{cmd!r} collects nothing from the recorded commit ({o.tail})"
-            if o.skipped or o.failed or o.errors:
+            if o.failed or o.errors:
                 return (
                     f"{cmd!r} no longer passes from the recorded commit "
-                    f"({o.failed} failed, {o.errors} errors, {o.skipped} skipped of "
-                    f"{o.collected})"
+                    f"({o.failed} failed, {o.errors} errors of {o.collected})"
                 )
+            # A skip (without a fail/error) is environment-absence, not a capture gap (REQ-063).
             return None
         try:
             proc = subprocess.run(
