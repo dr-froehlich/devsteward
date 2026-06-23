@@ -10,4 +10,4 @@ The package ships two things in one wheel (the material-core pattern):
 See ``devsteward/handbook/`` for the reference guide.
 """
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
