@@ -34,6 +34,10 @@ engine runs them and only marks a step done when they pass.
   the production branch (`git.production_branch` in `.devsteward/config.yaml`, default
   `main`) — never commit directly to `main`. The only branch operation is the human-gated
   `dev → main` release PR.
+- **Concept doc path:** when a REQ declares `process.concept: true`, the concept document
+  **must** be written at the flat path `docs/concepts/REQ-NNN.md` (not a subdirectory like
+  `docs/concepts/REQ-NNN/concept.md`). The develop land gate enforces this; a file at any
+  other path is not found and the land refuses.
 - **Co-author trailer** on commits:
   `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`
 

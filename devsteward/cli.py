@@ -279,6 +279,38 @@ def revalidate(req_id: str) -> None:
     )
 
 
+@main.command()
+@click.argument("req_id")
+def reland(req_id: str) -> None:
+    """Replay REQ_ID's mechanical land after a land-gate refusal — no re-validation (REQ-065).
+
+    The cheap recovery edge for a validate step left FAILED by a land-gate refusal (a missing
+    concept doc / plan): the session already ran and its sign-offs are durable in the green
+    validation event, so once the formality is fixed this re-certifies that same green and
+    lands — no re-prompting, no re-run. Narrow preconditions: REQ_ID:validate is FAILED and
+    its last events are a green validation followed by a land_refused. For a *red* validation
+    use `steward revalidate`; for a develop step use `steward repeat`.
+    """
+    cfg = _load_or_die()
+    ctrl = StopController()
+    ctrl.install()
+    ex = build_executor(cfg, announce=_stderr_announcer, stop=ctrl)
+    routine = ex.validate_runner
+    if routine is None:
+        raise click.ClickException("the generic profile has no validation phase")
+    check_invariants(ex)  # REQ-049: refuse on production / mid-merge before any write
+    # REQ-049: the replayed land is atomic — a git failure mid-commit rolls repo + ledger back.
+    with transaction(ex.git, label=f"reland {req_id}"):
+        res = routine.reland(ex, req_id, driver="interactive")
+    if res.outcome is RunOutcome.REFUSED:
+        raise click.ClickException(res.detail)
+    if res.outcome is RunOutcome.FAILED:
+        raise click.ClickException(res.detail)
+    if res.outcome is RunOutcome.VERIFY_FAILED:
+        raise click.ClickException(f"reland could not land — {res.detail}")
+    _print_report(ex, res)
+
+
 # -- status -------------------------------------------------------------------
 
 

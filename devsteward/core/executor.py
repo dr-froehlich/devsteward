@@ -485,7 +485,8 @@ class Executor:
             return self.mechanical_land(step, detail, driver="interactive")
 
     def mechanical_land(
-        self, step: Step, detail: str = "", driver: str = "headless"
+        self, step: Step, detail: str = "", driver: str = "headless",
+        *, run_gate: bool = True,
     ) -> StepResult:
         """The deterministic post-green tail — **no claude** (REQ-029 Decision 2).
 
@@ -506,9 +507,14 @@ class Executor:
         The caller must have already verified the step green; this routine assumes it.
         Returns ``PARKED`` if the land gate refuses (nothing committed), ``VERIFY_FAILED`` on a
         capture gap (the work commit is **preserved** — REQ-063), else ``DONE``.
+
+        ``run_gate`` (REQ-065): the validate phase pre-flights the same ``CompositeLandGate``
+        in ``ReqValidateRoutine.start``/``__call__`` *before* spending the session, so its
+        land callers pass ``run_gate=False`` — the gate is never run a second time for that
+        validate step. Develop landing keeps the default (``True``).
         """
         led = self.ledger
-        if self.land_gate is not None:
+        if run_gate and self.land_gate is not None:
             refusal = self.land_gate(step)
             if refusal is not None:
                 # REQ-056 Decision 2: a land-gate refusal (no plan names the REQ) is a

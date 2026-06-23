@@ -144,6 +144,13 @@ class ReqValidateRoutine:
                 f"the declared lab is not done yet",
             )
 
+        # REQ-065: pre-flight the land gate before spending the session. A formality red
+        # (missing concept doc / plan) must refuse here, never after the paid session and
+        # its human sign-offs.
+        preflight = self._preflight_gate(ex, step)
+        if preflight is not None:
+            return preflight
+
         led.set_cursor(step.id)
         led.set_status(step.id, StepStatus.RUNNING)
         led.save()
@@ -199,6 +206,93 @@ class ReqValidateRoutine:
             driver=driver, in_flight=False,
         )
 
+    def reland(
+        self, ex, req_id: str, *, driver: str = "interactive"
+    ) -> StepResult:
+        """REQ-065 — replay ``mechanical_land`` for a validate step left ``FAILED`` by a
+        land-gate refusal, **without** re-running the session.
+
+        The session ran; its artifact gate and human sign-offs are durable in the green
+        ``validation`` event. Once the formality (concept doc / plan) is fixed, replaying the
+        land re-certifies that same recorded green — strictly correct, and far cheaper than
+        ``steward repeat`` (which would re-spawn the session and re-collect every sign-off).
+
+        Narrow, safe preconditions (Decision 4): ``REQ-NNN:validate`` is ``FAILED``, the
+        latest ``land_refused`` event for the step is at-or-after the latest ``ok:True``
+        ``validation`` event, and that green validation exists. Anything else — a red
+        validation, a non-validate / never-run step, a ``DONE``/``PENDING``/``RUNNING`` step —
+        is a hard ``REFUSED`` with a routing diagnostic. Re-runs the (now-fixed) gate as a
+        final pre-flight; if it still refuses, the step stays ``FAILED``.
+        """
+        led: Ledger = ex.ledger
+        req = self._req(req_id)
+        if req is None:
+            return StepResult(None, RunOutcome.FAILED, f"{req_id}: REQ file not found")
+        validate_id = f"{req_id}:validate"
+        if led.status_of(validate_id) is not StepStatus.FAILED:
+            return StepResult(None, RunOutcome.REFUSED, self._reland_refusal(req_id, led))
+
+        green: dict | None = None
+        refused: dict | None = None
+        for ev in led.events():
+            if (
+                ev.get("event") == "validation"
+                and ev.get("req") == req_id
+                and ev.get("ok") is True
+            ):
+                green = ev
+            if ev.get("event") == "land_refused" and ev.get("step") == validate_id:
+                refused = ev
+        if green is None or refused is None or refused["ts"] < green["ts"]:
+            return StepResult(None, RunOutcome.REFUSED, self._reland_refusal(req_id, led))
+
+        # Reconstruct the land detail + carry the recorded sign-offs forward (Decision 2).
+        results = green.get("results", [])
+        signoffs = green.get("signoffs", [])
+        evidence_rel = green.get("evidence", "")
+        detail = "; ".join(
+            r["detail"].splitlines()[0] for r in results if r.get("detail")
+        ) or "validated"
+
+        step = Step(
+            id=validate_id,
+            command=f"/system-test {req_id}",
+            verify=tuple(c.test for c in req.acceptance if c.check == "artifact"),
+            title=f"{req.title} — validate (reland)",
+            req=req_id,
+            phase="validate",
+        )
+        # Re-run the now-fixed gate as a final pre-flight; still red → refuse, leave FAILED.
+        if ex.land_gate is not None:
+            refusal = ex.land_gate(step)
+            if refusal is not None:
+                return StepResult(
+                    step,
+                    RunOutcome.REFUSED,
+                    f"reland refused — the land gate still refuses {req_id}: {refusal}",
+                )
+
+        led.set_status(validate_id, StepStatus.RUNNING)
+        led.save()
+        led.append_event("reland", step=validate_id, req=req_id, replays=evidence_rel)
+        self._write_verified_by(req, results, signoffs, evidence_rel, driver)
+        for dec in led.open_decisions():
+            if dec.step == validate_id:
+                led.answer_decision(dec.id, "resolved by reland (recorded green replayed)")
+        # The gate was pre-flighted just above — do not run it again in mechanical_land.
+        return ex.mechanical_land(step, detail, driver=driver, run_gate=False)
+
+    def _reland_refusal(self, req_id: str, led: Ledger) -> str:
+        """The diagnostic for a reland outside its narrow precondition shape (Decision 4)."""
+        validate_id = f"{req_id}:validate"
+        status = led.status_of(validate_id)
+        return (
+            f"steward reland only applies to a {validate_id} step left FAILED by a "
+            f"land-gate refusal (its last events a green validation followed by a "
+            f"land_refused) — {validate_id} is {status.value}. For a red validation use "
+            f"`steward revalidate {req_id}`; for a develop step use `steward repeat {req_id}`."
+        )
+
     # -- guided two-phase bookkeeping (REQ-034) ---------------------------------
 
     def start(self, ex, step: Step) -> "StartContext | StepResult":
@@ -222,6 +316,11 @@ class ReqValidateRoutine:
                 f"{req.id} validation waiting on {', '.join(pending_labs)} — "
                 f"the declared lab is not done yet",
             )
+        # REQ-065: pre-flight the land gate (see ``__call__``) — refuse a formality red
+        # before readying the evidence dir or bringing up the guided session.
+        preflight = self._preflight_gate(ex, step)
+        if preflight is not None:
+            return preflight
         led.set_cursor(step.id)
         led.set_status(step.id, StepStatus.RUNNING)
         led.save()
@@ -331,8 +430,9 @@ class ReqValidateRoutine:
                 led.answer_decision(
                     dec.id, "resolved by green validation (sign-off recorded)"
                 )
-        # REQ-048: lands inline on ``dev`` — no feature branch to merge.
-        return ex.mechanical_land(step, detail, driver=driver)
+        # REQ-048: lands inline on ``dev`` — no feature branch to merge. REQ-065: the gate
+        # was pre-flighted in ``start()``, so it is not run again here.
+        return ex.mechanical_land(step, detail, driver=driver, run_gate=False)
 
     def guided_validate(
         self,
@@ -471,9 +571,25 @@ class ReqValidateRoutine:
                 led.answer_decision(
                     dec.id, "resolved by green validation (sign-off recorded)"
                 )
-        return ex.mechanical_land(step, detail, driver=driver)
+        # REQ-065: the gate was pre-flighted in ``__call__``, so it is not run again here.
+        return ex.mechanical_land(step, detail, driver=driver, run_gate=False)
 
     # -- pieces -------------------------------------------------------------------
+
+    def _preflight_gate(self, ex, step: Step) -> StepResult | None:
+        """REQ-065 — run the full ``CompositeLandGate`` *before* the validate session.
+
+        A refusal becomes a terminal ``REFUSED`` result and leaves the ledger and tree
+        untouched (no ``RUNNING``, no ``step_started``, no spawned session): a formality red
+        must never cost a paid session and its human oracles. ``None`` when the gate is clear
+        (or absent) so the caller proceeds to set ``RUNNING`` and run the session.
+        """
+        if ex.land_gate is None:
+            return None
+        refusal = ex.land_gate(step)
+        if refusal is None:
+            return None
+        return StepResult(step, RunOutcome.REFUSED, refusal)
 
     def _req(self, req_id: str | None) -> ReqFile | None:
         for r in load_reqs(self.req_dir):
