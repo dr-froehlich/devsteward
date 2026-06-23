@@ -67,6 +67,6 @@ commit** as its frontmatter and the code.
 | REQ-061 | Re-wire the account pin — `steward --pin N` forwards `clauder gate --pin N`, draining one account before its 7d reset | DONE | [REQ-061](REQ-061.md) | REQ-058 |
 | REQ-062 | First onboarding — drive memzy under the engine via the onboard skill (the live proof run) | DRAFT | [REQ-062](REQ-062.md) | REQ-022, REQ-023, REQ-024 |
 | REQ-063 | Non-destructive capture gate — withhold certification without destroying the work commit; an environment skip is not a capture gap | DONE | [REQ-063](REQ-063.md) | REQ-047, REQ-048, REQ-049, REQ-050 |
-| REQ-064 | Intake screens environment-bound `regression` ACs — route by oracle coupling so a green can't silently become a skip | OPEN | [REQ-064](REQ-064.md) | REQ-027 |
+| REQ-064 | Intake screens environment-bound `regression` ACs — route by oracle coupling so a green can't silently become a skip | DONE | [REQ-064](REQ-064.md) | REQ-027 |
 
 New requirement template: [`_templates/req.md`](../../devsteward/templates/docs/requirements/_templates/req.md)
