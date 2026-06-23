@@ -190,6 +190,24 @@ validation. Driven **interactively** (not by `steward run`) in this order — se
   `steward sync-skills` verb that refreshes stale bundled skills (and won't clobber a
   customized one without `--force`). Bundled skills only; fused; consumer-repo reality (no
   DevSteward lab). With REQ-007 (stamping) + REQ-030 (bundled skills).
+- REQ-066 — **sync covers STEWARD.md** (feature): the spun-out generalization of REQ-036,
+  triggered by FlowSteward *not having* `STEWARD.md` at all. REQ-057 shipped the Claude-targeted
+  black-box manual and had `steward new` stamp it, but REQ-036's drift machinery is scoped to
+  `.claude/skills/<name>/SKILL.md` — so the manual, an engine-owned artifact that must track the
+  engine just like a skill (unlike per-project `CLAUDE.md`/settings, REQ-036 D1), has no
+  provenance, no drift signal, and no refresh path. FlowSteward was onboarded before REQ-057, so
+  the manual was never stamped and nothing surfaces the absence. Generalizes the tracked set from
+  "bundled skills" to "engine-owned stamped artifacts" (the four skills + `STEWARD.md`, still
+  engine-derived) — subtracting the skills special-case rather than adding a parallel tracker;
+  renames `skills.lock`→`stamped.lock` (legacy name read for back-compat) and `sync-skills`→`sync`
+  (alias kept); a consumer missing the manual acquires it through the **existing** `MISSING`→refresh
+  bucket, no new acquisition machinery — and has `onboard`'s scaffold-stamp step run `steward
+  sync` so a *retrofitted* project gets the same lock baseline + manual a fresh `steward new` one
+  does (onboard never seeded the lock — the root reason FlowSteward had neither). 5 regression ACs
+  (seed+in-sync incl. manual, missing→sync, stale/customized, legacy-lock migration+alias, onboard
+  seeds the full lock) + 1 manual sign-off (live FlowSteward closure, REQ-036 AC5 precedent —
+  consumer-repo reality, no DevSteward lab); fused. With REQ-024 (onboard), REQ-036
+  (the mechanism), REQ-057 (the manual it now tracks).
 - REQ-035 — **done re-validation freezes verified_by** (fix): re-validating a `done`
   REQ (`steward validate`, REQ-030 D5) silently overwrote its `verified_by`, clobbering the
   landing provenance (postmortem Finding 3). The fix leaves `verified_by` and `status`
@@ -440,7 +458,7 @@ REQ-001
            │   │   └─ REQ-040 (live-ledger reads + checkpoint idempotency — read-side follow-up to REQ-037; with REQ-018)
            │   │       └─ REQ-041 (finish REQ-040 D1: route ALL read-side ledger access through live_ledger — validate pre-flight, no-arg checkpoint, report)
            ├─ REQ-035 (fix: done re-validation freezes verified_by — provenance not clobbered)
-           ├─ REQ-036 (steward sync-skills: refresh stamped bundled skills + provenance manifest + drift signal; with REQ-007)
+           ├─ REQ-036 (steward sync-skills: refresh stamped bundled skills + provenance manifest + drift signal; with REQ-007) ── REQ-066 (generalize the tracked set to engine-owned stamped artifacts so sync covers STEWARD.md; skills.lock→stamped.lock, sync-skills→sync; onboard seeds the lock via steward sync; with REQ-024, REQ-057)
            └─ REQ-039 (concept phase: interactive leading architecture session that gates develop — left-arm counterpart of validate; with REQ-027, REQ-029, REQ-034)
  REQ-047 (trunk-based pivot) ──┬─ REQ-052 (post-pivot code + skill review → sign-off report)
                                      ├─ REQ-053 (design: process-resilience forward-path audit + rework/repeat model)
