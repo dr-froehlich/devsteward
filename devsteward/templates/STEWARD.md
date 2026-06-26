@@ -51,7 +51,10 @@ steward checkpoint        # close it: the engine re-runs the tests and lands on 
 
 Plan-first is enforced: the land **refuses** unless a file in `docs/plans/` names the REQ id.
 Concept-first is enforced the same way for a REQ that declared `process.concept: true`: the land
-also **refuses** unless `docs/concepts/REQ-NNN.md` exists and the REQ's `concept_refs:` names it.
+also **refuses** unless a concept deliverable — `docs/concepts/REQ-NNN.md` **or** a non-empty
+`docs/concepts/REQ-NNN/` bundle directory — exists and the REQ's `concept_refs:` names it (the flat
+file or a path inside the directory). The bundle form is for a concept phase that keeps a committed
+prototype as its deliverable, not only a throwaway spike.
 
 ## The batch lane (headless queues)
 

@@ -104,10 +104,15 @@ and no lab is needed):
 
 - `concept:` — is a **concept phase** (architecture / risk buy-down / spike) warranted
   before develop? Default `false`. Setting it makes the develop step *attended* (batch
-  parks it) and the develop land **refuses** unless a concept doc at `docs/concepts/REQ-NNN.md`
-  exists and the REQ's `concept_refs:` names it (REQ-039 — the doc-gate, mirroring `docs/plans/`).
-  There is no separate `steward concept` step; the attended develop session *is* the concept
-  phase.
+  parks it) and the develop land **refuses** unless a concept deliverable — a flat
+  `docs/concepts/REQ-NNN.md` **or** a non-empty `docs/concepts/REQ-NNN/` **bundle directory**
+  (REQ-067) — exists and the REQ's `concept_refs:` names it (the flat file or a path inside the
+  directory; REQ-039 — the doc-gate, mirroring `docs/plans/`). The spike is throwaway by default,
+  but when the bought-down risk is *empirical* (e.g. operator consent to a concrete UI,
+  unanswerable by a REQ or wireframe) the concept phase MAY keep a **committed, frozen prototype**
+  as its deliverable — the build wires it (the bundle directory is its natural home). The author
+  decides per REQ; the engine enforces no criterion. There is no separate `steward concept` step;
+  the attended develop session *is* the concept phase.
 - `lab:` — which REQs own the **lab assets** the System-Test phase will require?
   Default `[]`.
 - `develop:` — `fused`, one design+build session (the **default**), or `split`, an

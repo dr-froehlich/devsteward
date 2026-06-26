@@ -70,6 +70,6 @@ commit** as its frontmatter and the code.
 | REQ-064 | Intake screens environment-bound `regression` ACs — route by oracle coupling so a green can't silently become a skip | DONE | [REQ-064](REQ-064.md) | REQ-027 |
 | REQ-065 | Validate pre-flight gate + steward reland — formality checks before the session, recovery without re-validation | DONE | [REQ-065](REQ-065.md) | REQ-029, REQ-039, REQ-056 |
 | REQ-066 | sync covers STEWARD.md — track every engine-owned stamped artifact, not just skills | DONE | [REQ-066](REQ-066.md) | REQ-024, REQ-036, REQ-057 |
-| REQ-067 | Concept phase may keep a committed prototype; the concept gate accepts a docs/concepts/REQ-NNN/ bundle directory | DRAFT | [REQ-067](REQ-067.md) | REQ-039, REQ-057 |
+| REQ-067 | Concept phase may keep a committed prototype; the concept gate accepts a docs/concepts/REQ-NNN/ bundle directory | DONE | [REQ-067](REQ-067.md) | REQ-039, REQ-057 |
 
 New requirement template: [`_templates/req.md`](../../devsteward/templates/docs/requirements/_templates/req.md)

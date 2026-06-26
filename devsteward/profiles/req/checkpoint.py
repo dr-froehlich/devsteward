@@ -81,8 +81,9 @@ class PlanArtifactGate:
 
 class ConceptArtifactGate:
     """REQ-039 — when a REQ declared ``process.concept``, the develop land additionally
-    refuses unless a concept document exists at ``docs/concepts/REQ-NNN.md`` *and* the REQ's
-    ``concept_refs`` reference it.
+    refuses unless a concept deliverable exists — a flat ``docs/concepts/REQ-NNN.md`` *or* a
+    non-empty bundle directory ``docs/concepts/REQ-NNN/`` (REQ-067) — *and* the REQ's
+    ``concept_refs`` reference it (the flat file or a path inside the directory).
 
     The left-arm counterpart of the validate phase done the *lightweight* way: there is no
     dedicated concept step, CLI verb, or skill. ``process.concept`` already makes the develop
@@ -104,17 +105,30 @@ class ConceptArtifactGate:
         req = {r.id: r for r in load_reqs(self.req_dir)}.get(req_id)
         if req is None or not req.process.get("concept"):
             return None  # no concept phase declared — not gated
+        # Existence: the deliverable may be a flat ``REQ-NNN.md`` *or* a non-empty bundle
+        # directory ``REQ-NNN/`` (REQ-067 — a durable prototype produces several files, the
+        # directory is their natural home). An empty directory does not count.
         doc = self.concepts_dir / f"{req_id}.md"
-        if not doc.is_file():
+        bundle = self.concepts_dir / req_id
+        has_flat = doc.is_file()
+        has_bundle = bundle.is_dir() and any(p.is_file() for p in bundle.rglob("*"))
+        if not (has_flat or has_bundle):
             return (
                 f"refusing to land {req_id} — it declared a concept phase but no "
-                f"{self.concepts_dir.name}/{req_id}.md concept document exists "
+                f"{self.concepts_dir.name}/{req_id}.md file or non-empty "
+                f"{self.concepts_dir.name}/{req_id}/ bundle directory exists "
                 f"(run the attended concept session and capture the architecture first)"
             )
-        if not any(f"{req_id}.md" in str(ref) for ref in req.concept_refs):
+        # Link: a ``concept_refs`` entry must name the flat file (``REQ-NNN.md``) or point
+        # inside the bundle directory (``REQ-NNN/…``).
+        if not any(
+            f"{req_id}.md" in str(ref) or f"{req_id}/" in str(ref)
+            for ref in req.concept_refs
+        ):
             return (
-                f"refusing to land {req_id} — its concept document exists but the REQ's "
-                f"concept_refs does not reference {self.concepts_dir.name}/{req_id}.md "
+                f"refusing to land {req_id} — its concept deliverable exists but the REQ's "
+                f"concept_refs references neither {self.concepts_dir.name}/{req_id}.md nor a "
+                f"path under {self.concepts_dir.name}/{req_id}/ "
                 f"(link the deliverable in concept_refs)"
             )
         return None

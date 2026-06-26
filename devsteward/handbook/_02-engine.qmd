@@ -67,9 +67,15 @@ authority). The same mechanical-land routine is what interactive `steward checkp
 so a REQ lands identically however it was driven. The land also refuses when **no file in
 `docs/plans/` names the REQ id** (plan-first, enforced at the one moment it is cheap and
 load-bearing — never plan *quality*). For a REQ that declared `concept: true` the same gate
-*additionally* refuses unless a **concept doc** at `docs/concepts/REQ-NNN.md` exists and the
-REQ's `concept_refs:` names it (REQ-039 — concept-first, the same existence check one altitude
-up; the attended develop session *is* the concept phase, so there is no separate concept step).
+*additionally* refuses unless a **concept deliverable** exists — a flat `docs/concepts/REQ-NNN.md`
+**or** a non-empty bundle directory `docs/concepts/REQ-NNN/` (REQ-067) — and the REQ's
+`concept_refs:` names it (the flat file or a path inside the directory). The bundle form is the
+natural home when the concept phase keeps a **committed prototype** as its deliverable: REQ-039's
+spike is throwaway by default, but a concept phase whose risk is *empirical* (does this surface
+match operator intent? — unanswerable by a REQ or wireframe) may commit and freeze the prototype as
+the contract the build then wires (REQ-067 amended REQ-039 D4). It is still the same existence check
+one altitude up, never concept *quality*; the attended develop session *is* the concept phase, so
+there is no separate concept step.
 
 On a **red** gate the engine spawns at most **two** bounded repair sessions — each a *fresh*
 session (no `--resume`) fed the failure brief (failed test ids + verifier detail), on the

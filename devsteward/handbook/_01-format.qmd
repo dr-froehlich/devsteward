@@ -29,7 +29,9 @@ Validated against `req.schema.json` by `steward lint`. The `id` must match the f
 The optional **`process:` block** records the intake-time declarations a present human
 made: whether develop runs **fused** (one design+build session, the default) or **split**
 (an attended design review first, for genuinely risky REQs), whether a **concept phase**
-(risk buy-down / spike) precedes develop, and which REQs own the **lab assets** the
+(architecture / risk buy-down / spike — whose deliverable is a `docs/concepts/REQ-NNN.md` doc or a
+`docs/concepts/REQ-NNN/` bundle directory, optionally a committed prototype, REQ-039/REQ-067)
+precedes develop, and which REQs own the **lab assets** the
 System-Test phase will require. An absent block means exactly the defaults
 (`develop: fused`, `concept: false`, `lab: []`); `lab:` references are lint-resolved like
 `depends_on`.

@@ -27,6 +27,14 @@ def _write_concept_doc(root, req_id: str) -> None:
     (concepts / f"{req_id}.md").write_text(f"# {req_id} concept\n", encoding="utf-8")
 
 
+def _write_concept_bundle(root, req_id: str, name: str = "concept.md") -> None:
+    """A non-empty concept *bundle directory* ``docs/concepts/REQ-NNN/`` (REQ-067) — the
+    natural home for a committed prototype's several files."""
+    bundle = root / "docs" / "concepts" / req_id
+    bundle.mkdir(parents=True, exist_ok=True)
+    (bundle / name).write_text(f"# {req_id} concept bundle\n", encoding="utf-8")
+
+
 # -- AC1 — concept makes develop attended; no separate concept step ------------
 
 
@@ -96,3 +104,62 @@ def test_no_concept_flag_not_gated(tmp_path):
 
     assert gate(_develop_step("REQ-001")) is None
     assert gate(Step(id="generic", command="noop")) is None  # no req → not gated
+
+
+# == REQ-067 — a committed prototype bundle directory satisfies the gate =======
+
+
+def test_concept_bundle_directory_satisfies_gate(tmp_path):
+    """REQ-067 AC1 — a concept deliverable that is a non-empty bundle directory
+    ``docs/concepts/REQ-NNN/`` (with *no* flat ``REQ-NNN.md``) satisfies the existence check,
+    and a ``concept_refs`` entry pointing inside it satisfies the link check → admitted."""
+    req_dir = tmp_path / "docs" / "requirements"
+    write_req(req_dir, "REQ-001", status="open", process={"concept": True},
+              concept_refs=["docs/concepts/REQ-001/concept.md"])
+    _write_concept_bundle(tmp_path, "REQ-001")  # docs/concepts/REQ-001/concept.md, no flat file
+    gate = ConceptArtifactGate(tmp_path / "docs" / "concepts", req_dir)
+
+    assert not (tmp_path / "docs" / "concepts" / "REQ-001.md").exists()  # bundle only
+    assert gate(_develop_step("REQ-001")) is None
+
+
+def test_flat_form_admits_and_absent_or_empty_bundle_refused(tmp_path):
+    """REQ-067 AC2 — back-compat + the negatives: the flat ``REQ-NNN.md`` form still admits;
+    a concept REQ with neither a flat file nor a bundle dir is refused; and an *empty* bundle
+    directory does not satisfy the existence check."""
+    req_dir = tmp_path / "docs" / "requirements"
+    concepts = tmp_path / "docs" / "concepts"
+    gate = ConceptArtifactGate(concepts, req_dir)
+
+    # flat form still admits (REQ-039 back-compat)
+    write_req(req_dir, "REQ-001", status="open", process={"concept": True},
+              concept_refs=["docs/concepts/REQ-001.md"])
+    _write_concept_doc(tmp_path, "REQ-001")
+    assert gate(_develop_step("REQ-001")) is None
+
+    # neither a flat file nor a bundle directory → refused
+    write_req(req_dir, "REQ-002", status="open", process={"concept": True},
+              concept_refs=["docs/concepts/REQ-002/concept.md"])
+    assert gate(_develop_step("REQ-002")) is not None
+
+    # an empty bundle directory is not "non-empty" → still refused
+    (concepts / "REQ-002").mkdir(parents=True, exist_ok=True)
+    assert gate(_develop_step("REQ-002")) is not None
+
+
+def test_concept_bundle_must_be_linked_in_concept_refs(tmp_path):
+    """REQ-067 AC3 — the link discipline holds for the bundle form: a present, non-empty
+    bundle directory whose path is *not* in ``concept_refs`` is refused (naming concept_refs);
+    once a ref points inside the directory it admits."""
+    req_dir = tmp_path / "docs" / "requirements"
+    write_req(req_dir, "REQ-001", status="open", process={"concept": True})  # refs empty
+    _write_concept_bundle(tmp_path, "REQ-001")
+    gate = ConceptArtifactGate(tmp_path / "docs" / "concepts", req_dir)
+    step = _develop_step("REQ-001")
+
+    refusal = gate(step)
+    assert refusal is not None and "concept_refs" in refusal
+
+    write_req(req_dir, "REQ-001", status="open", process={"concept": True},
+              concept_refs=["docs/concepts/REQ-001/concept.md"])
+    assert gate(step) is None
