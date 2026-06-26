@@ -428,6 +428,20 @@ validation. Driven **interactively** (not by `steward run`) in this order — se
   root-cause case (a stable path to adopt an external fix and continue) and recommends whether
   `recover` should become `repeat`. Audit-and-recommend: a `manual` report; implementation
   spins out. With REQ-047.
+- REQ-067 — **concept phase keeps a committed prototype + the concept gate accepts a bundle
+  directory** (feature): the unblock for FlowSteward REQ-055 (FL-G). REQ-039 D4 declared
+  spikes/prototypes *throwaway, never committed* — wrong for a concept phase whose risk is
+  **empirical UI intent** (*"does this surface match how I want to manage the tree?"*), unanswerable
+  by a REQ or wireframe and bought down only by a real prototype that survives as the **contract**
+  the build wires. Amends D4 so a `concept: true` REQ MAY keep a durable, committed, frozen prototype
+  (author decides per REQ, no engine-enforced criterion; throwaway stays valid). And it generalizes
+  the `ConceptArtifactGate` existence + link checks from the flat `docs/concepts/REQ-NNN.md` to also
+  accept a non-empty **bundle directory** `docs/concepts/REQ-NNN/` (the layout that recurs in
+  FlowSteward) — otherwise REQ-055's `concept_refs: docs/concepts/REQ-055/concept.md` is refused at
+  the develop land. Pure subtraction + a widened predicate + doc surfaces (REQ-039 note, handbook,
+  STEWARD.md, `/intake` §2c); no new step/verb/skill. The postmortem test-role taxonomy gap is a
+  **separate** follow-up, not folded here. Regression-only (hermetic gate logic); fused. With
+  REQ-039 (the gate + doctrine it amends), REQ-057 (the manual/handbook surfaces it touches).
 - Future REQs land here as `/intake` produces them.
 
 ## Dependency graph
@@ -466,6 +480,7 @@ REQ-001
  REQ-026 (recover verb) ── REQ-054 (refactor: rename recover → repeat + --recover → --repeat; hard rename, no alias)
  REQ-033 (rework edge) ── REQ-055 (feature: steward revalidate — mirror of rework, external-cause re-validate; with REQ-047)
  REQ-029 + REQ-039 + REQ-056 ── REQ-065 (fix: validate pre-flight gate + steward reland — formality checks before session, recovery without re-validation)
+ REQ-039 (concept gate) ── REQ-067 (feature: concept phase keeps a committed prototype + gate accepts a docs/concepts/REQ-NNN/ bundle directory — unblocks FlowSteward REQ-055; with REQ-057)
  REQ-053 (forward-path audit) ──┬─ REQ-056 (fix: D/H off decisions → repeat; FAILED-step names its forward verb; with REQ-029, REQ-054)
                                 └─ REQ-059 (fix: interrupted run self-heals a stranded RUNNING step + honest ineligibility diagnosis; with REQ-025, REQ-026)
  REQ-047 + REQ-056 ── REQ-060 (fix: caught-up project reports an honest terminal state — cursor never names a done step; with REQ-018)
