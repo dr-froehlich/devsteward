@@ -442,6 +442,22 @@ validation. Driven **interactively** (not by `steward run`) in this order — se
   STEWARD.md, `/intake` §2c); no new step/verb/skill. The postmortem test-role taxonomy gap is a
   **separate** follow-up, not folded here. Regression-only (hermetic gate logic); fused. With
   REQ-039 (the gate + doctrine it amends), REQ-057 (the manual/handbook surfaces it touches).
+- REQ-068 — **deterministic acceptance-test execution** (feature): the test-role taxonomy gap
+  REQ-067's entry named as a separate follow-up, from the FlowSteward REQ-022 post-mortem and
+  the REQ-054-tripped-over-REQ-053 live incident. Peter's three tiers — module regression /
+  a few e2e live tests run *as* regression / validation run once on demand — have no honest
+  home for tier 2 in the `check:` enum (system-scope × *standing* is the missing cell), and
+  the develop full-suite gate leaks tier-3 one-time validations into every later REQ's gate
+  (the incident root). Extends the **one** existing axis rather than adding a second: `check:`
+  gains `live` (standing system-regression); the develop gate routes by `check:` and excludes
+  artifact/manual project-wide; a declared-lane test whose resource is absent is a **hard red**
+  (fail-hard, not skip — the deliberate-declaration counterpart to REQ-064, reconciled with
+  REQ-063's tolerate-the-*unknown*-skip); every pytest acceptance command runs as one flavor
+  `python -m pytest` (normalize a leading bare `pytest`, fixing the `from tests.<helper>`
+  import break); degrade = `live → artifact` reclassification (no new verb). Regression-heavy
+  + one manual; fused; no lab. With REQ-027 (the `check:` axis it extends), REQ-028 (the
+  named-test gate teeth), REQ-063 (tolerate-the-unknown, preserved), REQ-064 (the intake
+  env-binding screen it completes at runtime).
 - Future REQs land here as `/intake` produces them.
 
 ## Dependency graph
@@ -481,6 +497,7 @@ REQ-001
  REQ-033 (rework edge) ── REQ-055 (feature: steward revalidate — mirror of rework, external-cause re-validate; with REQ-047)
  REQ-029 + REQ-039 + REQ-056 ── REQ-065 (fix: validate pre-flight gate + steward reland — formality checks before session, recovery without re-validation)
  REQ-039 (concept gate) ── REQ-067 (feature: concept phase keeps a committed prototype + gate accepts a docs/concepts/REQ-NNN/ bundle directory — unblocks FlowSteward REQ-055; with REQ-057)
+ REQ-027 + REQ-028 + REQ-063 + REQ-064 ── REQ-068 (feature: deterministic test execution — `check: live` standing-regression lane + develop-gate routing by check: + fail-hard on a missing declared resource + one `python -m pytest` flavor + degrade-by-reclassification; from FlowSteward REQ-022 postmortem)
  REQ-053 (forward-path audit) ──┬─ REQ-056 (fix: D/H off decisions → repeat; FAILED-step names its forward verb; with REQ-029, REQ-054)
                                 └─ REQ-059 (fix: interrupted run self-heals a stranded RUNNING step + honest ineligibility diagnosis; with REQ-025, REQ-026)
  REQ-047 + REQ-056 ── REQ-060 (fix: caught-up project reports an honest terminal state — cursor never names a done step; with REQ-018)
