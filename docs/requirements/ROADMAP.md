@@ -458,6 +458,19 @@ validation. Driven **interactively** (not by `steward run`) in this order — se
   + one manual; fused; no lab. With REQ-027 (the `check:` axis it extends), REQ-028 (the
   named-test gate teeth), REQ-063 (tolerate-the-unknown, preserved), REQ-064 (the intake
   env-binding screen it completes at runtime).
+- REQ-069 — **Build delivers the validation fixtures it owes** (fix): the REQ-051 pincer had
+  only one jaw. REQ-051 forbids the decoupled System Tester from creating a missing fixture
+  (hard red, "a human's call") but no rule obliges the *builder* to produce one — the `/advance`
+  Build step says only "write the code and the acceptance tests," nothing about the seeded
+  sample project / fixture / lab starting-state an `artifact`/`manual` validation rests on. So a
+  fixture-needing validation has no owner and deadlocks at System-Test, where the one person
+  present may not fix it. Surfaced dogfooding REQ-068 AC6 (its seeded multi-lane fixture was
+  never built → the guided validation correctly stopped). Method-only fix: the Build step (skill
+  §2) + handbook workflow state that a REQ with artifact/manual ACs must build+commit the
+  fixtures those validations need; no new engine machinery (REQ-051 already hard-reds at
+  validate-time). A left-shift develop-land fixture-presence tooth is a named follow-on, not
+  built now. Two hermetic doc-presence regression ACs; fused; no lab. With REQ-051 (the jaw it
+  completes) and REQ-030 (the System-Test phase whose fixtures it governs).
 - Future REQs land here as `/intake` produces them.
 
 ## Dependency graph
@@ -498,6 +511,7 @@ REQ-001
  REQ-029 + REQ-039 + REQ-056 ── REQ-065 (fix: validate pre-flight gate + steward reland — formality checks before session, recovery without re-validation)
  REQ-039 (concept gate) ── REQ-067 (feature: concept phase keeps a committed prototype + gate accepts a docs/concepts/REQ-NNN/ bundle directory — unblocks FlowSteward REQ-055; with REQ-057)
  REQ-027 + REQ-028 + REQ-063 + REQ-064 ── REQ-068 (feature: deterministic test execution — `check: live` standing-regression lane + develop-gate routing by check: + fail-hard on a missing declared resource + one `python -m pytest` flavor + degrade-by-reclassification; from FlowSteward REQ-022 postmortem)
+ REQ-051 + REQ-030 ── REQ-069 (fix: Build delivers the validation fixtures it owes — close the REQ-051 pincer; the builder-side duty mirroring the System Tester's never-improvise prohibition, so a missing seeded fixture can't deadlock validation; method-only skill §2 + handbook; surfaced dogfooding REQ-068 AC6)
  REQ-053 (forward-path audit) ──┬─ REQ-056 (fix: D/H off decisions → repeat; FAILED-step names its forward verb; with REQ-029, REQ-054)
                                 └─ REQ-059 (fix: interrupted run self-heals a stranded RUNNING step + honest ineligibility diagnosis; with REQ-025, REQ-026)
  REQ-047 + REQ-056 ── REQ-060 (fix: caught-up project reports an honest terminal state — cursor never names a done step; with REQ-018)
