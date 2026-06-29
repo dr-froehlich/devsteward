@@ -62,9 +62,12 @@ def _validation_nodeids(cfg: Config) -> tuple[str, ...]:
     """The project-wide ``artifact``/``manual`` acceptance node-ids (REQ-068 Decision 2).
 
     The develop full-suite gate deselects these so a one-time validation of an already-done
-    REQ never runs in a later REQ's develop gate. Manual ACs carry no pytest node-id and
-    contribute nothing; the set is the lane a test *declares*, derived from frontmatter the
-    engine already parses — not a hand-edited ``-m`` marker expression.
+    REQ never runs in a later REQ's develop gate. The set is the lane a test *declares*,
+    derived from frontmatter the engine already parses — not a hand-edited ``-m`` marker
+    expression. Every element is a genuine pytest node-id: :func:`_pytest_targets` keeps only
+    real targets (``file.py`` / ``file.py::test``) and yields nothing for a ``manual:`` AC's
+    human prose, so a criterion that merely *mentions* pytest can never inject a bare word like
+    ``tests`` that ``--deselect`` would read as the whole ``tests/`` tree (REQ-070).
     """
     nodeids: list[str] = []
     for req in load_reqs(cfg.req_dir):

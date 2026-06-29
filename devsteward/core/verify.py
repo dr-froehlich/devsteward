@@ -164,29 +164,37 @@ def _is_pytest_command(cmd: str) -> bool:
 
 
 def _pytest_targets(cmd: str) -> list[str]:
-    """The test target tokens of a pytest command — file paths / node-ids, no flags.
+    """The genuine test node-ids/paths of a pytest command — never a bare word or marker value.
 
     Used to derive the project-wide ``artifact``/``manual`` node-id set the develop full-suite
-    run deselects (REQ-068 Decision 2). A non-pytest command (e.g. a ``manual:`` AC) yields
-    nothing — it carries no collectible node-id. Tokens that are the interpreter, ``-m``, the
-    ``pytest`` module/executable, or any flag are dropped; what remains is the selection.
+    run deselects (REQ-068 Decision 2 / REQ-070). The deselect list is fed to ``--deselect``, so
+    every token here must be a *collectible* target; a non-node-id (a bare word, a directory, a
+    ``-m`` marker value, prose) deselected by id is at best a no-op and at worst catastrophic —
+    ``pytest --deselect tests`` deselects the whole ``tests/`` tree and empties the suite.
+
+    Two disciplines keep the set pure (REQ-070):
+
+    * A ``manual:`` acceptance criterion is **human prose**, not a command — it carries no
+      collectible node-id and contributes nothing, even when the prose mentions ``pytest`` (e.g.
+      "run ``python -m pytest -m not live`` and confirm a ``0 skipped`` summary"). That prose
+      must never be tokenized into deselect targets.
+    * Only a token that *looks like* a pytest target is kept: it ends in ``.py`` (a test file) or
+      contains ``.py::`` (a node-id ``file.py::test`` / ``file.py::Cls::test``). The interpreter,
+      the ``pytest`` module/executable, any flag, a ``-m`` marker value, and any bare prose word
+      are all dropped.
     """
+    if cmd.strip().lower().startswith("manual:"):
+        return []  # a human-oracle AC — prose, no collectible node-id (REQ-070)
     if not _is_pytest_command(cmd):
         return []
     try:
         toks = shlex.split(cmd)
     except ValueError:
         toks = cmd.split()
-    targets: list[str] = []
-    for t in toks:
-        if t.startswith("-"):
-            continue  # a flag (and acceptance node-id strings carry no value-taking flags)
-        if t in ("python", "python3") or t.endswith("/python") or t.endswith("python.exe"):
-            continue  # the interpreter
-        if t == "pytest" or t.endswith("/pytest") or t.endswith("\\pytest") or t.endswith("pytest.exe"):
-            continue  # the pytest module/executable
-        targets.append(t)
-    return targets
+    # A real target is a test file or a node-id rooted in one — never a bare word, dir, or
+    # marker value. This is what makes the ``manual contributes nothing`` promise actual and
+    # stops a stray ``tests`` / ``not live`` token from reaching ``--deselect`` (REQ-070).
+    return [t for t in toks if t.endswith(".py") or ".py::" in t]
 
 
 @dataclass(frozen=True)
