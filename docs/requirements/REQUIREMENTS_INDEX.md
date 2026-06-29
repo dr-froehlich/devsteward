@@ -73,5 +73,6 @@ commit** as its frontmatter and the code.
 | REQ-067 | Concept phase may keep a committed prototype; the concept gate accepts a docs/concepts/REQ-NNN/ bundle directory | DONE | [REQ-067](REQ-067.md) | REQ-039, REQ-057 |
 | REQ-068 | Deterministic acceptance-test execution — a `check: live` standing-regression lane, develop-gate routing by check:, fail-hard on a missing declared resource, one test flavor | DONE | [REQ-068](REQ-068.md) | REQ-027, REQ-028, REQ-063, REQ-064 |
 | REQ-069 | Build delivers the validation fixtures it owes — close the REQ-051 pincer so a missing seeded fixture can't deadlock validation | DRAFT | [REQ-069](REQ-069.md) | REQ-051, REQ-030 |
+| REQ-070 | Full-suite deselection must use only real node-ids — a manual/artifact AC's prose can't poison the develop gate into deselecting the whole suite | DRAFT | [REQ-070](REQ-070.md) | REQ-068 |
 
 New requirement template: [`_templates/req.md`](../../devsteward/templates/docs/requirements/_templates/req.md)

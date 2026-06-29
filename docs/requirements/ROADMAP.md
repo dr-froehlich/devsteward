@@ -471,6 +471,20 @@ validation. Driven **interactively** (not by `steward run`) in this order — se
   validate-time). A left-shift develop-land fixture-presence tooth is a named follow-on, not
   built now. Two hermetic doc-presence regression ACs; fused; no lab. With REQ-051 (the jaw it
   completes) and REQ-030 (the System-Test phase whose fixtures it governs).
+- REQ-070 — **Full-suite deselection must use only real node-ids** (fix): a gating-integrity
+  defect in REQ-068's deselection derivation. `core.verify._is_pytest_command` trips on any token
+  equal to `pytest`, so a `manual:` AC whose prose merely mentions the tool ("run `python -m
+  pytest -m not live` …") is read as a pytest command; `_pytest_targets` then keeps every non-dash
+  prose word — `tests`, `live`, `run`, `confirm`, marker values — as a "node-id", which
+  `build._validation_nodeids` feeds into `--deselect`. `pytest --deselect tests` deselects the
+  whole `tests/` directory → the standing suite selects 0 tests (a false signal identical to a
+  zero-match `-m regression`), silently neutering the gate. Reproduced against FlowSteward
+  (`steward 0.2.0`) the moment its config used the canonical plain `python -m pytest` (FlowSteward
+  REQ-060): the exclude set carried `tests`/`live`/`manual:`/prose, emptying a 539-test suite.
+  Fix at the derivation layer: a `manual:` AC contributes zero targets, and `_pytest_targets`
+  emits only genuine node-ids/paths (ends `.py` or contains `::`) — never a bare word, marker
+  value, or prose. Three hermetic regression ACs; fused; no lab. With REQ-068 (the contract it
+  repairs); sibling to REQ-028/REQ-063 on the gating-integrity line.
 - Future REQs land here as `/intake` produces them.
 
 ## Dependency graph
@@ -512,6 +526,7 @@ REQ-001
  REQ-039 (concept gate) ── REQ-067 (feature: concept phase keeps a committed prototype + gate accepts a docs/concepts/REQ-NNN/ bundle directory — unblocks FlowSteward REQ-055; with REQ-057)
  REQ-027 + REQ-028 + REQ-063 + REQ-064 ── REQ-068 (feature: deterministic test execution — `check: live` standing-regression lane + develop-gate routing by check: + fail-hard on a missing declared resource + one `python -m pytest` flavor + degrade-by-reclassification; from FlowSteward REQ-022 postmortem)
  REQ-051 + REQ-030 ── REQ-069 (fix: Build delivers the validation fixtures it owes — close the REQ-051 pincer; the builder-side duty mirroring the System Tester's never-improvise prohibition, so a missing seeded fixture can't deadlock validation; method-only skill §2 + handbook; surfaced dogfooding REQ-068 AC6)
+ REQ-068 ── REQ-070 (fix: full-suite deselection must use only real node-ids — a manual/artifact AC's prose can't poison the develop gate; `_is_pytest_command` trips on the word "pytest", `_pytest_targets` keeps prose words like bare `tests` as deselect targets → `--deselect tests` empties the suite; reproduced on FlowSteward steward 0.2.0 under canonical plain pytest)
  REQ-053 (forward-path audit) ──┬─ REQ-056 (fix: D/H off decisions → repeat; FAILED-step names its forward verb; with REQ-029, REQ-054)
                                 └─ REQ-059 (fix: interrupted run self-heals a stranded RUNNING step + honest ineligibility diagnosis; with REQ-025, REQ-026)
  REQ-047 + REQ-056 ── REQ-060 (fix: caught-up project reports an honest terminal state — cursor never names a done step; with REQ-018)
