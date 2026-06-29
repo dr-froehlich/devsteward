@@ -44,7 +44,7 @@ from .verify import (
     NoUsableEnvError,
     _is_pytest_command,
     _pytest_outcome,
-    _rebind_python,
+    _rebind_interpreter,
     resolve_test_interpreter,
 )
 
@@ -848,7 +848,7 @@ class Executor:
             if not self._extract_commit(ref, tmp):
                 return None
             for cmd in step.verify:
-                resolved = _rebind_python(cmd, interpreter)
+                resolved = _rebind_interpreter(cmd, interpreter)
                 gap = self._reproduces_green(cmd, resolved, tmp, timeout)
                 if gap is not None:
                     return gap

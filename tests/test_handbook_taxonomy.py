@@ -6,6 +6,7 @@ from __future__ import annotations
 from importlib.resources import files
 
 _HANDBOOK = files("devsteward") / "handbook"
+_TEMPLATES = files("devsteward") / "templates"
 
 
 def _read(name: str) -> str:
@@ -59,3 +60,40 @@ def test_handbook_documents_environment_bound_regression():
     # routing by oracle coupling.
     assert "decoupled" in fmt and "process.lab" in fmt
     assert "runtime" in fmt and "required environment" in fmt
+
+
+def test_docs_document_live_lane_and_one_flavor():
+    """REQ-068 AC5: the stamped ``/intake`` skill, the handbook taxonomy, and the stamped
+    ``STEWARD.md`` document the four lanes (hermetic regression / live standing regression /
+    one-time artifact / manual), the develop-gate routing, fail-hard-on-a-missing-declared-
+    resource, the one-flavor ``python -m pytest`` rule, and the degrade (live → artifact +
+    recorded successor) lifecycle."""
+    fmt = _read("_01-format.qmd")
+    workflow = _read("_03-workflow.qmd")
+    intake = (_TEMPLATES / ".claude" / "skills" / "intake" / "SKILL.md").read_text(
+        encoding="utf-8"
+    )
+    steward = (_TEMPLATES / "STEWARD.md").read_text(encoding="utf-8")
+
+    # 1. the fourth lane exists in every surface, distinguished from one-time artifact.
+    for doc in (fmt, workflow, intake, steward):
+        assert "`live`" in doc, "the live lane must be named"
+        assert "standing" in doc, "live is a standing gate member, not one-time"
+
+    # 2. the develop-gate routing: artifact/manual one-time validations are excluded.
+    assert "develop gate" in steward.lower() or "develop-gate" in steward.lower()
+    assert "deselect" in steward or "excluded" in steward
+    assert "one-time" in steward
+
+    # 3. fail-hard on a missing declared resource (a declared lane skip is a hard red).
+    assert "hard red" in steward and "skip" in steward
+
+    # 4. the one-flavor rule: every pytest acceptance command runs as `python -m pytest`.
+    for doc in (fmt, intake, steward):
+        assert "one flavor" in doc.lower() or "one-flavor" in doc.lower()
+    assert "`python -m pytest`" in steward
+
+    # 5. the degrade lifecycle: live → artifact reclassification, successor recorded.
+    for doc in (intake, steward):
+        assert "degrade" in doc.lower()
+        assert "live → artifact" in doc or "live -> artifact" in doc

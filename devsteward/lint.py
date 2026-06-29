@@ -35,9 +35,12 @@ from .profiles.req.index import read_statuses
 from .profiles.req.reqfile import ReqFile, load_reqs
 
 
-# REQ-027: the acceptance `check:` routing key — maps a criterion onto the V-model
-# (regression → Build/verification; artifact, manual → System-Test/validation).
-CHECK_VALUES = ("regression", "artifact", "manual")
+# REQ-027 + REQ-068: the acceptance `check:` routing key — maps a criterion onto the V-model
+# (regression → Build/verification; artifact, manual → System-Test/validation) and selects
+# its execution lane. `live` (REQ-068) is a system-scope, decoupled-oracle test that runs as
+# a **standing** develop-gate member (a continuous integration proof), unlike one-time
+# `artifact`/`manual` validations.
+CHECK_VALUES = ("regression", "live", "artifact", "manual")
 
 
 def _schema() -> dict:
@@ -146,12 +149,12 @@ def lint(cfg: Config) -> list[str]:
             if not ac.check.strip():
                 problems.append(
                     f"{r.id}: acceptance {ac.id or '?'} has no check: classification "
-                    f"(regression | artifact | manual)"
+                    f"(regression | live | artifact | manual)"
                 )
             elif ac.check not in CHECK_VALUES:
                 problems.append(
                     f"{r.id}: acceptance {ac.id or '?'} check '{ac.check}' is not one of "
-                    f"regression | artifact | manual"
+                    f"regression | live | artifact | manual"
                 )
 
     # 6. north star

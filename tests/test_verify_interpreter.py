@@ -30,10 +30,30 @@ def test_resolve_rebinds_leading_python():
 
 
 def test_resolve_leaves_other_commands_untouched():
-    assert _resolve_interpreter("pytest x::y") == "pytest x::y"
     assert _resolve_interpreter("true") == "true"
     # only the leading token is rebound, not a later 'python' argument
     assert _resolve_interpreter("env python3 -V") == "env python3 -V"
+    # a non-leading 'pytest' (e.g. an argument) is left alone — only the leading token routes
+    assert _resolve_interpreter("env pytest x") == "env pytest x"
+
+
+def test_bare_pytest_normalized_to_python_m():
+    """REQ-068 AC4: a leading bare ``pytest …`` is normalized to ``<interpreter> -m pytest …``
+    so the repo root is importable (a ``from tests.<helper>`` import resolves); a leading
+    ``python``/``python3`` keeps its existing rebind, and a non-pytest command is unchanged."""
+    # leading bare pytest → `<interp> -m pytest …` (repo root on sys.path)
+    out = _resolve_interpreter("pytest tests/test_x.py::test_y")
+    assert out == f"{sys.executable} -m pytest tests/test_x.py::test_y"
+    # the bare invocation (no args) is normalized too
+    assert _resolve_interpreter("pytest") == f"{sys.executable} -m pytest"
+    # leading whitespace preserved; still normalized
+    assert _resolve_interpreter("  pytest x").strip() == f"{sys.executable} -m pytest x"
+
+    # the existing python/python3 rebind is unchanged
+    assert _resolve_interpreter("python -m pytest x::y").startswith(sys.executable)
+    assert "-m pytest" in _resolve_interpreter("python3 -m pytest x")
+    # a non-pytest command is left exactly as written
+    assert _resolve_interpreter("true") == "true"
 
 
 def test_pick_prefers_project_venv_with_pytest(tmp_path, monkeypatch):

@@ -84,6 +84,37 @@ steward validate REQ-NNN    # the single entry point for the validate step
 - On green, the same mechanical land fires (flip + index + ledger, on `dev`). A green validate on
   an already-`done` REQ just appends a fresh evidence event.
 
+## Acceptance lanes — how the engine runs your tests (REQ-068)
+
+The **engine** decides how each acceptance test runs — which lane, which flavor. You declare the
+lane with the per-criterion `check:` field; you never decide it with a marker string or how you
+typed the command. The four lanes:
+
+| `check:` | scope / oracle | when it runs | in the develop gate? |
+|----------|----------------|--------------|----------------------|
+| `regression` | module, coupled | every gate (hermetic) | yes — named test + in the full suite |
+| `live` | system, decoupled | every gate (**standing**) | yes — named test (a **standing** integration proof) |
+| `artifact` | system, decoupled, durable | **once**, in `validate` | no — a one-time validation |
+| `manual` | system, human | **once**, in `validate` | no — a one-time validation |
+
+- **The develop gate routes by `check:`, deterministically.** It runs this REQ's `regression` +
+  `live` lane tests as named tests, runs the hermetic full suite, and **deselects every
+  `artifact`/`manual` node-id project-wide** from that suite — so a **one-time** validation of an
+  already-done REQ never gates a later REQ's develop. You never hand-edit a `-m "not live"`
+  marker; the engine derives the exclusion from frontmatter.
+- **Fail-hard on a missing declared resource.** A `live` (or any named-lane) test that reports
+  **skipped** in the develop gate is a **hard red** — the engine knows it must run, so a skip is
+  not tolerated. (An *unknown* test that skips in the full suite is still tolerated.) A red
+  withholds the land without destroying the work commit.
+- **One flavor.** Every pytest acceptance command runs as `python -m pytest` under one
+  engine-resolved interpreter; a leading bare `pytest …` is normalized to
+  `<interpreter> -m pytest …` (repo root importable). A test never runs in a different flavor
+  depending on how you typed it.
+- **Degrade is reclassification, not a verb.** When a newer live proof subsumes an older one, flip
+  the older AC's `check:` from `live → artifact`: it leaves the standing develop gate, stays
+  re-runnable via `steward revalidate`, and you record the superseding test/REQ in the AC text or
+  Notes. There is no `steward degrade`.
+
 ## Recovery — getting out of every red or parked state
 
 Pick the verb by **what is actually stuck**. None of these touch a `done` REQ (supersede instead;

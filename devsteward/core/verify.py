@@ -34,6 +34,14 @@ from .model import Step
 # found``; or ``No module named pytest``) back into a real result.
 _PY_PREFIX = re.compile(r"^(\s*)(python3?)(\s)")
 
+# A leading bare ``pytest`` token (REQ-068 Decision 4 — "one flavor"). Run via the console
+# script, ``pytest`` shells with no repo root on ``sys.path``, so a ``from tests.<helper>``
+# import that resolves fine under ``python -m pytest`` explodes. The engine normalizes a
+# leading ``pytest …`` to ``<resolved interpreter> -m pytest …`` so the lane *and* the flavor
+# never depend on how a human happened to type the string. (A non-leading ``pytest`` argument,
+# or a non-pytest command, is untouched.)
+_PYTEST_PREFIX = re.compile(r"^(\s*)pytest(\s|$)")
+
 
 def _venv_interpreters(cwd: str | None):
     """Yield project-local venv interpreters under ``cwd``, most-conventional first."""
@@ -75,20 +83,31 @@ def _pick_interpreter(cwd: str | None) -> str:
 
 
 def _resolve_interpreter(cmd: str, cwd: str | None = None) -> str:
-    """Rebind a leading bare ``python``/``python3`` to a pytest-capable interpreter."""
-    if not _PY_PREFIX.match(cmd):
+    """Rebind a leading ``python``/``python3``/``pytest`` to a pytest-capable interpreter."""
+    if not (_PY_PREFIX.match(cmd) or _PYTEST_PREFIX.match(cmd)):
         return cmd
     interpreter = _pick_interpreter(cwd)
-    return _rebind_python(cmd, interpreter)
+    return _rebind_interpreter(cmd, interpreter)
 
 
-def _rebind_python(cmd: str, interpreter: str) -> str:
-    """Rebind a leading bare ``python``/``python3`` token to an explicit interpreter."""
-    if not _PY_PREFIX.match(cmd):
-        return cmd
-    return _PY_PREFIX.sub(
-        lambda m: f"{m.group(1)}{shlex.quote(interpreter)}{m.group(3)}", cmd, count=1
-    )
+def _rebind_interpreter(cmd: str, interpreter: str) -> str:
+    """Normalize a leading interpreter token to an explicit pytest-capable interpreter.
+
+    A leading ``python``/``python3`` is rebound to ``interpreter``; a leading bare ``pytest``
+    is normalized to ``interpreter -m pytest`` (REQ-068 Decision 4 — one flavor, repo root
+    importable). Anything else is returned unchanged.
+    """
+    if _PY_PREFIX.match(cmd):
+        return _PY_PREFIX.sub(
+            lambda m: f"{m.group(1)}{shlex.quote(interpreter)}{m.group(3)}", cmd, count=1
+        )
+    if _PYTEST_PREFIX.match(cmd):
+        return _PYTEST_PREFIX.sub(
+            lambda m: f"{m.group(1)}{shlex.quote(interpreter)} -m pytest{m.group(2)}",
+            cmd,
+            count=1,
+        )
+    return cmd
 
 
 class NoUsableEnvError(RuntimeError):
@@ -142,6 +161,32 @@ def _is_pytest_command(cmd: str) -> bool:
         t == "pytest" or t.endswith("/pytest") or t.endswith("\\pytest") or t.endswith("pytest.exe")
         for t in toks
     )
+
+
+def _pytest_targets(cmd: str) -> list[str]:
+    """The test target tokens of a pytest command — file paths / node-ids, no flags.
+
+    Used to derive the project-wide ``artifact``/``manual`` node-id set the develop full-suite
+    run deselects (REQ-068 Decision 2). A non-pytest command (e.g. a ``manual:`` AC) yields
+    nothing — it carries no collectible node-id. Tokens that are the interpreter, ``-m``, the
+    ``pytest`` module/executable, or any flag are dropped; what remains is the selection.
+    """
+    if not _is_pytest_command(cmd):
+        return []
+    try:
+        toks = shlex.split(cmd)
+    except ValueError:
+        toks = cmd.split()
+    targets: list[str] = []
+    for t in toks:
+        if t.startswith("-"):
+            continue  # a flag (and acceptance node-id strings carry no value-taking flags)
+        if t in ("python", "python3") or t.endswith("/python") or t.endswith("python.exe"):
+            continue  # the interpreter
+        if t == "pytest" or t.endswith("/pytest") or t.endswith("\\pytest") or t.endswith("pytest.exe"):
+            continue  # the pytest module/executable
+        targets.append(t)
+    return targets
 
 
 @dataclass(frozen=True)

@@ -68,11 +68,29 @@ classification** — the REQ-027 routing key, validated by `steward lint` on act
 
 - **`regression`** — module/unit scope; the oracle is coupled to the code (mock
   assertions); runs headless in the **Build** phase.
+- **`live`** (REQ-068) — system scope and a **decoupled** oracle (like `artifact`), but a
+  **standing** gate member: the cheapest end-to-end integration proof, run *as* regression
+  in **every** develop gate forever, not once-on-demand. This is the matrix cell
+  (system-scope × standing) that used to force authors to mislabel an e2e as `regression` or
+  hide it behind a pytest marker. A `live` test that **skips** in the develop gate (its
+  declared resource absent) is a **hard red**, never a tolerated skip — the engine knows it
+  must run.
 - **`artifact`** — system scope; a **decoupled, durable** oracle: a captured / golden /
   hashable observable produced by the lab, of which the engine consumes only the
-  pass/fail signal. Runs in the **System-Test** phase.
+  pass/fail signal. Runs **once** in the **System-Test** phase (a one-time validation).
 - **`manual`** — system scope; a **human** oracle; a decision stop inside the
-  System-Test phase.
+  System-Test phase (a one-time validation).
+
+**One flavor (REQ-068).** Every pytest acceptance command runs as `python -m pytest` under
+the one engine-resolved interpreter: a leading bare `pytest …` is normalized to
+`<interpreter> -m pytest …` (so the repo root is importable and a `from tests.<helper>`
+import resolves). A test never runs in a different *flavor* depending on how a human typed
+the string, any more than it runs in a different *lane* depending on a hand-edited marker.
+
+**Degrade — `live → artifact` (REQ-068).** When a newer live proof subsumes an older one,
+flip the older AC's `check:` from `live` to `artifact`: it leaves the standing develop gate
+and stays re-runnable via `steward revalidate`; record the superseding test/REQ in the AC
+text or Notes. Degrade is *reclassification*, not a verb.
 
 **Oracle** (glossary): the part of a test that decides correct vs incorrect — distinct
 from the *fixture* (inputs/environment) and the *system under test*. A coupled oracle

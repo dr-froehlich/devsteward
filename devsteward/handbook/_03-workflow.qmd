@@ -35,8 +35,16 @@ key** that maps it onto the V-model:
 | `check:` | V-model side | Phase | Oracle |
 |----------|--------------|-------|--------|
 | `regression` | verification (left) | **Build** (inside `develop`) | coupled / mock, headless |
-| `artifact` | validation (right) | **System-Test** | decoupled, durable (lab-produced; engine reads only the pass/fail signal) |
-| `manual` | validation (right) | **System-Test** | human — a decision stop |
+| `live` | verification (standing) | **Build** (inside `develop`) — runs *as* regression | decoupled, but a **standing** gate member (continuous e2e proof, not one-time) |
+| `artifact` | validation (right) | **System-Test** (one-time) | decoupled, durable (lab-produced; engine reads only the pass/fail signal) |
+| `manual` | validation (right) | **System-Test** (one-time) | human — a decision stop |
+
+A `live` criterion (REQ-068) fills the missing cell: system scope with a decoupled oracle,
+yet a **standing** develop-gate member that runs in every gate forever (like `regression`),
+not a one-time `artifact`/`manual` validation. The develop gate runs the REQ's `regression`
++ `live` lane tests as named tests (a skip in a declared lane is a **hard red**) and excludes
+every one-time `artifact`/`manual` node-id from the hermetic full suite, so a one-time
+validation of a done REQ never gates a later REQ's develop.
 
 The phase names here are V-model *stages*, not step ids: the `develop` step does the
 Build-side **verification** of every `regression` criterion (that is its gate). The

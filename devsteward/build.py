@@ -6,9 +6,10 @@ from .config import Config
 from .core.accounts import ClauderAccountProvider, SingleAccountProvider
 from .core.executor import Executor
 from .core.git import GitCli
-from .core.verify import CommandVerifier
+from .core.verify import CommandVerifier, _pytest_targets
 from .profiles.generic import GenericStepSource
 from .profiles.req import ReqStepSource
+from .profiles.req.reqfile import load_reqs
 from .profiles.req.checkpoint import (
     CompositeLandGate,
     ConceptArtifactGate,
@@ -57,6 +58,23 @@ def build_validate_runner(cfg: Config):
     return ReqValidateRoutine(cfg.req_dir, python=cfg.verify_python)
 
 
+def _validation_nodeids(cfg: Config) -> tuple[str, ...]:
+    """The project-wide ``artifact``/``manual`` acceptance node-ids (REQ-068 Decision 2).
+
+    The develop full-suite gate deselects these so a one-time validation of an already-done
+    REQ never runs in a later REQ's develop gate. Manual ACs carry no pytest node-id and
+    contribute nothing; the set is the lane a test *declares*, derived from frontmatter the
+    engine already parses — not a hand-edited ``-m`` marker expression.
+    """
+    nodeids: list[str] = []
+    for req in load_reqs(cfg.req_dir):
+        for ac in req.acceptance:
+            if ac.check in ("artifact", "manual") and ac.test:
+                nodeids.extend(_pytest_targets(ac.test))
+    # Stable, de-duplicated order.
+    return tuple(dict.fromkeys(nodeids))
+
+
 def build_verifier(cfg: Config):
     # The REQ profile gives the guarantee teeth at land (a land step must run real
     # acceptance tests, no skip/zero-collection passes, the full suite is clean, and the
@@ -67,6 +85,7 @@ def build_verifier(cfg: Config):
         cwd=str(cfg.root),
         full_suite=cfg.verify_full_suite,
         python=cfg.verify_python,
+        exclude_nodeids=_validation_nodeids(cfg),
     )
 
 

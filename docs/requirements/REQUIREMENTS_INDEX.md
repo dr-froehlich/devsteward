@@ -71,6 +71,6 @@ commit** as its frontmatter and the code.
 | REQ-065 | Validate pre-flight gate + steward reland — formality checks before the session, recovery without re-validation | DONE | [REQ-065](REQ-065.md) | REQ-029, REQ-039, REQ-056 |
 | REQ-066 | sync covers STEWARD.md — track every engine-owned stamped artifact, not just skills | DONE | [REQ-066](REQ-066.md) | REQ-024, REQ-036, REQ-057 |
 | REQ-067 | Concept phase may keep a committed prototype; the concept gate accepts a docs/concepts/REQ-NNN/ bundle directory | DONE | [REQ-067](REQ-067.md) | REQ-039, REQ-057 |
-| REQ-068 | Deterministic acceptance-test execution — a `check: live` standing-regression lane, develop-gate routing by check:, fail-hard on a missing declared resource, one test flavor | DRAFT | [REQ-068](REQ-068.md) | REQ-027, REQ-028, REQ-063, REQ-064 |
+| REQ-068 | Deterministic acceptance-test execution — a `check: live` standing-regression lane, develop-gate routing by check:, fail-hard on a missing declared resource, one test flavor | OPEN | [REQ-068](REQ-068.md) | REQ-027, REQ-028, REQ-063, REQ-064 |
 
 New requirement template: [`_templates/req.md`](../../devsteward/templates/docs/requirements/_templates/req.md)

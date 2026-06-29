@@ -58,10 +58,28 @@ System-Test phase (validation), which exists only if such a check exists. Decide
 **oracle coupling, not test name**:
 
 - `regression` — module/unit scope; coupled or mock oracle; runs headless in Build.
+- `live` (REQ-068) — system scope and a **decoupled** oracle, but a **standing** gate
+  member: the cheapest end-to-end integration proof, run *as* regression in **every** develop
+  gate forever (not once-on-demand like `artifact`/`manual`). Use it for "a few e2e tests
+  kept running continuously" — the matrix cell (system scope × standing) that otherwise forces
+  you to mislabel an e2e as `regression` or hide it behind a pytest marker. A `live` test that
+  **skips** in the develop gate (its declared resource absent) is a **hard red**, never a
+  silent skip — so a `live` AC must name a resource the gate environment actually has.
 - `artifact` — system scope; a **decoupled, durable** oracle (a captured/golden/hashable
-  observable produced by the lab); the engine consumes only its pass/fail signal.
+  observable produced by the lab); the engine consumes only its pass/fail signal. Runs
+  **once** in the System-Test phase (a one-time validation, not a standing gate member).
 - `manual` — system scope; **human** oracle; a decision stop inside the System-Test
-  phase.
+  phase (one-time).
+
+**One flavor (REQ-068).** Author every pytest acceptance command as `python -m pytest …`;
+the engine runs it under one resolved interpreter and normalizes a leading bare `pytest …`
+to `<interpreter> -m pytest …` (repo root importable). Never rely on a bare `pytest` or a
+`-m "not live"` marker to decide a lane — the lane is the `check:` value, the engine reads it.
+
+**Degrade — `live → artifact` (REQ-068).** When a newer live proof subsumes an older one,
+flip the older AC's `check:` from `live` to `artifact`: it drops out of the standing develop
+gate and stays re-runnable via `steward revalidate`. Record the superseding test/REQ in the AC
+text or Notes. Degrade is *reclassification*, not a `steward degrade` verb.
 
 **Writing a `manual` AC for a human oracle (2026-06-12 postmortem):** the human is the
 least-context reader in the system and cannot infer — so a `manual` AC must name its

@@ -29,6 +29,7 @@ Any non-``develop`` step (a generic or phase-less step) still passes on marker-t
 
 from __future__ import annotations
 
+import shlex
 import subprocess
 
 from ...core.model import Step
@@ -37,7 +38,7 @@ from ...core.verify import (
     NoUsableEnvError,
     _is_pytest_command,
     _pytest_outcome,
-    _rebind_python,
+    _rebind_interpreter,
     resolve_test_interpreter,
 )
 
@@ -50,6 +51,13 @@ class ReqVerifier:
     semantics — :func:`devsteward.build.build_verifier` threads the configured default
     (``python -m pytest``) for real runs. ``python`` is the optional configured interpreter
     (``verify.python``) the gate resolves the suite under (AC4).
+
+    ``exclude_nodeids`` (REQ-068 Decision 2) is the project-wide set of one-time
+    ``artifact``/``manual`` acceptance node-ids — they are **deselected** from the full-suite
+    run so a one-time validation of an already-done REQ never gates a later REQ's develop.
+    The develop gate is deterministic: it runs this REQ's ``regression`` + ``live`` lane tests
+    as named tests (a skip is a hard red, REQ-028) and the hermetic suite, and a hand-edited
+    marker expression never decides lane membership.
     """
 
     def __init__(
@@ -58,11 +66,13 @@ class ReqVerifier:
         timeout: float = 1800.0,
         full_suite: str | None = None,
         python: str | None = None,
+        exclude_nodeids: tuple[str, ...] = (),
     ):
         self.cwd = cwd
         self.timeout = timeout
         self.full_suite = full_suite
         self.python = python
+        self.exclude_nodeids = tuple(exclude_nodeids)
         self._inner = CommandVerifier(cwd=cwd, timeout=timeout)
 
     def verify(self, step: Step) -> tuple[bool, str]:
@@ -110,7 +120,7 @@ class ReqVerifier:
         AC1: a skip fails. AC2: zero collected fails. A non-pytest command (no per-test
         signal) falls back to exit-code semantics.
         """
-        resolved = _rebind_python(cmd, interpreter)
+        resolved = _rebind_interpreter(cmd, interpreter)
         if not _is_pytest_command(resolved):
             return self._exit_code(cmd, resolved)
         o = _pytest_outcome(resolved, self.cwd, self.timeout)
@@ -136,10 +146,20 @@ class ReqVerifier:
         return True, f"{head}\n    {o.passed} passed"
 
     def _gate_full_suite(self, interpreter: str) -> tuple[bool, str]:
-        """Run the whole project suite; any failure/error fails the land (skips stay legal)."""
+        """Run the whole project suite; any failure/error fails the land (skips stay legal).
+
+        REQ-068 Decision 2: a one-time ``artifact``/``manual`` validation never gates a later
+        REQ's develop — every such node-id (project-wide) is **deselected** from the suite.
+        The deselection is pytest-specific (``--deselect``); a non-pytest full suite keeps
+        exit-code semantics, untouched (tech-agnostic, like the rest of the gate).
+        """
         if not self.full_suite:
             return True, ""
-        resolved = _rebind_python(self.full_suite, interpreter)
+        resolved = _rebind_interpreter(self.full_suite, interpreter)
+        if self.exclude_nodeids and _is_pytest_command(resolved):
+            resolved += "".join(
+                f" --deselect {shlex.quote(nid)}" for nid in self.exclude_nodeids
+            )
         try:
             proc = subprocess.run(
                 resolved,

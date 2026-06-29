@@ -134,13 +134,16 @@ def project(tmp_path: Path) -> Path:
 
 
 def write_req(req_dir: Path, rid: str, *, status="open", depends_on=(), acceptance=True,
-              title=None, kind="feature", check="regression", process=None, concept_refs=()):
+              title=None, kind="feature", check="regression", process=None, concept_refs=(),
+              test=None):
     """Write a minimal, schema-valid REQ file into ``req_dir``.
 
-    ``check`` classifies the single acceptance criterion (REQ-027); ``None`` omits the
-    line (an undeclared check). ``process`` is an optional dict rendered as the
-    ``process:`` frontmatter block. ``concept_refs`` populates the ``concept_refs:`` list
-    (REQ-039 — the develop land gate for a concept REQ checks it references the doc).
+    ``check`` classifies the single acceptance criterion (REQ-027/REQ-068); ``None`` omits
+    the line (an undeclared check). ``test`` overrides the AC's runnable ``test:`` string
+    (default ``"true"``) — used to give an ``artifact``/``manual`` AC a real node-id.
+    ``process`` is an optional dict rendered as the ``process:`` frontmatter block.
+    ``concept_refs`` populates the ``concept_refs:`` list (REQ-039 — the develop land gate
+    for a concept REQ checks it references the doc).
     """
     req_dir.mkdir(parents=True, exist_ok=True)
     title = title or f"{rid} title"
@@ -148,11 +151,12 @@ def write_req(req_dir: Path, rid: str, *, status="open", depends_on=(), acceptan
     acc = ""
     if acceptance:
         check_line = f"  check: {check}\n" if check else ""
+        test_str = test if test is not None else "true"
         acc = (
             "\n```yaml acceptance\n"
             "- id: AC1\n"
             f"  text: {rid} works.\n"
-            '  test: "true"\n'
+            f'  test: "{test_str}"\n'
             f"{check_line}"
             "  status: pending\n"
             "```\n"

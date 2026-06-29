@@ -31,16 +31,17 @@ class DecisionStatus(str, Enum):
 class AcceptanceCheck:
     """One acceptance criterion: a human ``text`` and a runnable ``test`` id.
 
-    ``check`` is the REQ-027 routing key (``regression | artifact | manual``) mapping the
-    criterion onto the V-model. The core only carries the value — ``""`` means
-    *undeclared*; the REQ profile's linter enforces presence/enum on active REQs.
+    ``check`` is the REQ-027/REQ-068 routing key (``regression | live | artifact | manual``)
+    mapping the criterion onto the V-model and selecting its execution lane. The core only
+    carries the value — ``""`` means *undeclared*; the REQ profile's linter enforces
+    presence/enum on active REQs.
     """
 
     id: str
     text: str
     test: str
     status: str = "pending"  # pending | pass | fail (engine-owned)
-    check: str = ""  # regression | artifact | manual ("" = undeclared)
+    check: str = ""  # regression | live | artifact | manual ("" = undeclared)
 
 
 @dataclass(frozen=True)
