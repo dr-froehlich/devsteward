@@ -198,6 +198,9 @@ steps:
   REQ-068:validate:
     status: done
     updated: '2026-06-29T05:36:03+00:00'
+  REQ-070:develop:
+    status: failed
+    updated: '2026-06-29T07:32:08+00:00'
 decisions:
 - id: DEC-001
   step: REQ-031:validate
