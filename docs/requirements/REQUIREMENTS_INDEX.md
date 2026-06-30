@@ -74,5 +74,6 @@ commit** as its frontmatter and the code.
 | REQ-068 | Deterministic acceptance-test execution — a `check: live` standing-regression lane, develop-gate routing by check:, fail-hard on a missing declared resource, one test flavor | DONE | [REQ-068](REQ-068.md) | REQ-027, REQ-028, REQ-063, REQ-064 |
 | REQ-069 | Build delivers the validation fixtures it owes — close the REQ-051 pincer so a missing seeded fixture can't deadlock validation | DRAFT | [REQ-069](REQ-069.md) | REQ-051, REQ-030 |
 | REQ-070 | Full-suite deselection must use only real node-ids — a manual/artifact AC's prose can't poison the develop gate into deselecting the whole suite | DONE | [REQ-070](REQ-070.md) | REQ-068 |
+| REQ-071 | Wiring-gap doctrine — concept-phase-as-functional-spec, wire-through-the-live-entrypoint, don't-scope-a-known-defect-out | DRAFT | [REQ-071](REQ-071.md) | REQ-027, REQ-039, REQ-064, REQ-068 |
 
 New requirement template: [`_templates/req.md`](../../devsteward/templates/docs/requirements/_templates/req.md)
