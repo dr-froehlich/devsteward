@@ -501,6 +501,22 @@ validation. Driven **interactively** (not by `steward run`) in this order — se
   false-positive on). Acceptance = one hermetic anchor test across all three surfaces (the wiring
   proof) + a manual coherence sign-off → a validate step; `concept:false` dogfoods its own rule.
   On the intake-doctrine line with REQ-064/REQ-068; with REQ-027/REQ-039.
+- REQ-072 — **Capture gate runs in the operator's declared environment** (fix): the fail-side
+  complement to REQ-063. REQ-063 ruled an environment *skip* in the bare `git archive` extract is
+  not a capture gap — but it could only address skips. When the missing environment makes a test
+  *fail* (FlowSteward's Postgres-only JSONField `__contains` lookup, which SQLite can't compile,
+  in an extract that dropped the gitignored `.env` and fell back to the hermetic SQLite default),
+  a green, paid-for develop checkpoint fails its own capture gate for environment reasons alone —
+  the engine changed the environment between the gate that *passes* a step and the one that
+  *re-verifies* it. Fix upstream of skip-vs-fail: **carry the operator's declared environment into
+  the extract** — copy the env-file (`verify.env_file`, default `.env`, honor-when-present) into
+  the extract dir + inherit `os.environ` — so the develop green reproduces in the *same declared*
+  environment with no shell `export`s. Plus an **honest diagnosis** (the red-herring "track the
+  uncaptured file" single-cause text becomes source/test **or** environment, naming the preserved
+  SHA, never "commit the secret"); secrets stay in the ephemeral `0700` extract, contents never
+  logged. Engine + manual/handbook; regression-only ACs in `test_commit_integrity.py` (synthetic
+  env-gated fixtures — the real Postgres end-to-end is FlowSteward's live proof); develop fused,
+  `concept:false`. From FlowSteward's Postgres-on-SQLite capture-gate failure; with REQ-068.
 - Future REQs land here as `/intake` produces them.
 
 ## Dependency graph
@@ -535,7 +551,7 @@ REQ-001
            └─ REQ-039 (concept phase: interactive leading architecture session that gates develop — left-arm counterpart of validate; with REQ-027, REQ-029, REQ-034)
  REQ-047 (trunk-based pivot) ──┬─ REQ-052 (post-pivot code + skill review → sign-off report)
                                      ├─ REQ-053 (design: process-resilience forward-path audit + rework/repeat model)
-                                     └─ REQ-050 (commit-integrity gate; Stage C) ── REQ-063 (fix: non-destructive — certification is the atomic unit, the work commit is durable + surfaced, env-skip ≠ capture gap; from FlowSteward REQ-043 postmortem; with REQ-049)
+                                     └─ REQ-050 (commit-integrity gate; Stage C) ── REQ-063 (fix: non-destructive — certification is the atomic unit, the work commit is durable + surfaced, env-skip ≠ capture gap; from FlowSteward REQ-043 postmortem; with REQ-049) ── REQ-072 (fix: capture gate runs in the operator's DECLARED environment — carry the env-file [verify.env_file, default .env] into the extract + inherit os.environ so a develop green needing a declared DB engine reproduces without shell exports; the fail-side complement to REQ-063's skip exemption; honest env-vs-source diagnosis; honor-when-present; from FlowSteward's Postgres-on-SQLite capture-gate failure; with REQ-068)
  REQ-026 (recover verb) ── REQ-054 (refactor: rename recover → repeat + --recover → --repeat; hard rename, no alias)
  REQ-033 (rework edge) ── REQ-055 (feature: steward revalidate — mirror of rework, external-cause re-validate; with REQ-047)
  REQ-029 + REQ-039 + REQ-056 ── REQ-065 (fix: validate pre-flight gate + steward reland — formality checks before session, recovery without re-validation)
