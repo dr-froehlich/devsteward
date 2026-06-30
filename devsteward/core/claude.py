@@ -201,7 +201,7 @@ def run_claude(
     argv_prefix: list[str] | None = None,
     cwd: str | None = None,
     env: dict | None = None,
-    timeout: float = 1800.0,
+    timeout: float = 5400.0,
     unattended: bool = True,
     permission_mode: str | None = DEFAULT_PERMISSION_MODE,
     model: str | None = DEFAULT_MODEL,
@@ -259,6 +259,11 @@ def run_claude(
     if on_spawn is not None:
         on_spawn(proc)
     lines: list[dict] = []
+    # Session cap (default 90 min). The clock starts here, *after* the clauder gate has
+    # cleared in the caller — a step's `step_started`→`step_failed` wall-clock therefore also
+    # includes any gate-wait, which is not part of this budget. Note this is a *between-lines*
+    # cap: it is only checked when a new stream-json line arrives, so a truly silent session
+    # is not bounded by it.
     deadline = time.monotonic() + timeout
     timed_out = False
     try:
