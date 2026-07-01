@@ -21,13 +21,13 @@ CONFIG_FILE = "config.yaml"
 # REQ-029 Decision 4 — per-step-kind model/effort defaults. ``model``/``effort`` of None on
 # a kind means "inherit the flat ``claude.model``/``claude.effort``". develop inherits
 # (Opus-high); repair drops to Sonnet so a cold repair session is cheap; validate (the
-# System Tester session, REQ-030 Decision 2) inherits Opus-high — spend the orientation
-# tax gladly, context independence is the decoupling. Overridable per project via
-# ``claude.steps.<kind>``.
+# System Tester session, REQ-030 Decision 2) pins Sonnet 5 — the System Tester runs a
+# validation procedure, not novel problem-solving, so it doesn't need Opus. Overridable
+# per project via ``claude.steps.<kind>``.
 STEP_CLAUDE_DEFAULTS = {
     "develop": {"model": None, "effort": None},
     "repair": {"model": "claude-sonnet-4-6", "effort": None},
-    "validate": {"model": None, "effort": None},
+    "validate": {"model": "claude-sonnet-5", "effort": None},
 }
 
 
