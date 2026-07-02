@@ -57,6 +57,13 @@ git:
 #   python     — optional explicit interpreter the gate runs tests under (e.g.
 #                `.venv/bin/python`). A configured-but-unusable interpreter is a hard,
 #                surfaced error. Unset: discover the project venv, then the engine's own.
+#   env_file   — the declared env-file the land's commit-integrity self-check carries into
+#                its ephemeral tree extract (REQ-072), so the check runs in the same
+#                declared environment the gate used (default `.env`; set to `null` to
+#                disable). Honor-when-present: an absent file is a no-op. The file is
+#                copied only into the throwaway extract dir — its contents never reach a
+#                message, event, or artifact.
 # verify:
 #   full_suite: python -m pytest
 #   python: .venv/bin/python
+#   env_file: .env

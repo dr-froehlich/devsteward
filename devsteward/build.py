@@ -165,4 +165,5 @@ def build_executor(
         step_claude=step_claude,
         repair_budget=repair_budget,
         validate_runner=build_validate_runner(cfg),
+        verify_env_file=cfg.verify_env_file,
     )

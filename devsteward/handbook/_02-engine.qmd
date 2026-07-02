@@ -113,6 +113,22 @@ reconciles the marker against the ledger — a `done` REQ whose ledger `develop`
 `failed`/absent is a hard lint error, because the ledger is the cursor of record and a
 hand-edited `done` must not outrun it.
 
+On green the develop land additionally self-checks **commit integrity** (REQ-050, made
+non-destructive by REQ-063): the named tests are re-run against a clean extract of the
+staged tree, so the recorded commit provably reproduces its own green. That check runs in
+the operator's **declared environment** (REQ-072): the declared env-file
+(`verify.env_file`, default `.env`) is copied into the ephemeral extract when present, and
+`os.environ` is inherited — develop and its re-verification refer to the *same* environment,
+so a green that legitimately reads a gitignored `.env` certifies with no shell exports.
+Honor-when-present: no env-file declared or present means the bare, hermetic extract,
+unchanged — and the file's contents never reach a surfaced message, an event, or any
+persisted artifact (it lives only in the throwaway extract dir). A gap withholds
+certification *without* destroying the work — the pure code is committed and its SHA
+surfaced — and the diagnosis is honest about both possible causes: an uncaptured
+source/test file **or** a runtime environment the check lacked, never "commit the secret".
+The validate phase stays exempt (its green is established against the live lab, not a tree
+extract).
+
 ## The ledger (`.devsteward/`)
 
 - `state.yaml` — round-trip-stable YAML: the profile, the cursor, the per-step status

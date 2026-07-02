@@ -126,6 +126,14 @@ class Config:
         return (self.verify or {}).get("python")
 
     @property
+    def verify_env_file(self) -> str | None:
+        """The operator's declared env-file the capture self-check carries into its tree
+        extract (REQ-072). Default ``.env``; a project that names its environment in a
+        differently-named file sets ``verify.env_file``; explicit ``null`` disables the
+        carry. Honor-when-present: an absent file is a no-op, never an error."""
+        return (self.verify or {}).get("env_file", ".env")
+
+    @property
     def plans_dir(self) -> Path:
         """Where plan artifacts live (REQ-029 Decision 6 — the mechanical land refuses to
         land a REQ no plan here names). Conventionally ``docs/plans/`` under the repo root."""

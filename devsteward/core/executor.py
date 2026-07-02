@@ -26,6 +26,7 @@ event records which one drove (``driver: headless | interactive``).
 
 from __future__ import annotations
 
+import shutil
 import subprocess
 import tempfile
 from dataclasses import dataclass
@@ -98,6 +99,7 @@ class Executor:
         repair_budget: int = 0,
         validate_runner: Callable[..., "StepResult"] | None = None,
         interactive_runner: Callable[..., int] = claude_mod.run_claude_interactive,
+        verify_env_file: str | None = ".env",
     ):
         self.root = Path(root)
         self.source = source
@@ -125,6 +127,10 @@ class Executor:
         # validation (the editor pattern — TTY inherited, no -p, no detach). Injectable so
         # the tests drive shape A without a real claude / TTY.
         self.interactive_runner = interactive_runner
+        # REQ-072: the operator's declared env-file (``verify.env_file``, default ``.env``),
+        # carried into the capture self-check's tree extract when present so the check runs
+        # in the same declared environment the develop gate used. None disables the carry.
+        self.verify_env_file = verify_env_file
         self.runner = runner
         self.committer = committer
         self.autocommit = autocommit
@@ -818,16 +824,24 @@ class Executor:
         return out.stdout.strip() or None
 
     def _capture_gap_message(self, step: Step, sha: str | None, gap: str) -> str:
-        """The surfaced detail for a withheld certification (REQ-063 Decision 4): name the
-        **preserved** work commit and frame the cause as an uncaptured *source/test* file —
-        explicitly *never* "commit the secret", the postmortem's actively-wrong advice."""
+        """The surfaced detail for a withheld certification (REQ-063 Decision 4, made
+        environment-honest by REQ-072 Decision 4): name the **preserved** work commit and frame
+        the gap as *the named test did not reproduce* — the cause may be a source/test file the
+        commit can't hold **or** a runtime environment the capture run lacked. Never a
+        single-cause "track it / fix .gitignore" hunt when every file *is* captured, and
+        explicitly *never* "commit the secret", the postmortem's actively-wrong advice. The
+        env-file's *contents* never enter this message (Decision 5) — it names the file and
+        the cause category only."""
         where = f"preserved as commit {sha} on {self.integration_branch}" if sha else "preserved"
+        env_name = self.verify_env_file or ".env"
         return (
             f"the commit recorded for {step.req or step.id} does not reproduce its green — {gap}. "
             f"The work was {where} (nothing was discarded) and {step.id} was left repeatable. "
-            f"The cause is an uncaptured source/test file the commit can't hold — track it "
-            f"(add it, or fix .gitignore so a *source* file is tracked — never a secret), then "
-            f"`steward repeat {step.req or step.id}`."
+            f"The named test did not reproduce from the recorded commit; the cause may be an "
+            f"uncaptured source/test file the commit can't hold (track the *source* file — "
+            f"never a secret), or a runtime environment the capture run lacked (the declared "
+            f"env-file `{env_name}` is carried into the check when present — see "
+            f"`verify.env_file`). Fix the cause, then `steward repeat {step.req or step.id}`."
         )
 
     def _green_gap_at(self, step: Step, ref: str) -> str | None:
@@ -837,8 +851,10 @@ class Executor:
         The interpreter is resolved against the *real* repo: the environment (the venv) is
         never part of a commit's self-sufficiency — only its source/test files are — so the
         tests run under the same interpreter, in a throwaway dir holding only what the commit
-        captured. An unusable env or an unavailable extraction is the verifier's / operator's
-        concern, not a capture gap, so it fails open (returns ``None``)."""
+        captured **plus the operator's declared env-file** (REQ-072: the check must reproduce
+        the develop gate's green in the same *declared* environment, not a stripped one). An
+        unusable env or an unavailable extraction is the verifier's / operator's concern, not
+        a capture gap, so it fails open (returns ``None``)."""
         try:
             interpreter = resolve_test_interpreter(str(self.root), self._verify_python())
         except NoUsableEnvError:
@@ -847,6 +863,7 @@ class Executor:
         with tempfile.TemporaryDirectory(prefix="devsteward-selfcheck-") as tmp:
             if not self._extract_commit(ref, tmp):
                 return None
+            self._carry_env_file(tmp)
             for cmd in step.verify:
                 resolved = _rebind_interpreter(cmd, interpreter)
                 gap = self._reproduces_green(cmd, resolved, tmp, timeout)
@@ -858,6 +875,34 @@ class Executor:
         """The configured test interpreter the verifier resolves under (``verify.python``),
         if the verifier exposes one (the REQ profile's :class:`ReqVerifier` does)."""
         return getattr(self.verifier, "python", None)
+
+    def _carry_env_file(self, dest: str) -> None:
+        """Carry the operator's declared env-file into the tree extract (REQ-072).
+
+        ``git archive`` strips gitignored content by design, but the consumer's test
+        bootstrap reads its environment from an env-file in the CWD (now the extract dir) —
+        so without the carry the capture check runs in a *different* environment than the
+        develop gate that just passed. Copying the file into the ephemeral extract reproduces
+        the declared environment for both file-reading (``dotenv``) and ``os.environ``-reading
+        bootstraps (the subprocess already inherits ``os.environ``).
+
+        Honor-when-present, never require: an unset name or an absent file is a no-op — the
+        clean-checkout hermetic path is unchanged. The copy lands only in the ``0700``
+        ``TemporaryDirectory`` that is deleted after the run; the file's contents never reach
+        a message, event, or persisted artifact (Decision 5). Fail-open on ``OSError`` like
+        the rest of the self-check — a carry that cannot run must not block a legitimate land."""
+        name = self.verify_env_file
+        if not name:
+            return
+        src = self.root / name
+        if not src.is_file():
+            return
+        try:
+            target = Path(dest) / name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(src, target)
+        except OSError:
+            pass
 
     def _extract_commit(self, ref: str, dest: str) -> bool:
         """Extract only the tracked content of ``ref`` (a commit or tree) into ``dest`` — no

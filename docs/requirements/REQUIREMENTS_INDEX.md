@@ -75,6 +75,6 @@ commit** as its frontmatter and the code.
 | REQ-069 | Build delivers the validation fixtures it owes — close the REQ-051 pincer so a missing seeded fixture can't deadlock validation | DRAFT | [REQ-069](REQ-069.md) | REQ-051, REQ-030 |
 | REQ-070 | Full-suite deselection must use only real node-ids — a manual/artifact AC's prose can't poison the develop gate into deselecting the whole suite | DONE | [REQ-070](REQ-070.md) | REQ-068 |
 | REQ-071 | Wiring-gap doctrine — concept-phase-as-functional-spec, wire-through-the-live-entrypoint, don't-scope-a-known-defect-out | DRAFT | [REQ-071](REQ-071.md) | REQ-027, REQ-039, REQ-064, REQ-068 |
-| REQ-072 | Capture gate runs in the operator's declared environment — carry the env-file into the extract, and diagnose an env gap honestly | DRAFT | [REQ-072](REQ-072.md) | REQ-063, REQ-068 |
+| REQ-072 | Capture gate runs in the operator's declared environment — carry the env-file into the extract, and diagnose an env gap honestly | DONE | [REQ-072](REQ-072.md) | REQ-063, REQ-068 |
 
 New requirement template: [`_templates/req.md`](../../devsteward/templates/docs/requirements/_templates/req.md)

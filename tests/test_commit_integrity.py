@@ -1,4 +1,4 @@
-"""REQ-063 — non-destructive commit integrity: a capture gap never discards the work.
+"""REQ-063 / REQ-072 — commit integrity: non-destructive, and run in the declared environment.
 
 The REQ-050 gate proved a develop commit reproduces its own green, but did it *after*
 committing and ``reset --hard``'d the work away on a gap — discarding a green, paid-for
@@ -20,6 +20,12 @@ Real-git teeth (the plan-0021 lesson): a throwaway ``git init`` repo on ``dev``,
 * **AC4** (``test_withhold_recovery_is_honest_and_names_sha``) — the withhold message names the
   preserved SHA and frames the cause as a source file, never "commit the secret".
 * Two controls: the validate land stays exempt; the develop land of the *self-sufficient* case.
+
+REQ-072 extends the gate to run in the operator's **declared environment**: the env-file
+(``verify.env_file``, default ``.env``) is carried into the tree extract when present — so a
+green that legitimately *fails* (not skips) without it, the FlowSteward Postgres-on-extract-
+SQLite shape, reproduces and certifies. Honor-when-present (the hermetic path is unchanged),
+the withheld diagnosis is environment-honest, and the carried secrets never leak.
 """
 
 from __future__ import annotations
@@ -27,6 +33,10 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
+import tempfile
+
+from devsteward.build import build_executor
+from devsteward.config import Config
 from devsteward.core.accounts import SingleAccountProvider
 from devsteward.core.executor import Executor, RunOutcome
 from devsteward.core.git import GitCli
@@ -124,7 +134,7 @@ def _log_shas(root: Path) -> list[str]:
     return _git(root, "log", "--format=%H").split()
 
 
-def _executor(root: Path) -> Executor:
+def _executor(root: Path, *, env_file: str | None = ".env") -> Executor:
     req_dir = root / "docs" / "requirements"
     return Executor(
         root=root,
@@ -137,6 +147,7 @@ def _executor(root: Path) -> Executor:
         production_branch="main",
         integration_branch="dev",
         git=GitCli(root),
+        verify_env_file=env_file,
     )
 
 
@@ -325,3 +336,192 @@ def test_validate_land_certifies_despite_live_lab_skip(tmp_path):
     led = Ledger(tmp_path)
     assert led.status_of("REQ-001:validate") is StepStatus.DONE
     assert any(e["event"] == "checkpoint" for e in led.events())
+
+
+# -- REQ-072: the capture gate runs in the operator's declared environment ------
+
+
+def _env_gated_test(env_name: str = ".env") -> str:
+    """A named test whose oracle reads a value the declared (gitignored) env-file carries,
+    and **fails** (not skips) when it is absent — the FlowSteward Postgres shape reduced to a
+    coupled fixture: without the env-file the bootstrap falls back to the hermetic default,
+    which is the wrong engine."""
+    return (
+        "from pathlib import Path\n"
+        "def test_engine_from_declared_env():\n"
+        "    engine = 'sqlite-fallback'\n"
+        f"    env = Path({env_name!r})\n"
+        "    if env.exists():\n"
+        "        for line in env.read_text().splitlines():\n"
+        "            key, _, value = line.partition('=')\n"
+        "            if key == 'DB_ENGINE':\n"
+        "                engine = value.strip()\n"
+        "    assert engine == 'postgres'\n"
+    )
+
+
+def _tracked_files(root: Path, commit: str) -> list[str]:
+    return _git(root, "ls-tree", "-r", "--name-only", commit).split()
+
+
+def test_declared_env_file_is_carried_into_extract(tmp_path):
+    """AC1 (REQ-072): a develop green that passes ONLY because the gitignored ``.env`` is
+    present — its named test *fails* without it, so REQ-063's skip exemption cannot apply —
+    reproduces in the capture extract (the engine copied the env-file in) and the land
+    certifies ``DONE``, with no shell exports and no ``steward repeat``."""
+    _scaffold(tmp_path, test="python -m pytest tests/test_env.py")
+    (tmp_path / ".gitignore").write_text(".env\n", encoding="utf-8")
+    _init_git(tmp_path)
+
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "tests" / "test_env.py").write_text(_env_gated_test(), encoding="utf-8")
+    (tmp_path / ".env").write_text("DB_ENGINE=postgres\n", encoding="utf-8")  # gitignored env
+
+    ex = _executor(tmp_path)
+    res = ex.advance_once()
+
+    assert res.outcome is RunOutcome.DONE
+    assert _porcelain(tmp_path) == ""
+    assert "status: done" in (tmp_path / "docs" / "requirements" / "REQ-001.md").read_text()
+    led = Ledger(tmp_path)
+    assert led.status_of("REQ-001:develop") is StepStatus.DONE
+    assert any(e["event"] == "checkpoint" for e in led.events())
+    # The carry is into the *ephemeral extract only* — the commit never holds the env-file.
+    assert ".env" not in _tracked_files(tmp_path, res.commit)
+
+
+def test_no_env_file_keeps_hermetic_capture_path(tmp_path):
+    """AC2 (REQ-072): honor-when-present. With NO env-file, the capture check runs against
+    the bare extract exactly as before — a self-sufficient green certifies, and a genuine
+    source/test capture gap (a fail in the extract) is still refused. Carrying an env is
+    opt-in-by-presence, never a new precondition."""
+    # (a) self-sufficient green, no env-file anywhere → certifies.
+    green = tmp_path / "green"
+    green.mkdir()
+    _scaffold(green, test="python -m pytest tests/test_dep.py")
+    _init_git(green)
+    (green / "tests").mkdir()
+    (green / "tests" / "test_dep.py").write_text(_CAPTURED_TEST, encoding="utf-8")
+    (green / "data.txt").write_text("captured\n", encoding="utf-8")
+
+    res = _executor(green).advance_once()
+    assert res.outcome is RunOutcome.DONE
+    assert Ledger(green).status_of("REQ-001:develop") is StepStatus.DONE
+
+    # (b) a genuine source gap, no env-file → still refused (REQ-063's guarantee, intact).
+    gap = tmp_path / "gap"
+    gap.mkdir()
+    _scaffold(gap, test="python -m pytest tests/test_dep.py")
+    (gap / ".gitignore").write_text("secret.txt\n", encoding="utf-8")
+    _init_git(gap)
+    (gap / "tests").mkdir()
+    (gap / "tests" / "test_dep.py").write_text(_DEP_TEST, encoding="utf-8")
+    (gap / "secret.txt").write_text("load-bearing\n", encoding="utf-8")
+
+    res = _executor(gap).advance_once()
+    assert res.outcome is RunOutcome.VERIFY_FAILED
+    led = Ledger(gap)
+    assert led.status_of("REQ-001:develop") is StepStatus.FAILED
+    assert any(e["event"] == "capture_gap" for e in led.events())
+
+
+def test_configured_env_file_name_is_honored(tmp_path):
+    """AC3 (REQ-072): ``verify.env_file`` names the carried file (default ``.env`` when
+    unset; explicit ``null`` disables); a declared-but-absent file is a no-op, not an error;
+    and ``build_executor`` wires the config value through to the engine."""
+    assert Config(root=tmp_path).verify_env_file == ".env"
+    assert Config(root=tmp_path, verify={"env_file": "steward.env"}).verify_env_file == "steward.env"
+    assert Config(root=tmp_path, verify={"env_file": None}).verify_env_file is None
+
+    # The custom-named declared file is carried: the env-gated green certifies.
+    custom = tmp_path / "custom"
+    custom.mkdir()
+    _scaffold(custom, test="python -m pytest tests/test_env.py")
+    (custom / ".gitignore").write_text("steward.env\n", encoding="utf-8")
+    _init_git(custom)
+    (custom / "tests").mkdir()
+    (custom / "tests" / "test_env.py").write_text(
+        _env_gated_test("steward.env"), encoding="utf-8"
+    )
+    (custom / "steward.env").write_text("DB_ENGINE=postgres\n", encoding="utf-8")
+
+    res = _executor(custom, env_file="steward.env").advance_once()
+    assert res.outcome is RunOutcome.DONE
+    assert Ledger(custom).status_of("REQ-001:develop") is StepStatus.DONE
+
+    # Declared-but-absent: a no-op — a self-sufficient green still certifies, no error.
+    absent = tmp_path / "absent"
+    absent.mkdir()
+    _scaffold(absent, test="python -m pytest tests/test_dep.py")
+    _init_git(absent)
+    (absent / "tests").mkdir()
+    (absent / "tests" / "test_dep.py").write_text(_CAPTURED_TEST, encoding="utf-8")
+    (absent / "data.txt").write_text("captured\n", encoding="utf-8")
+
+    res = _executor(absent, env_file="steward.env").advance_once()
+    assert res.outcome is RunOutcome.DONE
+
+    # The config value reaches the engine through the standard assembly.
+    cfg = Config(
+        root=absent, accounts={"provider": "single"}, verify={"env_file": "steward.env"}
+    )
+    assert build_executor(cfg).verify_env_file == "steward.env"
+
+
+def test_capture_gap_message_is_environment_honest(tmp_path):
+    """AC4 (REQ-072): the withheld-certification message names the preserved work-commit SHA
+    and frames the cause as source/test **or** environment (pointing at the env-file carry) —
+    the red-herring "the cause is an uncaptured file — track it / fix .gitignore" single-cause
+    text is gone, and it never instructs committing a gitignored secret."""
+    _scaffold(tmp_path, test="python -m pytest tests/test_dep.py")
+    (tmp_path / ".gitignore").write_text("secret.txt\n", encoding="utf-8")
+    _init_git(tmp_path)
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "tests" / "test_dep.py").write_text(_DEP_TEST, encoding="utf-8")
+    (tmp_path / "secret.txt").write_text("load-bearing\n", encoding="utf-8")
+
+    res = _executor(tmp_path).advance_once()
+
+    assert res.outcome is RunOutcome.VERIFY_FAILED
+    msg = res.detail
+    assert res.commit and res.commit in msg          # names the preserved SHA
+    assert "did not reproduce" in msg
+    assert "source/test file" in msg                 # cause 1: an uncaptured source/test ...
+    assert "runtime environment" in msg              # ... OR cause 2: a dropped environment
+    assert "verify.env_file" in msg                  # points at the carry
+    assert "never a secret" in msg                   # never "commit the secret"
+    assert "fix .gitignore" not in msg               # the red-herring recovery is gone
+    assert "The cause is an uncaptured source/test file" not in msg  # no single-cause claim
+
+
+def test_env_file_contents_never_leak(tmp_path, monkeypatch):
+    """AC5 (REQ-072): the carried env-file's key VALUES never reach the surfaced message,
+    the event log, or any persisted artifact — the file is copied only into the ephemeral
+    extract dir, which is removed after the run."""
+    secret = "s3cr3t-hunter2-XYZZY"
+    scratch = tmp_path / "scratch-tmp"
+    scratch.mkdir()
+    # Pin the in-process tempdir so the extract dir's lifetime is observable.
+    monkeypatch.setattr(tempfile, "tempdir", str(scratch))
+
+    root = tmp_path / "repo"
+    root.mkdir()
+    _scaffold(root, test="python -m pytest tests/test_dep.py")
+    (root / ".gitignore").write_text("secret.txt\n.env\n", encoding="utf-8")
+    _init_git(root)
+    (root / "tests").mkdir()
+    (root / "tests" / "test_dep.py").write_text(_DEP_TEST, encoding="utf-8")
+    (root / "secret.txt").write_text("load-bearing\n", encoding="utf-8")  # forces the withhold
+    (root / ".env").write_text(f"DB_PASSWORD={secret}\n", encoding="utf-8")  # carried env
+
+    res = _executor(root).advance_once()
+
+    # The gap fires (the env-file WAS carried; secret.txt is genuinely uncaptured) ...
+    assert res.outcome is RunOutcome.VERIFY_FAILED
+    # ... and the secret value is nowhere: not the message, the ledger, or the git history.
+    assert secret not in res.detail
+    assert secret not in (root / ".devsteward" / "events.jsonl").read_text(encoding="utf-8")
+    assert secret not in (root / ".devsteward" / "state.yaml").read_text(encoding="utf-8")
+    assert secret not in _git(root, "log", "-p")
+    # The extract dir — the only place the env-file was copied to — is gone after the run.
+    assert list(scratch.iterdir()) == []

@@ -106,6 +106,15 @@ typed the command. The four lanes:
   **skipped** in the develop gate is a **hard red** — the engine knows it must run, so a skip is
   not tolerated. (An *unknown* test that skips in the full suite is still tolerated.) A red
   withholds the land without destroying the work commit.
+- **Your declared environment travels.** On green the land self-checks that the recorded commit
+  reproduces its own green from a clean tree extract — and that check runs in your **declared
+  environment**: the env-file (`verify.env_file` in `.devsteward/config.yaml`, default `.env`)
+  is copied into the ephemeral extract when present, and `os.environ` is inherited. A green that
+  legitimately reads a gitignored `.env` certifies with no shell exports. No env-file declared
+  or present means the bare, hermetic check, unchanged. If certification is withheld anyway, the
+  message names the **preserved** work commit; the cause is a source/test file the commit can't
+  hold **or** a runtime environment the check lacked — fix it (never commit a secret), then
+  `steward repeat REQ-NNN`.
 - **One flavor.** Every pytest acceptance command runs as `python -m pytest` under one
   engine-resolved interpreter; a leading bare `pytest …` is normalized to
   `<interpreter> -m pytest …` (repo root importable). A test never runs in a different flavor
