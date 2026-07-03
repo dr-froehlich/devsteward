@@ -136,6 +136,7 @@ Pick the verb by **what is actually stuck**. None of these touch a `done` REQ (s
 | A parked **decision** on a `develop` step (a genuine fork) | The session hit a choice it couldn't resolve | `steward decision answer DEC-NNN "<answer>"` |
 | A **`manual`-AC** validate hold (state F): "awaits its human oracle" | Async QA — a human must sign off | `steward validate REQ-NNN` (**not** `decision answer`) |
 | A **red validation** (the lab found a defect, or the validation test is wrong) | A human question — no auto-repair loop | `steward rework` or `steward revalidate` (below) |
+| A **`done` REQ still surfacing a parked `:validate` decision** | A diverged ledger — the land already happened; the cursor was rewound behind it | `steward validate REQ-NNN` (reconciles it from the event log; **never** hand-edit `state.yaml`) |
 
 - **`steward repeat REQ-NNN`** — the re-run verb (REQ-054, renamed from `recover`). The common
   failure is transient (a flaky env, an account swap), so the honest action is to repeat the step:
@@ -157,7 +158,9 @@ Pick the verb by **what is actually stuck**. None of these touch a `done` REQ (s
 ## Hard rules
 
 - **Never** write `status: done` in a REQ, and **never** hand-edit `.devsteward/state.yaml` — the
-  engine owns both. Faking green is the false-done hole the gate exists to close.
+  engine owns both. Faking green is the false-done hole the gate exists to close. If a `done` REQ
+  still surfaces a parked `:validate` decision (a diverged ledger), the sanctioned exit is `steward
+  validate REQ-NNN`, which reconciles it from the event log — not a hand-edit.
 - **Never** create, switch, or merge a branch to do REQ work. Everything is on `dev`.
 - **Never** read the DevSteward engine source to operate it. This manual is the contract; the
   `steward` CLI is the API.

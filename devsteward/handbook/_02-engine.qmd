@@ -174,3 +174,12 @@ a decision request to the ledger and stop* instead of blocking on `AskUserQuesti
 engine records it (`state.yaml` + `events.jsonl`), notifies, and advances to the next
 independent step. `steward decision answer <id> "<answer>"` unblocks it; the next `run`
 resumes. **The interview stays sacred** — a fork is never auto-resolved.
+
+`save()` carries a monotonic `seq`: a save from a process whose loaded `seq` is older than
+disk (a long-lived attended `validate` parent overlapping a later land) never blind-overwrites
+the newer facts — it replays only its own targeted mutation onto the reloaded state, so an
+answered decision or an advanced cursor is never silently rewound (REQ-073). If such a
+divergence already exists — a `done` REQ still surfacing an open `:validate` decision — the
+recovery is `steward validate REQ-NNN`, which reconciles the decision from the event log and
+leaves `verified_by`/`status` frozen (REQ-035). It is the verb the REQ-057 `decision answer`
+guard already redirects to; **never** hand-edit `state.yaml`.

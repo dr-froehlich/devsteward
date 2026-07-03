@@ -206,6 +206,22 @@ class ReqValidateRoutine:
             driver=driver, in_flight=False,
         )
 
+    def reconcile_stale_validation_decision(self, led: Ledger, req_id: str) -> list:
+        """Close any lingering **open** ``:validate`` decision on a **done** REQ — the D2
+        recovery (REQ-073 Decision 3).
+
+        Reachable only on the revalidate route (the caller has already established the REQ is
+        ``done``). A ``done`` REQ still surfacing an open ``:validate`` decision is a diverged
+        ledger — the land already happened and is in the event log — so the decision is
+        reconciled without re-running the System Tester or touching provenance (REQ-035).
+        Returns the decisions it closed (empty if the ledger was already clean).
+        """
+        validate_id = f"{req_id}:validate"
+        stale = [d for d in led.open_decisions() if d.step == validate_id]
+        for dec in stale:
+            led.reconcile_validation_decision(dec.id)
+        return stale
+
     def reland(
         self, ex, req_id: str, *, driver: str = "interactive"
     ) -> StepResult:

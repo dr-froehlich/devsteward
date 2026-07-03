@@ -704,6 +704,23 @@ def validate(req_id: str, quiet: bool) -> None:
     signoff = _interactive_signoff(cfg.root)
 
     if req.status == "done":
+        # REQ-073 D2 recovery: a done REQ still surfacing an open :validate decision is a
+        # diverged ledger (a stale save rewound the cursor behind the committed land). Close
+        # it here — the verb the REQ-057 `decision answer` guard already redirects to — before
+        # the (non-mutating) re-validation, so the two remedies terminate instead of looping.
+        # HEAD-agnostic like `decision answer` (single-ledger invariant only): recovery must
+        # not depend on which branch is checked out.
+        check_invariants(ex, allow_any_head=True)
+        with transaction(ex.git, label=f"reconcile stale validation {req_id}"):
+            recovered = routine.reconcile_stale_validation_decision(ex.ledger, req_id)
+        if recovered:
+            ids = ", ".join(d.id for d in recovered)
+            click.echo(click.style(
+                f"reconciled stale validation decision(s) {ids} on {req_id} from the event "
+                f"log — status and verified_by stay the frozen landing provenance. No "
+                f"hand-edit of state.yaml.", fg="green"
+            ))
+            return
         res = routine.revalidate(ex, req_id, on_event=on_event, signoff=signoff)
         if res.outcome is RunOutcome.REFUSED:
             raise click.ClickException(res.detail)
