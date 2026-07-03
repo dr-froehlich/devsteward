@@ -517,6 +517,32 @@ validation. Driven **interactively** (not by `steward run`) in this order — se
   logged. Engine + manual/handbook; regression-only ACs in `test_commit_integrity.py` (synthetic
   env-gated fixtures — the real Postgres end-to-end is FlowSteward's live proof); develop fused,
   `concept:false`. From FlowSteward's Postgres-on-SQLite capture-gate failure; with REQ-068.
+- REQ-073 — **ledger lost-update guard + stale-decision recovery** (fix): from the live
+  FlowSteward DEC-044 incident (2026-07-03 intake brief). `Ledger.save()` is a blind
+  whole-file write — no seq/mtime guard — so a long-lived process's stale snapshot (the
+  attended-validate parent loads at `start()`, saves hours later at `record()`) silently
+  rewound a correct, committed land: `state.yaml` diverged from the append-only
+  `events.jsonl`, and no verb could close the resurrected `:validate` decision
+  (`validate`-on-done routes to non-mutating `revalidate`; `decision answer` refuses and
+  redirects back — the two remedies point at each other; recovery required the forbidden
+  hand-edit). Fix: a monotonic `seq` on `state.yaml` — `save()` refuses a stale write,
+  reconciles the targeted mutation or fails loudly (a check, **not** a lock); plus the
+  targeted recovery — `steward validate` on a `done` REQ closes a lingering open
+  `:validate` decision from the event log (no new verb; the general `steward reconcile`
+  replay stays a rejected alternative). Revises the 2026-07-02 review §5: the overlap
+  hazard is *temporal*, not multi-user; distinct from the §4.6 `_park_red` dedupe gap.
+  Regression-only, hermetic; fused. With REQ-003, REQ-005, REQ-035, REQ-055, REQ-057.
+- REQ-074 — **the `steward decision` surface earns its shape** (refactor; `concept: true`):
+  Peter's standing UX complaint (intake brief §3) — `decision list` gives a question with
+  no briefing, `answer` records free text with no mechanical link to what the engine does
+  next (`Decision.options` exists but is never populated), and answering rarely has the
+  expected effect. Post-REQ-056 only genuine forks should park (2-of-34 historical parks
+  were real, per the 2026-07-02 review §1.2). Premise question first: reshape into a real
+  choose-an-option fork tool, or shrink the surface to match real usage (intake's lean:
+  shrink). Direction is decided with Peter in the attended concept phase
+  (`docs/concepts/REQ-074.md` inventories the genuine remaining producers and derives the
+  direction-specific ACs — set at intake as a provisional manual sign-off only). With
+  REQ-005, REQ-056, REQ-057; evidence includes REQ-073's recovery fix.
 - Future REQs land here as `/intake` produces them.
 
 ## Dependency graph
@@ -560,6 +586,8 @@ REQ-001
  REQ-051 + REQ-030 ── REQ-069 (fix: Build delivers the validation fixtures it owes — close the REQ-051 pincer; the builder-side duty mirroring the System Tester's never-improvise prohibition, so a missing seeded fixture can't deadlock validation; method-only skill §2 + handbook; surfaced dogfooding REQ-068 AC6)
  REQ-068 ── REQ-070 (fix: full-suite deselection must use only real node-ids — a manual/artifact AC's prose can't poison the develop gate; `_is_pytest_command` trips on the word "pytest", `_pytest_targets` keeps prose words like bare `tests` as deselect targets → `--deselect tests` empties the suite; reproduced on FlowSteward steward 0.2.0 under canonical plain pytest)
  REQ-027 + REQ-039 + REQ-064 + REQ-068 ── REQ-071 (docs: wiring-gap doctrine — concept-phase-as-functional-spec [set concept:true when ACs can't be honestly written at intake] + wire-through-the-live-entrypoint [present-but-unwired fails; tests passing ≠ wired] + don't-scope-a-known-defect-out [fix here or home in a named follow-on]; STEWARD.md + /intake skill + handbook/_00-method; pure doctrine, no engine enforcement; from the FlowSteward "built but unwired" postmortem; concept:false dogfoods its own rule)
+ REQ-003 + REQ-005 + REQ-035 + REQ-055 + REQ-057 ── REQ-073 (fix: ledger lost-update guard — monotonic seq on state.yaml, save() reconciles or refuses a stale write, never silently rewinds; + targeted recovery: validate-on-done closes a lingering open :validate decision from the event log; from the FlowSteward DEC-044 incident; revises the 2026-07-02 review §5 — the hazard is temporal, not multi-user)
+ REQ-005 + REQ-056 + REQ-057 ── REQ-074 (refactor, concept:true: the steward decision surface earns its shape — attended concept phase inventories the genuine post-REQ-056 fork producers and decides reshape-vs-shrink [intake lean: shrink] before direction-specific ACs are written)
  REQ-053 (forward-path audit) ──┬─ REQ-056 (fix: D/H off decisions → repeat; FAILED-step names its forward verb; with REQ-029, REQ-054)
                                 └─ REQ-059 (fix: interrupted run self-heals a stranded RUNNING step + honest ineligibility diagnosis; with REQ-025, REQ-026)
  REQ-047 + REQ-056 ── REQ-060 (fix: caught-up project reports an honest terminal state — cursor never names a done step; with REQ-018)
