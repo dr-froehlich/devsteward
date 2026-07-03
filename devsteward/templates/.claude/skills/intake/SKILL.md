@@ -33,6 +33,13 @@ Ask, in `AskUserQuestion` form when interactive, until you genuinely understand:
 - **Localization split:** any user-facing strings? They stay isolated/translatable; all
   code and technical text is English.
 
+**A question timeout is not an answer.** If an interactive `AskUserQuestion` gets no
+response (the harness gives up after ~60s and invites "best judgment"), the operator is
+merely away — **re-ask and wait; never proceed on defaults**. Steering these answers is
+the entire purpose of intake; a defaulted interview produces a REQ nobody chose. The only
+sanctioned way to run intake without a human is the explicit `DEVSTEWARD_UNATTENDED=1`
+park-and-surface path below — an unanswered prompt in an attended session is not it.
+
 **Park-and-surface:** if `DEVSTEWARD_UNATTENDED=1` is set, do **not** block on questions.
 Instead write a decision request to the ledger and stop (see §4).
 
