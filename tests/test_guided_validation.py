@@ -209,8 +209,10 @@ def test_pending_validation_parks_async_nonblocking(tmp_path):
     assert parse_req(req_dir / "REQ-001.md").status == "open"  # unlanded on a park
     led = Ledger(tmp_path)
     assert led.status_of("REQ-001:validate") is StepStatus.BLOCKED
-    (dec,) = led.open_decisions()
-    assert "pending" in dec.question and "REQ-001" in dec.question
+    # REQ-074: the async QA wait is a hold naming its verb, not a decision.
+    assert led.open_decisions() == []
+    hold = led.hold_note("REQ-001:validate")
+    assert "pending" in hold and "REQ-001" in hold
 
     # the pipeline is not frozen — a subsequent run advances the independent REQ-002
     ex.run()
@@ -271,8 +273,11 @@ def test_human_validation_terminal_outcomes_clean_tree(tmp_path):
     root, git, res = _run_guided(tmp_path, "declined", _decline)
     assert res.outcome is RunOutcome.PARKED
     assert "steward rework" in res.detail
-    (dec,) = Ledger(root).open_decisions()
-    assert "steward rework" in dec.question and "validation red" in dec.question
+    # REQ-074: the red validation is a hold naming both return edges, not a decision.
+    led_red = Ledger(root)
+    assert led_red.open_decisions() == []
+    hold_red = led_red.hold_note("REQ-001:validate")
+    assert "steward rework" in hold_red and "validation red" in hold_red
     assert git.current == "dev"
     assert parse_req(root / "docs/requirements/REQ-001.md").status == "open"
 

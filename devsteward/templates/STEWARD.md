@@ -159,7 +159,7 @@ Pick the verb by **what is actually stuck**. None of these touch a `done` REQ (s
 |---|---|---|
 | A step is **FAILED** (a develop step errored or the gate stayed red) | The attempt left partial edits in the tree | `steward repeat REQ-NNN` |
 | **D/H** — a develop step ineligible (e.g. no plan artifact, or split/attended need) | **Not a decision.** A mechanical go-fix-and-retry stop | fix the cause, then `steward repeat REQ-NNN` |
-| A parked **decision** on a `develop` step (a genuine fork) | The session hit a choice it couldn't resolve | `steward decision answer DEC-NNN "<answer>"` |
+| A parked **decision** on a `develop` step (a genuine fork) | The session hit a choice it couldn't resolve — the autopilot raised the captain | `steward decide DEC-NNN` (guided, from a plain shell) |
 | A **`manual`-AC** validate hold (state F): "awaits its human oracle" | Async QA — a human must sign off | `steward validate REQ-NNN` (**not** `decision answer`) |
 | A **red validation** (the lab found a defect, or the validation test is wrong) | A human question — no auto-repair loop | `steward rework` or `steward revalidate` (below) |
 | A **`done` REQ still surfacing a parked `:validate` decision** | A diverged ledger — the land already happened; the cursor was rewound behind it | `steward validate REQ-NNN` (reconciles it from the event log; **never** hand-edit `state.yaml`) |
@@ -170,16 +170,22 @@ Pick the verb by **what is actually stuck**. None of these touch a `done` REQ (s
   against the partial tree the failed attempt left. It succeeds regardless of which branch is
   checked out (single ledger). Use it for any FAILED step **and** for a D/H mechanical stop once
   you've fixed the cause (e.g. added the missing plan file).
-- **`steward decision answer DEC-NNN "<answer>"`** — resolves a **genuine fork** parked from a
-  develop step. It refuses on a validation hold and redirects you to the right verb — heed that;
-  do not try to force it.
+- **`steward decide DEC-NNN`** — the guided resolution of a **genuine fork** parked from a
+  develop step (REQ-074). From a plain shell (never inside a Claude session) it brings up a
+  session that briefs you on the fork (question, context, options, the parked session's
+  recommendation) and supports live interrogation; after it exits, the **engine** records your
+  choice + rationale, unblocks the step, and delivers the decision into the resuming session's
+  prompt. `steward decision answer DEC-NNN "<answer>"` remains as the non-guided plumbing; both
+  refuse on a legacy validation hold and redirect you to the right verb — heed that.
 - **`steward rework REQ-NNN`** — the return edge when a **red validation is a real defect**: it
   sends the validate step back to develop (`develop → recover`, `validate → pending`) so you fix
   the cause and re-validate. Reads the red evidence dir as your repair context.
 - **`steward revalidate REQ-NNN`** — the validate-layer mirror: when the develop work **stands**
   and an external lab/setup issue was fixed, re-run the validation only (`develop` stays `done`).
 
-`steward decision list` shows parked forks with their ids and questions.
+`steward decision list` shows parked forks with their briefs (question, context, options,
+recommendation). Validation and attended waits are **holds**, not decisions (REQ-074): they never
+appear in that list — `steward status` shows each hold with the verb that resolves it.
 
 ## Hard rules
 

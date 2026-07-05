@@ -170,10 +170,15 @@ selection strategy or fallback (`clauder` owns that).
 ## Park-and-surface
 
 When the engine shells out headless it sets `DEVSTEWARD_UNATTENDED=1`. Skills then *write
-a decision request to the ledger and stop* instead of blocking on `AskUserQuestion`. The
+a decision request to the ledger and stop* instead of blocking on `AskUserQuestion` — a
+genuine fork, parked **with a brief** (context, options, recommendation; REQ-074). The
 engine records it (`state.yaml` + `events.jsonl`), notifies, and advances to the next
-independent step. `steward decision answer <id> "<answer>"` unblocks it; the next `run`
-resumes. **The interview stays sacred** — a fork is never auto-resolved.
+independent step. `steward decide <id>` resolves it in a guided attended session — brief,
+live interrogation, then the engine records the operator's choice + rationale and delivers
+it into the resuming session's prompt; the next `run` continues. **The interview stays
+sacred** — a fork is never auto-resolved. Non-fork waits (a pending human oracle, an
+attended step hit in batch, a red validation) are ledger **holds** surfaced by `steward
+status` with their own verbs — they never enter the decisions list.
 
 `save()` carries a monotonic `seq`: a save from a process whose loaded `seq` is older than
 disk (a long-lived attended `validate` parent overlapping a later land) never blind-overwrites

@@ -96,9 +96,20 @@ The fused **Develop** checkpoint, in order, in one session:
 
 - *(interactive)* ask via `AskUserQuestion`, then continue. Nothing re-checks this for you —
   you and the human own the answer.
-- *(batch, `DEVSTEWARD_UNATTENDED=1`)* append a record to `.devsteward/state.yaml` under
-  `decisions:` (`{id, step, question, status: open}`) and **stop**. Do not guess. The engine
-  surfaces it and advances to the next independent step; `steward decision answer` unblocks it.
+- *(batch, `DEVSTEWARD_UNATTENDED=1`)* park the fork **with a brief** (REQ-074) and **stop**.
+  Do not guess. Append a record to `.devsteward/state.yaml` under `decisions:` —
+  `{id, step, question, status: open}` plus the brief fields: `context` (what you tried and
+  what hangs on the choice), `options` (each candidate with its consequence), and
+  `recommendation` (your pick, with why). The operator resolves the fork in a guided
+  `steward decide DEC-NNN` session and their choice is delivered into the resuming session's
+  prompt — a bare question with no brief leaves them deciding blind. The engine surfaces the
+  park and advances to the next independent step.
+  Alternatively emit the park sentinel in your output: the line
+  `[[DEVSTEWARD_PARK]] <question>` followed (before the next blank line) by context lines,
+  `- <option>` lines, and a `recommendation: <text>` line — the engine parses the same brief.
+- **Honor a delivered decision.** If your prompt carries "A fork parked on this step was
+  decided by the operator", that fork is settled — build on the recorded choice; do not
+  re-open it or re-park the same question.
 
 ## 4. Close
 

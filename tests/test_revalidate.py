@@ -181,9 +181,11 @@ def test_red_park_brief_names_both_edges(tmp_path):
     ex.advance_once(only="REQ-001")            # develop — deferred commit
     red = ex.advance_once(only="REQ-001")      # validate — artifact AC red → park
     assert red.outcome is RunOutcome.PARKED
-    (dec,) = ex.ledger.open_decisions()
-    assert "steward rework REQ-001" in dec.question
-    assert "steward revalidate REQ-001" in dec.question
+    # REQ-074: the red validation is a hold naming both edges, not a decision.
+    assert ex.ledger.open_decisions() == []
+    hold = ex.ledger.hold_note("REQ-001:validate")
+    assert "steward rework REQ-001" in hold
+    assert "steward revalidate REQ-001" in hold
 
     # Non-in-flight: the VERIFY_FAILED detail of a done re-validation names both edges too.
     routine = ReqValidateRoutine(req_dir)

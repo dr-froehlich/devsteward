@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 from datetime import date
@@ -362,8 +363,13 @@ def status() -> None:
             }.get(st, "•")
             tag = click.style(" (eligible)", fg="cyan") if s.id in eligible else ""
             # REQ-030 Decision 7: a validate step held by an undone lab REQ says so.
+            # REQ-074: a live ledger hold (a non-fork wait naming its own verb) takes
+            # precedence over the static profile note.
             note = ""
-            if s.blocked_note and s.id not in eligible and st is not StepStatus.DONE:
+            hold = led.hold_note(s.id) if st is StepStatus.BLOCKED else ""
+            if hold:
+                note = click.style(f"  ⏳ {hold.splitlines()[0]}", fg="yellow")
+            elif s.blocked_note and s.id not in eligible and st is not StepStatus.DONE:
                 note = click.style(f"  ⏳ {s.blocked_note}", fg="yellow")
             elif st is StepStatus.FAILED:
                 # REQ-056 Decision 4: a FAILED step names its own forward verb. D, H, and the
@@ -374,9 +380,12 @@ def status() -> None:
 
     decisions = led.open_decisions()
     if decisions:
-        click.echo(click.style("\nparked decisions:", fg="yellow"))
+        click.echo(click.style("\nparked forks:", fg="yellow"))
         for d in decisions:
             click.echo(f"  {d.id} [{d.step}] {d.question}")
+        click.echo(
+            "  resolve in a guided session: `steward decide DEC-NNN` (plain shell)"
+        )
 
     # REQ-036 Decision 3 / REQ-066 Decision 3: a stamped engine-owned artifact (a bundled
     # skill or the STEWARD.md manual) drifting from the installed engine is an informational
@@ -815,11 +824,29 @@ def run(
         _echo_result(res)
     parked = [r for r in results if r.outcome is RunOutcome.PARKED]
     if parked:
-        click.echo(
-            click.style(
-                f"\n{len(parked)} fork(s) parked — see `steward decision list`.", fg="yellow"
+        # REQ-074: a parked result is either a genuine fork (an open decision — the
+        # guided `steward decide` session resolves it) or a hold naming its own verb.
+        parked_steps = {r.step.id for r in parked if r.step}
+        forks = [
+            d for d in ex.live_ledger().open_decisions() if d.step in parked_steps
+        ]
+        held = len(parked) - len(forks)
+        if forks:
+            ids = ", ".join(d.id for d in forks)
+            click.echo(
+                click.style(
+                    f"\n{len(forks)} fork(s) parked — resolve with `steward decide "
+                    f"{ids if len(forks) == 1 else 'DEC-NNN'}` (see `steward decision list`).",
+                    fg="yellow",
+                )
             )
-        )
+        if held:
+            click.echo(
+                click.style(
+                    f"\n{held} step(s) held — see `steward status` for each hold's verb.",
+                    fg="yellow",
+                )
+            )
 
 
 def _echo_result(res: StepResult) -> None:
@@ -880,8 +907,15 @@ def decision_list() -> None:
     for d in open_d:
         click.echo(f"{d.id}  [{d.step}]")
         click.echo(f"    {d.question}")
-        if d.options:
-            click.echo("    options: " + ", ".join(d.options))
+        # REQ-074: render the fork brief so the operator is briefed, not just questioned.
+        if d.context:
+            for ln in d.context.splitlines():
+                click.echo(f"    {ln}")
+        for i, opt in enumerate(d.options, 1):
+            click.echo(f"    option {i}: {opt}")
+        if d.recommendation:
+            click.echo(f"    recommendation: {d.recommendation}")
+        click.echo(f"    → resolve with `steward decide {d.id}` (plain shell)")
 
 
 @decision.command("answer")
@@ -912,6 +946,105 @@ def decision_answer(decision_id: str, answer: str) -> None:
     with transaction(ex.git, label=f"decision answer {decision_id}"):
         d = ex.ledger.answer_decision(decision_id, answer)
     click.echo(f"Answered {decision_id}; {d.step} unblocked. Run `steward run` to resume.")
+
+
+def _fork_briefing_prompt(d) -> str:
+    """The initial prompt for the guided `steward decide` session (REQ-074): brief the
+    operator on the parked fork and support the live interrogation. The session advises;
+    the **engine** records the choice after it exits (editor pattern — no self-certify)."""
+    lines = [
+        f"A steward run parked a genuine fork on step {d.step} ({d.id}) — the autopilot "
+        f"raised the captain. Brief the operator and help them decide. Do NOT edit the "
+        f"ledger or answer the decision yourself: the engine records the operator's "
+        f"choice after this session ends.",
+        "",
+        f"Question: {d.question}",
+    ]
+    if d.context:
+        lines += ["", "Context from the parked session:", d.context]
+    if d.options:
+        lines += ["", "Options as the parked session saw them:"]
+        lines += [f"  {i}. {opt}" for i, opt in enumerate(d.options, 1)]
+    if d.recommendation:
+        lines += ["", f"The parked session's recommendation: {d.recommendation}"]
+    lines += [
+        "",
+        f"Start by reading the REQ ({d.req or 'see the step id'}) and the relevant code, "
+        f"present the fork in the operator's terms, answer their questions, and give a "
+        f"clear recommendation with rationale. When the operator is ready to decide, they "
+        f"exit this session; the engine then takes their choice.",
+    ]
+    return "\n".join(lines)
+
+
+@main.command()
+@click.argument("decision_id")
+def decide(decision_id: str) -> None:
+    """Resolve a parked fork in a guided attended session (REQ-074).
+
+    The resolution half of park-and-surface: brings up an interactive session that briefs
+    you on the fork (question, context, options, the parked session's recommendation),
+    supports live interrogation, and — after the session exits — records *your* choice and
+    rationale (editor pattern; the session cannot self-certify). The answered fork is
+    delivered into the resuming step's prompt; run `steward run` to continue.
+    """
+    cfg = _load_or_die()
+    ex = build_executor(cfg)
+    check_invariants(ex, allow_any_head=True)  # single-ledger only, like `decision answer`
+    if os.environ.get("DEVSTEWARD_UNATTENDED"):
+        raise click.ClickException(
+            "steward decide is the attended resolution of a parked fork — it cannot run "
+            "unattended (DEVSTEWARD_UNATTENDED is set). Run it from a plain shell."
+        )
+    if claude_mod.in_claude_session():
+        raise click.ClickException(
+            f"refusing to bring up a guided decision session from inside a Claude session "
+            f"(CLAUDECODE set) — Claude is never spawned from within Claude. Open a plain "
+            f"terminal tab and run `steward decide {decision_id}` there."
+        )
+    d = ex.ledger.find_decision(decision_id)
+    if d is None or d.status is not DecisionStatus.OPEN:
+        raise click.ClickException(f"no open decision {decision_id}")
+    if d.step.endswith(":validate"):
+        req = d.req or d.step.split(":", 1)[0]
+        raise click.ClickException(
+            f"{decision_id} is a legacy validation hold on {d.step}, not a fork to decide. "
+            f"Record the human sign-off with `steward validate {req}` "
+            f"(or, for a red validation, `steward rework {req}` / `steward revalidate {req}`)."
+        )
+    code = claude_mod.run_claude_interactive(
+        _fork_briefing_prompt(d),
+        argv_prefix=ex.accounts.claude_argv(),
+        cwd=str(ex.root),
+    )
+    if code != 0:
+        click.echo(click.style(
+            f"guided session exited non-zero ({code}) — taking your verdict anyway; "
+            f"abort with Ctrl-C to leave {decision_id} parked.", fg="yellow"
+        ))
+    # The engine records the choice (editor pattern). Numbered options, or free text.
+    click.echo(click.style(f"\n{decision_id}:", bold=True) + f" {d.question}")
+    for i, opt in enumerate(d.options, 1):
+        click.echo(f"  {i}. {opt}")
+    raw = click.prompt(
+        "Your choice — option number or free text (empty to leave parked)",
+        default="", show_default=False,
+    ).strip()
+    if not raw:
+        click.echo(f"{decision_id} stays parked.")
+        return
+    answer = raw
+    if d.options and raw.isdigit() and 1 <= int(raw) <= len(d.options):
+        answer = d.options[int(raw) - 1]
+    rationale = click.prompt(
+        "Rationale (one line; empty to skip)", default="", show_default=False
+    ).strip()
+    with transaction(ex.git, label=f"decide {decision_id}"):
+        d = ex.ledger.answer_decision(decision_id, answer, rationale=rationale or None)
+    click.echo(click.style(
+        f"Decided {decision_id}: {answer}\n{d.step} unblocked — the choice travels into "
+        f"the resuming session. Run `steward run` to continue.", fg="green"
+    ))
 
 
 # -- init (ledger only) -------------------------------------------------------

@@ -339,9 +339,11 @@ def test_split_and_concept_park_in_batch(tmp_path):
     # no develop session was spawned for the attended REQs
     assert all("REQ-001" not in c["command"] and "REQ-002" not in c["command"]
                for c in runner.calls)
-    questions = {d.step: d.question for d in Ledger(tmp_path).open_decisions()}
-    assert "split" in questions["REQ-001:develop"]
-    assert "concept" in questions["REQ-002:develop"]
+    # REQ-074: the attended wait is a ledger hold (no decision) naming the attended need.
+    led = Ledger(tmp_path)
+    assert led.open_decisions() == []
+    assert "split" in led.hold_note("REQ-001:develop")
+    assert "concept" in led.hold_note("REQ-002:develop")
 
 
 # -- AC7 ----------------------------------------------------------------------

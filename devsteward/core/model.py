@@ -80,7 +80,12 @@ class Step:
 
 @dataclass
 class Decision:
-    """A parked fork: recorded, surfaced, and resumed once answered."""
+    """A parked fork: recorded, surfaced, and resumed once answered.
+
+    REQ-074: a decision is a **genuine fork only** — validation/attended holds are ledger
+    step holds, not decisions. The park carries a fork brief (``context``, ``options``,
+    ``recommendation``) so the operator is briefed, not just questioned; the answer carries
+    the operator's ``rationale``. All brief fields default empty so legacy records load."""
 
     id: str
     step: str
@@ -91,3 +96,6 @@ class Decision:
     req: str | None = None
     raised_at: str | None = None
     answered_at: str | None = None
+    context: str = ""
+    recommendation: str = ""
+    rationale: str | None = None

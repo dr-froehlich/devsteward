@@ -323,8 +323,10 @@ def test_manual_decision_stop(tmp_path):
     assert res.outcome is RunOutcome.PARKED
     led = Ledger(tmp_path)
     assert led.status_of("REQ-001:validate") is StepStatus.BLOCKED
-    (dec,) = led.open_decisions()
-    assert "AC3" in dec.question and "human" in dec.question
+    # REQ-074: the pending oracle is a hold naming its verb, not a decision.
+    assert led.open_decisions() == []
+    hold = led.hold_note("REQ-001:validate")
+    assert "AC3" in hold and "human" in hold
     assert not _validation_events(tmp_path)  # a pending oracle records no verdict
 
     # attended: the sign-off lands the REQ and the event carries the provenance
@@ -334,7 +336,7 @@ def test_manual_decision_stop(tmp_path):
     ex2 = _executor(other)
     ex2.advance_once(only="REQ-001")
     ex2.advance_once(only="REQ-001")  # unattended pass parks the manual stop first
-    assert ex2.ledger.open_decisions()
+    assert ex2.ledger.hold_note("REQ-001:validate")  # held, not a decision (REQ-074)
     step = ex2.step_by_id("REQ-001:validate")
     res2 = ex2.validate_runner(
         ex2, step, unattended=False, driver="interactive",
@@ -350,7 +352,7 @@ def test_manual_decision_stop(tmp_path):
     req = parse_req(other / "docs/requirements/REQ-001.md")
     assert req.status == "done"
     assert "signed off by Petra" in req.frontmatter["verified_by"]
-    assert ex2.ledger.open_decisions() == []  # the parked stop is resolved, not stale
+    assert ex2.ledger.hold_note("REQ-001:validate") == ""  # the hold cleared with the land
 
     # a declined verdict is a red validation, not a pass
     declined = tmp_path / "declined"
@@ -383,8 +385,9 @@ def test_red_validation_parks_no_repair(tmp_path):
     assert ev["ok"] is False
     led = Ledger(tmp_path)
     assert led.status_of("REQ-001:validate") is StepStatus.BLOCKED
-    (dec,) = led.open_decisions()
-    assert "validation red" in dec.question
+    # REQ-074: the red park is a hold, not a decision.
+    assert led.open_decisions() == []
+    assert "validation red" in led.hold_note("REQ-001:validate")
     # exactly one develop session + one system-test session — zero repairs (D8)
     assert len(runner.calls) == 2
     assert not any("--repair" in c["command"] for c in runner.calls)

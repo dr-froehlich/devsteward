@@ -179,9 +179,33 @@ class Ledger:
             entry = state.setdefault("steps", {}).setdefault(step_id, {})
             entry["status"] = status.value
             entry["updated"] = updated
+            # REQ-074: a hold note describes *why* a step sits BLOCKED — any other
+            # transition makes it stale, so the transition clears it.
+            if status is not StepStatus.BLOCKED:
+                entry.pop("hold", None)
 
         apply(self._state)
         self._journal.append(apply)
+
+    def set_hold(self, step_id: str, note: str) -> None:
+        """Block ``step_id`` with a human-readable hold note (REQ-074).
+
+        A hold is *not* a decision: it names a non-fork wait (a pending human oracle, an
+        attended step hit in batch, a red validation with dedicated verbs) and the real
+        verb that resolves it. ``steward status`` surfaces it; nothing answers it."""
+        updated = _now()
+
+        def apply(state: dict) -> None:
+            entry = state.setdefault("steps", {}).setdefault(step_id, {})
+            entry["status"] = StepStatus.BLOCKED.value
+            entry["updated"] = updated
+            entry["hold"] = note
+
+        apply(self._state)
+        self._journal.append(apply)
+
+    def hold_note(self, step_id: str) -> str:
+        return self._state["steps"].get(step_id, {}).get("hold", "") or ""
 
     def all_statuses(self) -> dict[str, StepStatus]:
         return {sid: self.status_of(sid) for sid in self._state["steps"]}
@@ -230,8 +254,13 @@ class Ledger:
             question=decision.question,
         )
 
-    def answer_decision(self, decision_id: str, answer: str) -> Decision | None:
-        """Answer a parked decision and unblock its step (back to PENDING)."""
+    def answer_decision(
+        self, decision_id: str, answer: str, rationale: str | None = None
+    ) -> Decision | None:
+        """Answer a parked decision and unblock its step (back to PENDING).
+
+        ``rationale`` (REQ-074) records the operator's reasoning next to the chosen
+        answer; the resumed session receives both (see the executor's delivery)."""
         target = next(
             (
                 raw
@@ -252,6 +281,8 @@ class Ledger:
                     raw["status"] = DecisionStatus.ANSWERED.value
                     raw["answer"] = answer
                     raw["answered_at"] = answered_at
+                    if rationale:
+                        raw["rationale"] = rationale
                     break
             # Only unblock if it is *still* blocked in the state we are writing — never
             # resurrect a step a concurrent land already carried to DONE (REQ-073 replay).
@@ -259,12 +290,17 @@ class Ledger:
             if entry and entry.get("status") == StepStatus.BLOCKED.value:
                 entry["status"] = StepStatus.PENDING.value
                 entry["updated"] = updated
+                entry.pop("hold", None)
 
         apply(self._state)
         self._journal.append(apply)
         self.save()
         self.append_event(
-            "decision_answered", decision=decision_id, step=step, answer=answer
+            "decision_answered",
+            decision=decision_id,
+            step=step,
+            answer=answer,
+            rationale=rationale or "",
         )
         return self.find_decision(decision_id)
 

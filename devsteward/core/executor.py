@@ -38,7 +38,7 @@ from . import claude as claude_mod
 from .git import GitCli
 from .invariants import check_invariants
 from .ledger import Ledger
-from .model import Decision, Step, StepStatus
+from .model import Decision, DecisionStatus, Step, StepStatus
 from .seams import AccountProvider, GitTopology, StepSource, Verifier
 from .transaction import transaction
 from .verify import (
@@ -297,9 +297,21 @@ class Executor:
                     f"sweep requeues it and the run proceeds (no hand-edit of state.yaml)."
                 )
             if st is StepStatus.BLOCKED:
+                # REQ-074: a blocked step is either a genuine parked fork (an open
+                # decision — resolve it in the guided `steward decide` session) or a
+                # hold that names its own verb.
+                parked = next(
+                    (d for d in self.ledger.open_decisions() if d.step == s.id), None
+                )
+                if parked is not None:
+                    return (
+                        f"{req_id} has no eligible step — {s.id} is parked on an open "
+                        f"fork ({parked.id}). Resolve it with `steward decide {parked.id}`."
+                    )
+                hold = self.ledger.hold_note(s.id)
                 return (
-                    f"{req_id} has no eligible step — {s.id} is parked on an open decision. "
-                    f"Answer it with `steward decision answer` to unblock it."
+                    f"{req_id} has no eligible step — {s.id} is held: "
+                    f"{hold or 'blocked (see `steward status`)'}"
                 )
             if st is StepStatus.FAILED:
                 return (
@@ -348,6 +360,9 @@ class Executor:
         # the failed attempt's partial edits (already in the tree) instead of starting clean.
         recovering = led.status_of(step.id) is StepStatus.RECOVER
         command = step.command + (" --repeat" if recovering else "")
+        # REQ-074: a fork the operator decided travels into the resuming session — the
+        # same wire as the --repair failure brief. Without it the answer is write-only.
+        command += self._answered_fork_brief(step)
         led.set_cursor(step.id)
         led.set_status(step.id, StepStatus.RUNNING)
         led.save()
@@ -597,22 +612,41 @@ class Executor:
         return StepResult(step, RunOutcome.DONE, detail, commit=sha)
 
     def _park_attended(self, step: Step) -> StepResult:
-        """Park an attended step in batch (REQ-029 Decision 9): record a decision naming the
-        attended need and leave the step BLOCKED, spawning no claude session."""
+        """Park an attended step in batch (REQ-029 Decision 9): leave the step BLOCKED with
+        a hold naming the attended need, spawning no claude session.
+
+        REQ-074: needing a human *present* is a scheduling hold, not a fork — recording it
+        as a decision invited the circular answer→re-run→re-park trap. The hold's verb is
+        running the step attended."""
         led = self.ledger
-        if not any(d.step == step.id for d in led.open_decisions()):
-            dec = Decision(
-                id=led.next_decision_id(),
-                step=step.id,
-                question=step.attended_reason
-                or f"{step.req or step.id} needs an attended session",
-                req=step.req,
-            )
-            led.park_decision(dec)
-        led.set_status(step.id, StepStatus.BLOCKED)
+        note = (
+            step.attended_reason
+            or f"{step.req or step.id} needs an attended session"
+        ) + f" — run `/advance {step.req or step.id}` in a live session."
+        led.set_hold(step.id, note)
         led.save()
         led.append_event("attended_parked", step=step.id, reason=step.attended_reason)
         return StepResult(step, RunOutcome.PARKED, step.attended_reason)
+
+    def _answered_fork_brief(self, step: Step) -> str:
+        """The delivery wire for a decided fork (REQ-074): the most recent *answered*
+        decision on this step, formatted for the resuming session's prompt. Empty when
+        none exists. Idempotent — a decision, once made, stays valid context on re-runs."""
+        answered = [
+            d
+            for d in self.ledger.decisions()
+            if d.step == step.id and d.status is DecisionStatus.ANSWERED and d.answer
+        ]
+        if not answered:
+            return ""
+        d = answered[-1]
+        rationale = f"\nRationale: {d.rationale}" if d.rationale else ""
+        return (
+            f"\n\nA fork parked on this step was decided by the operator ({d.id}):\n"
+            f"Question: {d.question}\n"
+            f"Choice: {d.answer}{rationale}\n"
+            f"Honor this decision; do not re-open the fork."
+        )
 
     def _repair_command(self, step: Step, brief: str) -> str:
         """The prompt for a fresh repair session (REQ-029 Decision 8): the develop command
@@ -727,16 +761,39 @@ class Executor:
                 self.ledger.save()
                 return d
         if PARK_SENTINEL in (text or ""):
-            question = text.split(PARK_SENTINEL, 1)[1].strip().splitlines()[0]
-            dec = Decision(
-                id=self.ledger.next_decision_id(),
-                step=step.id,
-                question=question or "unspecified fork raised by skill",
-                req=step.req,
-            )
+            dec = self._parse_park_brief(text, step)
             self.ledger.park_decision(dec)
             return dec
         return None
+
+    def _parse_park_brief(self, text: str, step: Step) -> Decision:
+        """Parse the fork brief following the park sentinel (REQ-074).
+
+        Line 1 after the sentinel is the question; the following block (up to a blank
+        line) carries the brief: ``- <option>`` lines, a ``recommendation: <text>`` line,
+        and any other lines as context — so the operator is briefed, not just questioned."""
+        block = text.split(PARK_SENTINEL, 1)[1].strip().split("\n\n", 1)[0]
+        lines = [ln.strip() for ln in block.splitlines() if ln.strip()]
+        question = lines[0] if lines else ""
+        options: list[str] = []
+        recommendation = ""
+        context_lines: list[str] = []
+        for ln in lines[1:]:
+            if ln.startswith("- "):
+                options.append(ln[2:].strip())
+            elif ln.lower().startswith("recommendation:"):
+                recommendation = ln.split(":", 1)[1].strip()
+            else:
+                context_lines.append(ln)
+        return Decision(
+            id=self.ledger.next_decision_id(),
+            step=step.id,
+            question=question or "unspecified fork raised by skill",
+            req=step.req,
+            options=options,
+            recommendation=recommendation,
+            context="\n".join(context_lines),
+        )
 
     def _commit(self, step: Step) -> str | None:
         if self.committer is not None:

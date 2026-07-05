@@ -8,7 +8,7 @@ import pytest
 from devsteward.core.accounts import SingleAccountProvider
 from devsteward.core.executor import Executor, RunOutcome
 from devsteward.core.ledger import Ledger
-from devsteward.core.model import Step, StepStatus
+from devsteward.core.model import Decision, Step, StepStatus
 from devsteward.core.verify import CommandVerifier
 
 from conftest import (
@@ -362,13 +362,23 @@ def test_only_ineligibility_names_real_cause(project):
     assert "REQ-R:develop" in msg and "RUNNING" in msg
     assert "dependency" not in msg
 
-    # (b) BLOCKED (parked on a decision) → named as parked, never a dependency block.
+    # (b) BLOCKED → named as parked (a fork, with its decide verb) or held (REQ-074),
+    # never a dependency block.
     blocked = Step(id="REQ-B:develop", command="/advance REQ-B develop", req="REQ-B")
     ex = _executor(project, [blocked], FakeRunner(default=ok_result()))
-    ex.ledger.set_status("REQ-B:develop", StepStatus.BLOCKED)
-    ex.ledger.save()
+    ex.ledger.park_decision(Decision(
+        id=ex.ledger.next_decision_id(), step="REQ-B:develop", req="REQ-B",
+        question="fork?",
+    ))
     msg = ex.only_ineligibility_reason("REQ-B")
-    assert "parked" in msg and "dependency" not in msg
+    assert "parked" in msg and "steward decide DEC-001" in msg
+    assert "dependency" not in msg
+    held = Step(id="REQ-H:develop", command="/advance REQ-H develop", req="REQ-H")
+    ex_h = _executor(project, [held], FakeRunner(default=ok_result()))
+    ex_h.ledger.set_hold("REQ-H:develop", "awaits the human oracle")
+    ex_h.ledger.save()
+    msg_h = ex_h.only_ineligibility_reason("REQ-H")
+    assert "held" in msg_h and "human oracle" in msg_h and "dependency" not in msg_h
 
     # (c) a genuinely unfinished dependency → the dependency block message, naming the dep.
     # REQ-X:develop depends on REQ-W:develop, which is not DONE (PENDING), and REQ-X has no

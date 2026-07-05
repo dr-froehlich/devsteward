@@ -251,16 +251,20 @@ are reserved for genuine human forks.
   decision** (REQ-056 took these off the decision list — parking them only generated a
   stalemate). `steward status` names the real cause; add the plan / drive it attended, then
   `steward repeat REQ-NNN` to re-arm it. No `decision answer` is involved.
-- **A genuine fork → `steward decision answer DEC-NNN "<answer>"`.** When a session hits a
-  real human choice it can't resolve from the REQ + repo, it parks a decision (batch) or asks
-  (interactive). `decision answer` resolves a decision parked from a **develop** step; the
-  next `steward run` resumes. It refuses on a validation hold and redirects you (next point).
-- **A pending `manual`-AC validation (state F) → `steward validate REQ-NNN`, not `decision
-  answer`.** A standing QA ticket *is* a parked decision (a genuine human-present wait), but
-  its clear verb is `steward validate` — running it attended records the sign-off and fires
-  the deferred land. `steward decision answer` on such a ticket is **refused and redirected**
-  (REQ-057): answering it would flip the validate step back to pending and, unattended,
-  re-park — the same circular trap REQ-056 removed for D/H.
+- **A genuine fork → `steward decide DEC-NNN` (guided, from a plain shell).** When a session
+  hits a real human choice it can't resolve from the REQ + repo, it parks a decision **with a
+  brief** — context, options, its recommendation (batch) — or asks (interactive). `decide`
+  (REQ-074) brings up a guided session that briefs you and supports live interrogation; after
+  it exits the engine records your choice + rationale, unblocks the step, and **delivers the
+  decision into the resuming session's prompt** — the next `steward run` continues with the
+  fork cleared. (`steward decision answer DEC-NNN "<answer>"` remains as non-guided plumbing.)
+- **A pending `manual`-AC validation (state F) → `steward validate REQ-NNN`, not a
+  decision.** An open validation is an open validation (REQ-074): the wait is a ledger
+  **hold** shown by `steward status` with its verb, never a decision record — running
+  `steward validate` attended records the sign-off and fires the deferred land. The same
+  holds for the attended-step wait in batch (run the step attended) — holds keep the
+  decisions list an alarm panel for genuine forks only, closing the circular
+  answer→re-run→re-park trap REQ-056/057 fought.
 - **A red validation → `steward rework` or `steward revalidate`, keyed on the root cause.**
   `rework` when the develop was hollow (internal cause — send it back to develop and fix it);
   `revalidate` when the develop stands and an external lab/setup issue was fixed (re-run the
@@ -292,7 +296,7 @@ steward lint                         # green?
 steward checkpoint REQ-014           # engine verifies and lands on `dev` — one transaction
 # or, the batch lane for a queue of well-specified REQs:
 steward run                          # march everything eligible; park on forks
-steward decision list                # anything parked?
-steward decision answer DEC-001 "use RFC 4180 quoting"
-steward run                          # resume
+steward decision list                # any genuine fork parked? (holds live in `status`)
+steward decide DEC-001               # guided: brief → interrogate → your choice recorded
+steward run                          # resume — the choice travels into the session
 ```

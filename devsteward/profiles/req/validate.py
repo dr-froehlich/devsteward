@@ -35,7 +35,7 @@ from ...core import claude as claude_mod
 from ...core.executor import RunOutcome, StepResult
 from ...core.ledger import LEDGER_DIRNAME, Ledger
 from ...core.transaction import transaction
-from ...core.model import AcceptanceCheck, Decision, Step, StepStatus
+from ...core.model import AcceptanceCheck, Step, StepStatus
 from ...core.verify import (
     NoUsableEnvError,
     resolve_test_interpreter,
@@ -794,7 +794,11 @@ class ReqValidateRoutine:
     def _park_manual(
         self, ex, step: Step, req: ReqFile, manual_acs, *, in_flight: bool
     ) -> StepResult:
-        """Unattended manual AC → decision stop naming the pending human oracle (D4)."""
+        """Unattended manual AC → hold naming the pending human oracle (D4).
+
+        REQ-074: an open validation is an open validation, not an open decision — the
+        wait is recorded as a ledger hold (surfaced by ``steward status``), never as a
+        ``Decision`` record."""
         led = ex.ledger
         ids = ", ".join(c.id for c in manual_acs)
         question = (
@@ -803,12 +807,7 @@ class ReqValidateRoutine:
         )
         if not in_flight:
             return StepResult(step, RunOutcome.REFUSED, question)
-        if not any(d.step == step.id for d in led.open_decisions()):
-            dec = Decision(
-                id=led.next_decision_id(), step=step.id, question=question, req=req.id
-            )
-            led.park_decision(dec)
-        led.set_status(step.id, StepStatus.BLOCKED)
+        led.set_hold(step.id, question)
         led.save()
         return StepResult(step, RunOutcome.PARKED, question)
 
@@ -826,12 +825,8 @@ class ReqValidateRoutine:
             f"sign-off. Run `steward validate {req.id}` from a plain shell when ready; "
             f"meanwhile other REQs proceed (the waiting human does not freeze the pipeline)."
         )
-        if not any(d.step == step.id for d in led.open_decisions()):
-            dec = Decision(
-                id=led.next_decision_id(), step=step.id, question=question, req=req.id
-            )
-            led.park_decision(dec)
-        led.set_status(step.id, StepStatus.BLOCKED)
+        # REQ-074: a standing QA work-item is a hold, not a decision.
+        led.set_hold(step.id, question)
         led.save()
         # REQ-048 (was D3/D4): commit the ledger/evidence close on ``dev``. A pending human
         # validation is a standing work-item; the next ``steward run`` advances other REQs.
@@ -862,11 +857,10 @@ class ReqValidateRoutine:
         if not in_flight:
             return StepResult(step, RunOutcome.VERIFY_FAILED, f"{brief}\n\n{choice}")
         question = f"{req.id} validation red — needs a human:\n{brief[:1500]}\n\n{choice}"
-        dec = Decision(
-            id=led.next_decision_id(), step=step.id, question=question, req=req.id
-        )
-        led.park_decision(dec)
-        led.set_status(step.id, StepStatus.BLOCKED)
+        # REQ-074: the red validation's two return edges already have dedicated verbs
+        # (`steward rework` / `steward revalidate`, keyed on the validation event) — the
+        # wait is a hold, not a decision to answer.
+        led.set_hold(step.id, question)
         led.save()
         if attended:
             ex._commit_ledger_close(step, "ledger close — validation declined (red)")
