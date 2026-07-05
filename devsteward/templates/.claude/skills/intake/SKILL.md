@@ -57,6 +57,19 @@ cannot disconfirm anything: name it `regression` honestly, or sharpen the criter
 a decoupled observable exists. (Oracle = the part of a test that decides correct vs
 incorrect, distinct from the fixture and the system under test.)
 
+**Wire through the live entrypoint (REQ-071).** A *system-scoped* criterion must exercise
+the feature through its **real running entrypoint** (the cadence / scheduler, the served
+surface) — so a feature that is present and unit-tested but **unwired** *fails* the
+criterion. **Tests passing ≠ wired**: "the unit is correct" and "the system invokes the
+unit" are different claims, and a criterion that only proves the first goes green while
+the user-visible feature stays dead.
+
+**A known defect is never scoped out silently (REQ-071).** When the interview surfaces a
+defect this REQ will not fix, it is either fixed here or homed in a **named follow-on REQ**
+(record the home in Notes). Genuine non-goals may simply be listed out-of-scope; known
+*defects* may not be silently deferred — silent deferral is how "built but unwired"
+stayed invisible.
+
 ### 2b. Classify every criterion: `check:`
 
 Every acceptance criterion carries a required `check:` field — the routing key that maps
@@ -138,6 +151,22 @@ and no lab is needed):
   as its deliverable — the build wires it (the bundle directory is its natural home). The author
   decides per REQ; the engine enforces no criterion. There is no separate `steward concept` step;
   the attended develop session *is* the concept phase.
+  **Decision rule (REQ-071): set `concept: true` when the acceptance criteria cannot be
+  honestly written at intake** — the concept phase is where you earn the ACs you can't yet
+  write (a cause/path analysis for an outcome REQ; a committed prototype or frozen live data
+  for an empirical one). An empirical concept phase may *iterate* — commit, push, deploy —
+  until its deliverable is frozen; `steward checkpoint` is the terminal act (the `/advance`
+  skill carries that workflow).
+  **Phase-model placement — ask this explicitly (REQ-071):** when `concept: true` is set
+  *because the target ACs depend on the concept deliverable*, also decide where the
+  post-freeze work lives: **`develop: split`**, so a post-freeze develop phase iterates the
+  analysis and authors the target ACs against the frozen deliverable, **or** a **named
+  downstream REQ** that owns the modeling — and then the upstream REQ must **never carry the
+  downstream REQ's acceptance bar** (no "sufficient basis for phase-N+1"-style manual AC on
+  an upstream inventory step whose own Notes scope that work out — the FlowSteward REQ-081
+  AC6 trap). `concept: true` + `develop: fused` stays the legitimate default for spike-shaped
+  concepts whose ACs *are* writable at intake; either shape alone is fine — the *unexamined
+  combination* is the defect.
 - `lab:` — which REQs own the **lab assets** the System-Test phase will require?
   Default `[]`.
 - `develop:` — `fused`, one design+build session (the **default**), or `split`, an

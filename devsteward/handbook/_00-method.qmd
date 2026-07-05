@@ -26,6 +26,38 @@ fail to propagate. DevSteward is the single controlled baseline.
 5. **Verification is mechanical.** Acceptance criteria name runnable tests; a step is
    done only when they are green — checked by the engine, not asserted by a model.
 
+## Earning the acceptance criteria (the V-model left arm) {#sec-earning-acs}
+
+Intake and the concept phase divide the left arm of the V-model between them, and five
+doctrine rules (REQ-071) govern that split — each one a codified consumer postmortem:
+
+1. **Concept-phase-as-functional-spec.** Intake captures the solution-free *user*
+   requirement. When the acceptance criteria **cannot be honestly written at intake** —
+   the causes / stuck-paths / seams are unknown, or the deliverable is empirical — set
+   `process.concept: true`: *the concept phase is where you earn the ACs you can't yet
+   write*. The attended session derives them (the functional spec — where solution
+   knowledge legitimately enters); the deliverable is whatever earns them, a
+   cause/path-analysis doc or a committed prototype (the bundle-directory form).
+2. **Wire through the live entrypoint.** A system-scoped criterion must exercise the
+   feature through its **real running entrypoint** (the cadence, the served surface), so
+   present-but-unwired *fails* it. **Tests passing ≠ wired** — "the unit is correct" and
+   "the system invokes the unit" are different claims.
+3. **Don't scope a known defect out.** A known defect is fixed in the current REQ or homed
+   in a **named follow-on REQ** — never silently deferred; non-goals may be out-of-scope,
+   defects may not.
+4. **The concept phase iterates until the deliverable is frozen.** An *empirical* concept
+   phase (frozen live data, a committed prototype) may legitimately commit, push, and
+   deploy repeatedly to gather its own inputs; **`steward checkpoint` is the terminal
+   act**, sanctioned even over an already-clean tree (it records the step over an
+   effectively no-op commit). One checkpoint bounds the bookkeeping, not the round-trips.
+5. **Phase-model placement.** When `concept: true` is set *because the target ACs depend
+   on the concept deliverable*, intake also decides where the post-freeze work lives:
+   `develop: split` (a post-freeze develop phase authors the target ACs) or a named
+   downstream REQ — and the upstream REQ must **never carry the downstream REQ's
+   acceptance bar**. `concept: true` + `develop: fused` remains the legitimate default for
+   spike-shaped concepts; either shape alone is fine — the *unexamined combination* is the
+   defect.
+
 ## First-class conventions
 
 These are not style preferences; the linter and the engine enforce them.

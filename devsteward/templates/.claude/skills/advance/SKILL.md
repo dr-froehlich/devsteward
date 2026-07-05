@@ -60,13 +60,22 @@ Everything tagged *(batch)* or *(interactive)* below applies to that mode only.
 
 The fused **Develop** checkpoint, in order, in one session:
 
-- **Concept first, if declared (REQ-039).** If the REQ set `process.concept: true`, this
+- **Concept first, if declared (REQ-039/067).** If the REQ set `process.concept: true`, this
   attended develop session *is* its concept phase: do the architecture / risk buy-down /
   spike work first and capture the conclusion (chosen design path, rejected alternatives,
-  spike findings) in a **concept document** at `docs/concepts/REQ-NNN.md`, referenced from
-  the REQ's `concept_refs:`. Spikes are throwaway — never commit prototype code, only the
-  doc. The land **refuses** unless that doc exists and `concept_refs:` names it. Then write
-  the implementation plan *against* the approved concept. (REQs without the flag skip this.)
+  spike findings) in a **concept deliverable** — a flat `docs/concepts/REQ-NNN.md` or a
+  `docs/concepts/REQ-NNN/` bundle directory — referenced from the REQ's `concept_refs:`.
+  The land **refuses** unless that deliverable exists and `concept_refs:` names it. A
+  design-only spike stays throwaway (capture the doc, discard the prototype code) — but an
+  **empirical** concept deliverable, a committed frozen prototype (REQ-067) or frozen live
+  data the session must gather from the real world, is a different workflow: **iterate
+  until the deliverable is frozen**. Such a phase may legitimately **commit, push, and
+  deploy repeatedly on `dev`** to produce its own inputs (interactive only — batch parks a
+  `concept: true` step); the one-checkpoint frame bounds the *bookkeeping*, not those
+  round-trips. **`steward checkpoint` is the terminal act**, run once the deliverable is
+  frozen — it is sanctioned over an already-clean tree and records the step over an
+  effectively no-op commit. Then write the implementation plan *against* the approved
+  concept. (REQs without the flag skip this.)
 - **Plan first.** Turn the REQ into a concrete approach and capture it in `docs/plans/`
   (data shapes, interfaces, the files you'll touch, the tests you'll write). The plan
   artifact is **required**: the engine refuses to land a REQ when no file in `docs/plans/`
@@ -105,7 +114,9 @@ End with the fixed report (below) **after** handling the land per your mode:
   (that verb re-arms a *FAILED* batch step; a red interactive `checkpoint` left no failed step). Do **not** commit
   separately and do **not** hand-edit `state.yaml` — `checkpoint` is the committer (committing
   first would double-commit; editing the ledger by hand is what let it drift out of sync with
-  a committed `done`).
+  a committed `done`). The one sanctioned exception: mid-phase commits during an *empirical*
+  `concept: true` phase (§2) — the terminal `checkpoint` still closes the step, no-op commit
+  or not.
 - *(batch)* do **not** commit (and never create a branch). Leave the working tree dirty; the
   engine verifies, lands the REQ (flip + index + commit, on `dev`), and advances the ledger.
   Committing here would *double-commit* — the engine commits too.

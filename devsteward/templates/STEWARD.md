@@ -42,7 +42,8 @@ steward checkpoint        # close it: the engine re-runs the tests and lands on 
 
 - **`/advance`** (a skill) does exactly one fused develop checkpoint and stops. In a live
   session it asks you at forks. It leaves the working tree dirty for the engine — it does **not**
-  commit.
+  commit. (One exception: an *empirical* `concept: true` phase may commit mid-phase — see the
+  concept-gate paragraph below.)
 - **`steward checkpoint [REQ-NNN develop]`** is the interactive close. It re-runs the named
   acceptance tests through the land-grade gate, checks a `docs/plans/` file names the REQ, and on
   green makes the one authoritative commit (frontmatter + index + code) and advances the ledger —
@@ -55,6 +56,19 @@ also **refuses** unless a concept deliverable — `docs/concepts/REQ-NNN.md` **o
 `docs/concepts/REQ-NNN/` bundle directory — exists and the REQ's `concept_refs:` names it (the flat
 file or a path inside the directory). The bundle form is for a concept phase that keeps a committed
 prototype as its deliverable, not only a throwaway spike.
+
+**The concept phase is where you earn the ACs you can't yet write** (REQ-071): set
+`process.concept: true` when the acceptance criteria **cannot be honestly written at intake** —
+the attended session derives them from the analysis or prototype (the functional spec, where
+solution knowledge legitimately enters). An **empirical** concept phase — one whose deliverable is
+frozen live data or a committed prototype the session must gather from the real world —
+legitimately **iterates**: it may commit, push, and deploy repeatedly on `dev` to produce its own
+inputs. **`steward checkpoint` is the terminal act**, run once the deliverable is frozen; over an
+already-clean tree it simply records the step (an effectively no-op commit). And the phase model
+is decided at intake: when the target ACs depend on the concept deliverable, the post-freeze work
+needs a declared home — `develop: split` (a post-freeze develop phase authors the target ACs) or
+a **named downstream REQ** — and the upstream REQ must **never carry the downstream REQ's
+acceptance bar**.
 
 ## The batch lane (headless queues)
 
@@ -123,6 +137,18 @@ typed the command. The four lanes:
   the older AC's `check:` from `live → artifact`: it leaves the standing develop gate, stays
   re-runnable via `steward revalidate`, and you record the superseding test/REQ in the AC text or
   Notes. There is no `steward degrade`.
+
+## Authoring doctrine (REQ-071)
+
+Two rules for writing acceptance criteria that cannot go green while the feature stays dead:
+
+- **Wire through the live entrypoint.** A *system-scoped* acceptance criterion must exercise the
+  feature through its **real running entrypoint** (the cadence / scheduler, the served surface) —
+  a feature that is present and unit-tested but **unwired** *fails* the criterion. **Tests
+  passing ≠ wired**: "the unit is correct" and "the system invokes the unit" are different claims.
+- **Don't scope a known defect out.** A known defect is either fixed in the current REQ or homed
+  in a **named follow-on REQ** — never silently deferred. Genuine non-goals may be listed
+  out-of-scope; known *defects* may not.
 
 ## Recovery — getting out of every red or parked state
 
