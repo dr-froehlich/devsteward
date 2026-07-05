@@ -98,6 +98,20 @@ steward validate REQ-NNN    # the single entry point for the validate step
 - On green, the same mechanical land fires (flip + index + ledger, on `dev`). A green validate on
   an already-`done` REQ just appends a fresh evidence event.
 
+**The engine hands each `artifact` grading test its evidence dir.** When the engine runs an
+`artifact` AC's test command it sets **`DEVSTEWARD_EVIDENCE_DIR`** in that command's environment
+to the current run's evidence dir (an absolute path), **overriding** any inherited value. This is
+the supported way for a grading test to find the artifacts the System Tester captured — read it
+from the environment; never rely on an `export` left by a capture step (a stale one is overridden,
+per run, so it cannot leak into a later grade).
+
+**Red-only revalidation.** `steward revalidate REQ-NNN` re-opens **only the ACs that were red**
+in the last validation; the green one-offs (a passed `artifact` capture, a recorded `manual`
+sign-off) are **carried forward** into the new run's evidence dir with provenance — not
+re-performed. The System Tester's prompt names only the scoped ACs (`--ac …`). If every AC was
+red (or there were no per-AC results), it degrades to a full re-run. A carried AC whose source
+files are missing is a hard red, never a silent pass.
+
 ## Acceptance lanes — how the engine runs your tests (REQ-068)
 
 The **engine** decides how each acceptance test runs — which lane, which flavor. You declare the

@@ -215,12 +215,26 @@ class Outcome:
     parsed: bool
 
 
-def _pytest_outcome(cmd: str, cwd: str | None, timeout: float) -> Outcome:
+def _subprocess_env(env: dict[str, str] | None) -> dict[str, str] | None:
+    """The child environment for a grading subprocess: the engine's own environment with
+    ``env`` overlaid (REQ-075 AC3). The overlay **wins** over any inherited value, so an
+    injected ``DEVSTEWARD_EVIDENCE_DIR`` overrides a stale one left by a prior capture's
+    ``export``. ``None`` (the default) means "inherit unchanged" — subprocess sees
+    ``os.environ`` and nothing is allocated."""
+    if not env:
+        return None
+    return {**os.environ, **env}
+
+
+def _pytest_outcome(
+    cmd: str, cwd: str | None, timeout: float, env: dict[str, str] | None = None
+) -> Outcome:
     """Run a pytest command with an injected ``--junitxml`` and parse per-test counts.
 
     Exit code 0 cannot tell a pass from a skip (both exit 0) or a zero-collection from a
     real pass; the built-in JUnit XML can. No plugin/dependency is added — ``--junitxml``
-    and ``junit_family=xunit2`` ship with pytest.
+    and ``junit_family=xunit2`` ship with pytest. ``env`` overlays the child environment
+    (REQ-075 AC3: the engine hands the grading test its evidence dir).
     """
     fd, xml_path = tempfile.mkstemp(suffix=".xml", prefix="devsteward-junit-")
     os.close(fd)
@@ -228,7 +242,8 @@ def _pytest_outcome(cmd: str, cwd: str | None, timeout: float) -> Outcome:
         full = f"{cmd} --junitxml={shlex.quote(xml_path)} -o junit_family=xunit2"
         try:
             proc = subprocess.run(
-                full, shell=True, cwd=cwd, capture_output=True, text=True, timeout=timeout
+                full, shell=True, cwd=cwd, capture_output=True, text=True, timeout=timeout,
+                env=_subprocess_env(env),
             )
         except subprocess.TimeoutExpired:
             return Outcome(0, 0, 0, 0, 0, 124, f"timeout: {cmd}", parsed=False)

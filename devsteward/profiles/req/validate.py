@@ -25,6 +25,7 @@ append through :meth:`ReqValidateRoutine.revalidate` without its status being di
 from __future__ import annotations
 
 import hashlib
+import shutil
 import subprocess
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -44,6 +45,12 @@ from .reqfile import ReqFile, load_reqs
 from .verify import ReqVerifier
 
 EVIDENCE_DIRNAME = "evidence"
+
+#: REQ-075 AC3 — the engine hands each ``artifact`` grading command the current run's
+#: evidence dir through this variable, set per-subprocess and overriding any inherited
+#: value. Documented in STEWARD.md as the supported way for a grading test to locate its
+#: evidence (it replaces every consumer's ambient ``export`` convention).
+EVIDENCE_ENV_VAR = "DEVSTEWARD_EVIDENCE_DIR"
 
 
 @dataclass
@@ -84,6 +91,7 @@ class StartContext:
     evidence_dir: Path
     evidence_rel: str
     in_flight: bool
+    reval: dict | None = None  # REQ-075 AC1: the scoped revalidate driving this run, if any
 
 
 def _now_stamp() -> str:
@@ -100,6 +108,33 @@ def _sha256(path: Path) -> str:
         for chunk in iter(lambda: fh.read(65536), b""):
             h.update(chunk)
     return h.hexdigest()
+
+
+def _pending_revalidate(led: Ledger, req_id: str) -> dict | None:
+    """The scoped ``revalidate`` event awaiting its run (REQ-075 AC1), or ``None``.
+
+    Returns the latest ``revalidate`` event for ``req_id`` that carries a ``scope`` and has
+    no ``validation`` event after it (nothing has consumed the scope yet). ``None`` means a
+    full re-run — a plain/degenerate revalidate that recorded no scope, or a scope already
+    spent by a later validation."""
+    pending: dict | None = None
+    for ev in led.events():
+        if ev.get("req") != req_id:
+            continue
+        if ev.get("event") == "validation":
+            pending = None  # a validation consumes any earlier revalidate scope
+        elif ev.get("event") == "revalidate" and ev.get("scope") is not None:
+            pending = ev
+    return pending
+
+
+def _ac_flag(reval: dict | None) -> str:
+    """The ``--ac AC1,AC3`` suffix naming the scoped ACs for the System-Tester session
+    (REQ-075 AC1/step 2), or ``""`` for a full run."""
+    if reval is None:
+        return ""
+    scope = reval.get("scope") or []
+    return " --ac " + ",".join(scope) if scope else ""
 
 
 class ReqValidateRoutine:
@@ -351,6 +386,7 @@ class ReqValidateRoutine:
             evidence_dir=evidence_dir,
             evidence_rel=str(evidence_dir.relative_to(ex.root)),
             in_flight=True,
+            reval=_pending_revalidate(led, req.id),  # REQ-075 AC1: scoped re-run, if any
         )
 
     def record(
@@ -376,21 +412,38 @@ class ReqValidateRoutine:
         artifact_acs = [c for c in req.acceptance if c.check == "artifact"]
         manual_acs = [c for c in req.acceptance if c.check == "manual"]
 
+        # REQ-075 AC2: on a scoped re-run, carry the green one-offs forward before grading.
+        reval = ctx.reval
+        carried_ids = {c["ac"] for c in (reval.get("carried") if reval else []) or []}
+        carried_records: list[dict] = []
+        carry_results: list[dict] = []
+        carried_signoffs: list[dict] = []
+        carry_ok = True
+        if reval is not None:
+            carried_records, carry_results, carried_signoffs, carry_ok = self._carry_forward(
+                ex, reval, ctx.evidence_dir
+            )
+
         results, all_green = self._artifact_gate(
             ex, req, artifact_acs, ctx.evidence_dir
         )
+        results.extend(carry_results)
+        if not carry_ok:
+            all_green = False
 
-        signoffs: list[dict] = []
-        if manual_acs and all_green:
+        # A carried (green) manual AC is not re-signed — its verdict rode in via carry.
+        signoffs: list[dict] = list(carried_signoffs)
+        fresh_manual = [c for c in manual_acs if c.id not in carried_ids]
+        if fresh_manual and all_green:
             if signoff is None:
                 # No verdict source → the human has not answered yet: async QA park (D3).
-                return self._park_pending(ex, step, req, manual_acs)
-            for ac in manual_acs:
+                return self._park_pending(ex, step, req, fresh_manual)
+            for ac in fresh_manual:
                 verdict = signoff(ac)
                 if verdict.deferred:
                     # Pending — the human stepped away mid-validation (D3/D7). Park async;
                     # nothing recorded, the work-item stands.
-                    return self._park_pending(ex, step, req, manual_acs)
+                    return self._park_pending(ex, step, req, fresh_manual)
                 signoffs.append(
                     {
                         "ac": ac.id,
@@ -432,6 +485,7 @@ class ReqValidateRoutine:
             results=results,
             artifacts=artifacts,
             signoffs=signoffs,
+            carried=carried_records,
         )
 
         if not all_green:
@@ -465,7 +519,9 @@ class ReqValidateRoutine:
         ctx = self.start(ex, step)
         if isinstance(ctx, StepResult):
             return ctx
-        outcome = ex.bring_up_guided_session(step, ctx.evidence_rel, on_event=on_event)
+        outcome = ex.bring_up_guided_session(
+            step, ctx.evidence_rel, on_event=on_event, ac_flag=_ac_flag(ctx.reval)
+        )
         if isinstance(outcome, str):
             # CLAUDECODE refusal — never spawn Claude from within Claude. The start half's
             # RUNNING survives for a clean re-entry from a plain shell.
@@ -500,27 +556,50 @@ class ReqValidateRoutine:
         evidence_dir.mkdir(parents=True, exist_ok=True)
         evidence_rel = str(evidence_dir.relative_to(ex.root))
 
+        # REQ-075 AC1: a scoped revalidate re-captures only the red ACs and carries the
+        # green one-offs forward. ``None`` = a full re-run (today's behavior).
+        reval = _pending_revalidate(led, req.id)
+        carried_ids = {c["ac"] for c in (reval.get("carried") if reval else []) or []}
+
         # 1. The System Tester session (Decision 2) — fresh, diff-free, lab prep and
-        #    artifact capture only. No session when there is nothing to capture.
+        #    artifact capture only. No session when there is nothing to capture. On a scoped
+        #    re-run its prompt names only the red ACs (REQ-075 step 2).
         if artifact_acs:
             failure = self._run_session(
                 ex, step, evidence_rel,
                 unattended=unattended, on_event=on_event, in_flight=in_flight,
+                ac_flag=_ac_flag(reval),
             )
             if failure is not None:
                 return failure
 
+        # REQ-075 AC2: carry the green one-offs forward before grading — copy their artifacts
+        # into this run's evidence dir and honor a carried manual sign-off (no new stop).
+        carried_records: list[dict] = []
+        carry_results: list[dict] = []
+        carried_signoffs: list[dict] = []
+        carry_ok = True
+        if reval is not None:
+            carried_records, carry_results, carried_signoffs, carry_ok = self._carry_forward(
+                ex, reval, evidence_dir
+            )
+
         # 2. The engine runs each artifact AC's named test command itself (Decision 2) —
         #    the same skip-is-red / zero-collected-is-red teeth as the develop gate.
         results, all_green = self._artifact_gate(ex, req, artifact_acs, evidence_dir)
+        results.extend(carry_results)
+        if not carry_ok:
+            all_green = False
 
         # 3. Manual ACs (Decision 4): a decision stop. Unattended parks naming the
-        #    pending human oracle; attended records the verdict the provider supplies.
-        signoffs: list[dict] = []
-        if manual_acs and all_green:
+        #    pending human oracle; attended records the verdict the provider supplies. A
+        #    carried (green) manual AC is not re-signed — its verdict rode in via carry.
+        signoffs: list[dict] = list(carried_signoffs)
+        fresh_manual = [c for c in manual_acs if c.id not in carried_ids]
+        if fresh_manual and all_green:
             if unattended or signoff is None:
-                return self._park_manual(ex, step, req, manual_acs, in_flight=in_flight)
-            for ac in manual_acs:
+                return self._park_manual(ex, step, req, fresh_manual, in_flight=in_flight)
+            for ac in fresh_manual:
                 verdict = signoff(ac)
                 signoffs.append(
                     {
@@ -565,6 +644,7 @@ class ReqValidateRoutine:
             results=results,
             artifacts=artifacts,
             signoffs=signoffs,
+            carried=carried_records,
         )
 
         if not all_green:
@@ -623,9 +703,13 @@ class ReqValidateRoutine:
         return pending
 
     def _run_session(
-        self, ex, step: Step, evidence_rel: str, *, unattended, on_event, in_flight
+        self, ex, step: Step, evidence_rel: str, *, unattended, on_event, in_flight,
+        ac_flag: str = "",
     ) -> StepResult | None:
-        """Spawn the System Tester session; return a terminal result on limit/failure."""
+        """Spawn the System Tester session; return a terminal result on limit/failure.
+
+        ``ac_flag`` (REQ-075 AC1) names the scoped ACs (``--ac AC1,AC3``) on a red-only
+        re-run; empty for a full validation."""
         led = ex.ledger
         ok, reason = ex.accounts.precheck()
         if not ok:
@@ -635,7 +719,7 @@ class ReqValidateRoutine:
             led.append_event("quota_block", step=step.id, reason=reason)
             return StepResult(step, RunOutcome.LIMIT, reason)
         model, effort = ex._claude_for("validate")
-        command = f"{step.command} --evidence {evidence_rel}"
+        command = f"{step.command} --evidence {evidence_rel}{ac_flag}"
         result = ex.runner(
             command,
             argv_prefix=ex.accounts.claude_argv(),
@@ -689,8 +773,11 @@ class ReqValidateRoutine:
                  "detail": f"no usable test environment: {exc}"}
             )
             return results, False  # keep any fixture-gap rows already recorded
+        # REQ-075 AC3: hand each grading command its evidence dir, per-subprocess, overriding
+        # any inherited value — the defined channel that kills the ambient-export leak class.
+        grading_env = {EVIDENCE_ENV_VAR: str(evidence_dir)}
         for ac in artifact_acs:
-            ok, detail = gate._gate_named(ac.test, interpreter)
+            ok, detail = gate._gate_named(ac.test, interpreter, env=grading_env)
             results.append({"ac": ac.id, "check": "artifact", "ok": ok, "detail": detail})
             if not ok:
                 all_green = False
@@ -710,6 +797,81 @@ class ReqValidateRoutine:
             )
             all_green = False
         return results, all_green
+
+    def _carry_forward(
+        self, ex, reval: dict, evidence_dir: Path
+    ) -> tuple[list[dict], list[dict], list[dict], bool]:
+        """Carry the green one-offs of a scoped re-run forward (REQ-075 AC2/Decision 2).
+
+        Copies every file from the red validation's evidence dir into ``evidence_dir`` (the
+        green ACs' artifacts) so the uniform artifact gate re-grades them against present
+        files, and honors a green ``manual`` AC's recorded sign-off **without a new decision
+        stop**. A carried ``artifact`` AC whose source produced no files is a **hard red**,
+        never a silent pass.
+
+        Returns ``(carried_records, extra_results, carried_signoffs, ok)``: the provenance
+        rows for the new validation event (source evidence path + originating event per
+        carried AC), extra result rows (carried manual greens + any missing-source reds),
+        the carried sign-off records, and whether every carried AC survived.
+        """
+        carried = reval.get("carried") or []
+        source_rel = next(
+            (c.get("source_evidence") for c in carried if c.get("source_evidence")), None
+        )
+        copied_any = False
+        if source_rel:
+            source_dir = ex.root / source_rel
+            if source_dir.is_dir():
+                for p in sorted(source_dir.rglob("*")):
+                    if p.is_file():
+                        dest = evidence_dir / p.relative_to(source_dir)
+                        dest.parent.mkdir(parents=True, exist_ok=True)
+                        shutil.copy2(p, dest)
+                        copied_any = True
+
+        records: list[dict] = []
+        extra_results: list[dict] = []
+        carried_signoffs: list[dict] = []
+        ok = True
+        for c in carried:
+            records.append(
+                {
+                    "ac": c["ac"],
+                    "check": c["check"],
+                    "source_evidence": c.get("source_evidence"),
+                    "source_event": c.get("source_event"),
+                }
+            )
+            if c["check"] == "manual":
+                so = c.get("signoff")
+                if so is not None:
+                    carried_signoffs.append({**so, "carried_from": c.get("source_event")})
+                extra_results.append(
+                    {
+                        "ac": c["ac"],
+                        "check": "manual",
+                        "ok": True,
+                        "detail": (
+                            f"carried green sign-off from {c.get('source_evidence')} "
+                            f"(revalidate: green one-off not re-performed)"
+                        ),
+                    }
+                )
+            elif not copied_any:
+                # A carried artifact AC with no source files to copy — hard red (AC2 teeth).
+                extra_results.append(
+                    {
+                        "ac": c["ac"],
+                        "check": "artifact",
+                        "ok": False,
+                        "detail": (
+                            f"carried evidence for {c['ac']} missing under {source_rel} — a "
+                            f"carried AC with no source files is a hard red, never a silent pass"
+                        ),
+                    }
+                )
+                ok = False
+        return records, extra_results, carried_signoffs, ok
 
     def _check_fixtures(self, ex, req: ReqFile) -> tuple[list[dict], bool]:
         """REQ-051 (REQ-047 Decision 6): every declared lab fixture must be committed

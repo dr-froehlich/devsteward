@@ -90,6 +90,57 @@ class RevalidateResult:
     evidence: str | None  # the red validation's evidence dir
     brief: str  # the red validation's failure brief
     decision: str | None  # the parked validate decision answered, if any
+    scope: list[str] | None  # the red/unrecorded AC ids to re-capture; None = full re-run
+    carried: list[dict] | None  # per carried green AC {ac, check, source_evidence, ...}
+
+
+def _scope_revalidation(
+    req, latest_validation: dict | None
+) -> tuple[list[str] | None, list[dict] | None]:
+    """Red-only re-open (REQ-075 AC1/Decision 1): split the REQ's ``artifact``/``manual`` ACs
+    into the set to **re-capture** and the green set to **carry forward**, from the red
+    validation's per-AC results.
+
+    An AC is carried iff the red validation recorded it green; a red or *unrecorded* AC is
+    re-opened. Degenerate cases collapse to today's full re-run — no per-AC results, or
+    *every* declared AC red → ``(None, None)``, the caller then omits the scope entirely.
+
+    Returns ``(scope_ids, carried)`` where ``carried`` names, per green AC, the source
+    evidence path + originating validation event (its ``ts``) and, for a ``manual`` AC, the
+    recorded sign-off — the provenance the next run's validation event will carry.
+    """
+    declared = [c for c in req.acceptance if c.check in ("artifact", "manual")]
+    if latest_validation is None or not declared:
+        return None, None
+    recorded = {
+        r.get("ac"): r
+        for r in latest_validation.get("results", [])
+        if r.get("ac") not in (None, "-")
+    }
+    source_evidence = latest_validation.get("evidence")
+    source_event = latest_validation.get("ts")
+    signoffs = {s.get("ac"): s for s in latest_validation.get("signoffs", [])}
+
+    scope_ids: list[str] = []
+    carried: list[dict] = []
+    for c in declared:
+        rec = recorded.get(c.id)
+        if rec is not None and rec.get("ok"):
+            entry = {
+                "ac": c.id,
+                "check": c.check,
+                "source_evidence": source_evidence,
+                "source_event": source_event,
+            }
+            if c.check == "manual" and c.id in signoffs:
+                entry["signoff"] = signoffs[c.id]
+            carried.append(entry)
+        else:
+            scope_ids.append(c.id)
+    # No green set → nothing to scope down to / carry: a full re-run, today's behavior.
+    if not carried:
+        return None, None
+    return scope_ids, carried
 
 
 def activate(cfg: Config, req_id: str) -> ActivateResult:
@@ -270,15 +321,24 @@ def revalidate(cfg: Config, ledger: Ledger, req_id: str) -> RevalidateResult:
         "revalidated: external cause fixed, develop stands — re-running validation only",
     )
 
+    # REQ-075 AC1: scope the re-run to only the red/unrecorded ACs, carrying the green
+    # one-offs forward (Decision 1/2). Degenerate cases (no per-AC results / all red)
+    # return None and the event omits scope — a full re-run, exactly today's behavior.
+    req = next((r for r in load_reqs(cfg.req_dir) if r.id == req_id), None)
+    scope, carried = _scope_revalidation(req, ledger.latest_validation(req_id))
+
     # The whole point of the mirror: develop is left at DONE (D1). Only validate re-arms.
     ledger.set_status(validate, StepStatus.PENDING)
     ledger.save()
-    ledger.append_event(
-        "revalidate",
+    event_fields = dict(
         req=req_id,
         validate=validate,
         evidence=evidence,
         brief=brief[:2000],
         decision=decision_id,
     )
-    return RevalidateResult(req_id, validate, evidence, brief, decision_id)
+    if scope is not None:
+        event_fields["scope"] = scope
+        event_fields["carried"] = carried
+    ledger.append_event("revalidate", **event_fields)
+    return RevalidateResult(req_id, validate, evidence, brief, decision_id, scope, carried)

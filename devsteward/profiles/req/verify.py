@@ -39,6 +39,7 @@ from ...core.verify import (
     _is_pytest_command,
     _pytest_outcome,
     _rebind_interpreter,
+    _subprocess_env,
     resolve_test_interpreter,
 )
 
@@ -114,16 +115,19 @@ class ReqVerifier:
             return False, "\n".join(details)
         return True, "\n".join(details)
 
-    def _gate_named(self, cmd: str, interpreter: str) -> tuple[bool, str]:
+    def _gate_named(
+        self, cmd: str, interpreter: str, env: dict[str, str] | None = None
+    ) -> tuple[bool, str]:
         """A named acceptance test passes only if it collected and every test *passed*.
 
         AC1: a skip fails. AC2: zero collected fails. A non-pytest command (no per-test
-        signal) falls back to exit-code semantics.
+        signal) falls back to exit-code semantics. ``env`` overlays the child environment
+        (REQ-075 AC3: an ``artifact`` grading command receives ``DEVSTEWARD_EVIDENCE_DIR``).
         """
         resolved = _rebind_interpreter(cmd, interpreter)
         if not _is_pytest_command(resolved):
-            return self._exit_code(cmd, resolved)
-        o = _pytest_outcome(resolved, self.cwd, self.timeout)
+            return self._exit_code(cmd, resolved, env=env)
+        o = _pytest_outcome(resolved, self.cwd, self.timeout, env=env)
         head = f"[{o.returncode}] {cmd}"
         if o.collected == 0:
             return (
@@ -180,8 +184,12 @@ class ReqVerifier:
             )
         return True, f"[0] full suite clean ({self.full_suite})"
 
-    def _exit_code(self, cmd: str, resolved: str) -> tuple[bool, str]:
-        """Exit-code fallback for a non-pytest named command (no per-test outcomes)."""
+    def _exit_code(
+        self, cmd: str, resolved: str, env: dict[str, str] | None = None
+    ) -> tuple[bool, str]:
+        """Exit-code fallback for a non-pytest named command (no per-test outcomes).
+
+        ``env`` overlays the child environment (REQ-075 AC3)."""
         try:
             proc = subprocess.run(
                 resolved,
@@ -190,6 +198,7 @@ class ReqVerifier:
                 capture_output=True,
                 text=True,
                 timeout=self.timeout,
+                env=_subprocess_env(env),
             )
         except subprocess.TimeoutExpired:
             return False, f"timeout: {cmd}"

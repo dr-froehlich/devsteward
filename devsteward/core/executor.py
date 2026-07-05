@@ -162,7 +162,7 @@ class Executor:
     # mutation, as a typed ``PreconditionError`` rather than a per-call-site refusal string.
 
     def bring_up_guided_session(
-        self, step: Step, evidence_rel: str, *, on_event=None
+        self, step: Step, evidence_rel: str, *, on_event=None, ac_flag: str = ""
     ) -> int | str:
         """Bring up the interactive guided System-Tester session (REQ-034 Decision 6).
 
@@ -180,7 +180,9 @@ class Executor:
                 f"start/record steps."
             )
         model, effort = self._claude_for("validate")
-        command = f"/system-test {step.req} --evidence {evidence_rel} --guided"
+        # REQ-075 AC1: ``ac_flag`` names the scoped ACs (``--ac AC1,AC3``) on a red-only
+        # re-run; empty for a full validation.
+        command = f"/system-test {step.req} --evidence {evidence_rel}{ac_flag} --guided"
         return self.interactive_runner(
             command,
             argv_prefix=self.accounts.claude_argv(),
