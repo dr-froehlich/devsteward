@@ -485,22 +485,33 @@ validation. Driven **interactively** (not by `steward run`) in this order — se
   emits only genuine node-ids/paths (ends `.py` or contains `::`) — never a bare word, marker
   value, or prose. Three hermetic regression ACs; fused; no lab. With REQ-068 (the contract it
   repairs); sibling to REQ-028/REQ-063 on the gating-integrity line.
-- REQ-071 — **Wiring-gap doctrine** (docs): bakes two FlowSteward (2026-06-29/30) process
-  learnings into the doctrine surfaces after multiple REQs went green yet the user-visible feature
-  was "built but unwired" (an entry gate, a state-machine advancement, a calendar disposition, a
-  phantom-mail helper — each unit-green but never called by the live cadence/read path). Three
-  rules + a unifying decision rule across `STEWARD.md`, the `/intake` skill, and
-  `handbook/_00-method`: (1) **concept-phase-as-functional-spec** — intake captures the
-  solution-free user requirement + the decision that ACs can't yet be written; the attended
-  concept phase derives them ("the concept phase is where you earn the ACs you can't yet write");
-  set `concept:true` **when the ACs cannot be honestly written at intake**; (2)
-  **wire-through-the-live-entrypoint** — a system-scoped AC must exercise the feature through its
-  real running entrypoint, so present-but-unwired *fails* (tests passing ≠ wired); (3)
-  **don't-scope-a-known-defect-out** — a known defect is fixed here or homed in a named follow-on,
-  never silently deferred. Pure doctrine, no engine enforcement (a judgment rule a linter would
-  false-positive on). Acceptance = one hermetic anchor test across all three surfaces (the wiring
-  proof) + a manual coherence sign-off → a validate step; `concept:false` dogfoods its own rule.
-  On the intake-doctrine line with REQ-064/REQ-068; with REQ-027/REQ-039.
+- REQ-071 — **Concept-phase & wiring-gap doctrine** (docs): bakes two FlowSteward (2026-06-29/30)
+  process learnings into the doctrine surfaces after multiple REQs went green yet the user-visible
+  feature was "built but unwired" (an entry gate, a state-machine advancement, a calendar
+  disposition, a phantom-mail helper — each unit-green but never called by the live cadence/read
+  path), **amended 2026-07-05** with two more concept-phase lessons from the FlowSteward REQ-081
+  postmortem (copied into `docs/reports/` as the record). Five rules + a unifying decision rule
+  across `STEWARD.md`, the `/intake` skill, the `/advance` skill, and `handbook/_00-method`:
+  (1) **concept-phase-as-functional-spec** — intake captures the solution-free user requirement +
+  the decision that ACs can't yet be written; the attended concept phase derives them ("the
+  concept phase is where you earn the ACs you can't yet write"); set `concept:true` **when the
+  ACs cannot be honestly written at intake**; (2) **wire-through-the-live-entrypoint** — a
+  system-scoped AC must exercise the feature through its real running entrypoint, so
+  present-but-unwired *fails* (tests passing ≠ wired); (3) **don't-scope-a-known-defect-out** — a
+  known defect is fixed here or homed in a named follow-on, never silently deferred;
+  (4) **concept-phase-iterates-until-frozen** — an empirical concept phase (live-data /
+  committed-prototype deliverable) may legitimately commit+push+deploy repeatedly; `steward
+  checkpoint` is the *terminal* act, sanctioned over an already-clean tree; `/advance` must seed
+  that scope and drop its stale anti-REQ-067 "never commit prototype code" line; (5)
+  **phase-model-placement** — when `concept:true` because the ACs depend on the deliverable,
+  intake must ask where the post-freeze work lives: `develop:split` or a named downstream REQ,
+  and the upstream REQ never carries the downstream REQ's acceptance bar (the REQ-081 AC6 trap);
+  `concept:true`+`fused` stays the legitimate spike default — interrogation, never a lint. Pure
+  doctrine, no engine enforcement; the REQ-081 commit-sweep engine defect is deliberately unfiled
+  (Peter, 2026-07-05) with the copied postmortem as the record. Acceptance = one hermetic anchor
+  test across all four surfaces (the wiring proof) + a manual coherence sign-off → a validate
+  step; `concept:false` dogfoods its own rule. On the intake-doctrine line with REQ-064/REQ-068;
+  with REQ-018/REQ-027/REQ-039/REQ-067.
 - REQ-072 — **Capture gate runs in the operator's declared environment** (fix): the fail-side
   complement to REQ-063. REQ-063 ruled an environment *skip* in the bare `git archive` extract is
   not a capture gap — but it could only address skips. When the missing environment makes a test
@@ -585,7 +596,7 @@ REQ-001
  REQ-027 + REQ-028 + REQ-063 + REQ-064 ── REQ-068 (feature: deterministic test execution — `check: live` standing-regression lane + develop-gate routing by check: + fail-hard on a missing declared resource + one `python -m pytest` flavor + degrade-by-reclassification; from FlowSteward REQ-022 postmortem)
  REQ-051 + REQ-030 ── REQ-069 (fix: Build delivers the validation fixtures it owes — close the REQ-051 pincer; the builder-side duty mirroring the System Tester's never-improvise prohibition, so a missing seeded fixture can't deadlock validation; method-only skill §2 + handbook; surfaced dogfooding REQ-068 AC6)
  REQ-068 ── REQ-070 (fix: full-suite deselection must use only real node-ids — a manual/artifact AC's prose can't poison the develop gate; `_is_pytest_command` trips on the word "pytest", `_pytest_targets` keeps prose words like bare `tests` as deselect targets → `--deselect tests` empties the suite; reproduced on FlowSteward steward 0.2.0 under canonical plain pytest)
- REQ-027 + REQ-039 + REQ-064 + REQ-068 ── REQ-071 (docs: wiring-gap doctrine — concept-phase-as-functional-spec [set concept:true when ACs can't be honestly written at intake] + wire-through-the-live-entrypoint [present-but-unwired fails; tests passing ≠ wired] + don't-scope-a-known-defect-out [fix here or home in a named follow-on]; STEWARD.md + /intake skill + handbook/_00-method; pure doctrine, no engine enforcement; from the FlowSteward "built but unwired" postmortem; concept:false dogfoods its own rule)
+ REQ-018 + REQ-027 + REQ-039 + REQ-064 + REQ-067 + REQ-068 ── REQ-071 (docs: concept-phase & wiring-gap doctrine — concept-phase-as-functional-spec [set concept:true when ACs can't be honestly written at intake] + wire-through-the-live-entrypoint [present-but-unwired fails; tests passing ≠ wired] + don't-scope-a-known-defect-out [fix here or home in a named follow-on] + concept-phase-iterates-until-frozen [empirical concept may commit+push+deploy repeatedly; checkpoint is the terminal act] + phase-model-placement [ACs depend on the deliverable → split or a named downstream REQ, never import its acceptance bar]; STEWARD.md + /intake skill + /advance skill + handbook/_00-method; pure doctrine, no engine enforcement; from the FlowSteward "built but unwired" + REQ-081 concept-phase postmortems; concept:false dogfoods its own rule)
  REQ-003 + REQ-005 + REQ-035 + REQ-055 + REQ-057 ── REQ-073 (fix: ledger lost-update guard — monotonic seq on state.yaml, save() reconciles or refuses a stale write, never silently rewinds; + targeted recovery: validate-on-done closes a lingering open :validate decision from the event log; from the FlowSteward DEC-044 incident; revises the 2026-07-02 review §5 — the hazard is temporal, not multi-user)
  REQ-005 + REQ-056 + REQ-057 ── REQ-074 (refactor, concept:true: the steward decision surface earns its shape — attended concept phase inventories the genuine post-REQ-056 fork producers and decides reshape-vs-shrink [intake lean: shrink] before direction-specific ACs are written)
  REQ-053 (forward-path audit) ──┬─ REQ-056 (fix: D/H off decisions → repeat; FAILED-step names its forward verb; with REQ-029, REQ-054)
