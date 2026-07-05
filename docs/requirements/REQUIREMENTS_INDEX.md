@@ -77,6 +77,6 @@ commit** as its frontmatter and the code.
 | REQ-071 | Concept-phase & wiring-gap doctrine — concept-phase-as-functional-spec, wire-through-the-live-entrypoint, don't-scope-a-known-defect-out, concept-phase-iterates-until-frozen, phase-model-placement | DRAFT | [REQ-071](REQ-071.md) | REQ-018, REQ-027, REQ-039, REQ-064, REQ-067, REQ-068 |
 | REQ-072 | Capture gate runs in the operator's declared environment — carry the env-file into the extract, and diagnose an env gap honestly | DONE | [REQ-072](REQ-072.md) | REQ-063, REQ-068 |
 | REQ-073 | Ledger lost-update guard + stale-decision recovery — a save can never silently rewind newer state, and a diverged cursor has a sanctioned way back | DONE | [REQ-073](REQ-073.md) | REQ-003, REQ-005, REQ-035, REQ-055, REQ-057 |
-| REQ-074 | The `steward decision` surface earns its shape — a genuine-fork tool or a smaller one, decided from real usage | DRAFT | [REQ-074](REQ-074.md) | REQ-005, REQ-056, REQ-057 |
+| REQ-074 | The `steward decision` surface earns its shape — a genuine-fork tool or a smaller one, decided from real usage | OPEN | [REQ-074](REQ-074.md) | REQ-005, REQ-056, REQ-057 |
 
 New requirement template: [`_templates/req.md`](../../devsteward/templates/docs/requirements/_templates/req.md)
