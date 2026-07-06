@@ -217,8 +217,8 @@ steps:
     status: done
     updated: '2026-07-05T18:00:06+00:00'
   REQ-076:develop:
-    status: failed
-    updated: '2026-07-06T19:53:57+00:00'
+    status: done
+    updated: '2026-07-06T20:54:55+00:00'
 decisions:
 - id: DEC-001
   step: REQ-031:validate
@@ -312,4 +312,4 @@ decisions:
   req: REQ-058
   raised_at: '2026-06-20T21:10:10+00:00'
   answered_at: '2026-06-20T21:50:00+00:00'
-seq: 17
+seq: 23
