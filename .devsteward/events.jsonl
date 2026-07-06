@@ -313,3 +313,11 @@
 {"ts": "2026-07-05T17:37:42+00:00", "event": "quota_block", "step": "REQ-075:develop", "reason": "clauder: unsatisfiable — stopping run (no-accounts)"}
 {"ts": "2026-07-05T18:00:04+00:00", "event": "verify", "step": "REQ-075:develop", "ok": true, "detail": "[0] python -m pytest tests/test_req075_scoped_revalidate.py\n    5 passed\n[0] python -m pytest tests/test_req075_carry_forward.py\n    3 passed\n[0] python -m pytest tests/test_req075_evidence_env.py\n    4 passed\n[0] full suite clean (python -m pytest)"}
 {"ts": "2026-07-05T18:00:06+00:00", "event": "checkpoint", "step": "REQ-075:develop", "commit": "bf334b2735df7d65ac839eb7506bbfb0b251eba2", "driver": "interactive"}
+{"ts": "2026-07-06T15:31:00+00:00", "event": "step_started", "step": "REQ-076:develop", "command": "/advance REQ-076 develop", "recover": false}
+{"ts": "2026-07-06T15:47:18+00:00", "event": "step_failed", "step": "REQ-076:develop", "outcome": "error"}
+{"ts": "2026-07-06T19:47:48+00:00", "event": "step_recover", "req": "REQ-076", "steps": ["REQ-076:develop"]}
+{"ts": "2026-07-06T19:47:54+00:00", "event": "step_started", "step": "REQ-076:develop", "command": "/advance REQ-076 develop --repeat", "recover": true}
+{"ts": "2026-07-06T19:48:22+00:00", "event": "interrupted", "step": "REQ-076:develop", "requeued": "recover"}
+{"ts": "2026-07-06T19:48:23+00:00", "event": "step_started", "step": "REQ-076:develop", "command": "/advance REQ-076 develop --repeat", "recover": true}
+{"ts": "2026-07-06T19:53:56+00:00", "event": "verify", "step": "REQ-076:develop", "ok": true, "detail": "[0] python -m pytest tests/test_commit_scoping.py::test_scoped_commit_excludes_preexisting_dirt\n    1 passed\n[0] python -m pytest tests/test_commit_scoping.py::test_capture_gate_tree_matches_scoped_commit\n    1 passed\n[0] python -m pytest tests/test_commit_scoping.py::test_unscoped_commit_stages_whole_tree\n    1 passed\n[0] python -m pytest tests/test_commit_scoping.py::test_headless_land_does_not_sweep_concurrent_file\n    1 passed\n[0] full suite clean (python -m pytest)"}
+{"ts": "2026-07-06T19:53:57+00:00", "event": "capture_gap", "step": "REQ-076:develop", "commit": "bfa52660fd8f4f5149e584c8bbc0d7bdd27e205b", "detail": "'python -m pytest tests/test_commit_scoping.py::test_scoped_commit_excludes_preexisting_dirt' no longer passes from the recorded commit (1 failed, 0 errors of 1)"}
