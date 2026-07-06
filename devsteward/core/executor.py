@@ -29,6 +29,7 @@ from __future__ import annotations
 import shutil
 import subprocess
 import tempfile
+from contextlib import contextmanager
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
@@ -143,6 +144,12 @@ class Executor:
         self.implementation_phases = implementation_phases
         self.git: GitTopology = git if git is not None else GitCli(self.root)
         self.ledger = Ledger(self.root)
+        # REQ-076: the dirty-path set at the current command's transaction boundary. Set (via
+        # :meth:`_session_commit_scope`) only for a headless authoring command whose ``claude``
+        # session runs *after* the boundary, so the land commits only the session's own delta.
+        # ``None`` — the default and the ``checkpoint`` path (dirty-at-entry) — stages the whole
+        # tree as before.
+        self._commit_baseline: set[str] | None = None
 
     # -- invariants / read entry point -----------------------------------------
 
@@ -589,9 +596,15 @@ class Executor:
           exception). ``steward repeat`` resumes it once the missing source is tracked.
         """
         led = self.ledger
-        gap = self._capture_gap(step)
+        # REQ-076: the boundary baseline (set by _session_commit_scope for a headless authoring
+        # command; None for checkpoint) scopes both the capture-gate tree and the commit to the
+        # session's own delta — the two are built from the one staging routine, so they cannot
+        # diverge.
+        baseline = self._commit_baseline
+        gap = self._capture_gap(step, baseline)
         if gap is not None:
-            sha = self._commit(step)  # pure code — preserve the session's work, never reset
+            # pure code — preserve the session's work, never reset
+            sha = self._commit(step, baseline)
             led.set_status(step.id, StepStatus.FAILED)
             led.save()
             led.append_event("capture_gap", step=step.id, commit=sha, detail=gap)
@@ -602,7 +615,7 @@ class Executor:
             )
         if certify and self.on_verified is not None:
             self.on_verified(step)
-        sha = self._commit(step)
+        sha = self._commit(step, baseline)
         led.set_cursor(step.id)
         led.set_status(step.id, StepStatus.DONE)
         led.save()
@@ -797,7 +810,7 @@ class Executor:
             context="\n".join(context_lines),
         )
 
-    def _commit(self, step: Step) -> str | None:
+    def _commit(self, step: Step, baseline: set[str] | None = None) -> str | None:
         if self.committer is not None:
             return self.committer(step)
         if not self.autocommit:
@@ -808,7 +821,8 @@ class Executor:
         # cursor advances in its own trailing .devsteward/ commit. REQ-049: a git failure
         # here is *not* swallowed — it propagates to the transaction boundary, which rolls
         # the half-commit back and surfaces a RecoverableError (no silent None half-state).
-        return self.git.commit_code(message)
+        # REQ-076: ``baseline`` scopes the commit to the session's own delta (None = whole tree).
+        return self.git.commit_code(message, baseline)
 
     def _commit_ledger_close(self, step: Step | None, subject: str) -> str | None:
         """Commit the trailing ledger write (and any captured evidence) on ``dev`` as a
@@ -826,12 +840,14 @@ class Executor:
 
     # -- commit integrity (REQ-050, made non-destructive by REQ-063) -----------
 
-    def _capture_gap(self, step: Step) -> str | None:
+    def _capture_gap(self, step: Step, baseline: set[str] | None = None) -> str | None:
         """Whether the code about to be committed reproduces its own named green (REQ-063).
 
         Run *before* the commit, against the **staged tree** (:meth:`_stage_and_write_tree` —
         exactly what ``commit_code`` will commit: tracked/staged content, no ``.gitignore``d or
-        never-staged working-tree state): re-run the step's named acceptance tests against a
+        never-staged working-tree state; REQ-076: scoped to the session's delta via the same
+        ``baseline`` the commit uses, so the checked tree and the landed tree never diverge):
+        re-run the step's named acceptance tests against a
         clean ``git archive`` extract of that tree. Return a one-line gap description if a named
         test no longer passes, else ``None``.
 
@@ -856,31 +872,24 @@ class Executor:
             return None
         if not (self.root / ".git").is_dir():
             return None  # the in-memory fake / no repo — nothing to extract
-        tree = self._stage_and_write_tree()
+        tree = self._stage_and_write_tree(baseline)
         if tree is None:
             return None
         return self._green_gap_at(step, tree)
 
-    def _stage_and_write_tree(self) -> str | None:
-        """Stage the code (``git add -A`` minus ``.devsteward/`` — what :meth:`GitCli.commit_code`
-        stages) and serialize the index to a tree object, returning its sha. The capture check
-        runs against this tree, so it sees exactly what the work commit will hold — *before* the
-        commit. Fail-open (``None``) if the git tooling is unavailable."""
+    def _stage_and_write_tree(self, baseline: set[str] | None = None) -> str | None:
+        """Serialize the tree :meth:`GitCli.commit_code` will commit and return its sha — the
+        capture-gate mirror. Delegates to :meth:`GitCli.write_code_tree` so the gate tree and
+        the commit are built from the **one** staging routine with the same ``baseline`` scoping
+        (REQ-076): identical in, byte-identical tree out. Fail-open (``None``) when the git
+        backend has no tree seam (the in-memory fake) or the write fails."""
+        write_code_tree = getattr(self.git, "write_code_tree", None)
+        if write_code_tree is None:
+            return None
         try:
-            subprocess.run(
-                ["git", "-C", str(self.root), "add", "-A", "--", ":(exclude).devsteward"],
-                capture_output=True,
-                check=True,
-            )
-            out = subprocess.run(
-                ["git", "-C", str(self.root), "write-tree"],
-                capture_output=True,
-                text=True,
-                check=True,
-            )
+            return write_code_tree(baseline)
         except (OSError, subprocess.CalledProcessError):
             return None
-        return out.stdout.strip() or None
 
     def _capture_gap_message(self, step: Step, sha: str | None, gap: str) -> str:
         """The surfaced detail for a withheld certification (REQ-063 Decision 4, made
@@ -1016,6 +1025,24 @@ class Executor:
 
     # -- step driver -----------------------------------------------------------
 
+    @contextmanager
+    def _session_commit_scope(self):
+        """Scope the code commit to the session's own authored delta for the duration (REQ-076).
+
+        Capture the dirty-path baseline at the transaction boundary — before this command's
+        ``claude`` session runs — so the land stages only what the session dirtied afterward,
+        excluding a file a concurrent run for a different REQ left dirty at the boundary. The
+        headless authoring paths (``advance``/``run`` develop and validate) enter this scope;
+        the attended ``checkpoint`` path is dirty-at-entry (no session) and does **not**, keeping
+        its whole-tree stage — scoping it by the same rule would stage nothing (REQ Decision 1).
+        Restored on exit so a ``run`` loop's next step re-captures its own boundary."""
+        prev = self._commit_baseline
+        self._commit_baseline = self.git.dirty_paths()
+        try:
+            yield
+        finally:
+            self._commit_baseline = prev
+
     def _drive_step(
         self,
         step: Step,
@@ -1035,8 +1062,12 @@ class Executor:
         verify, land, or ledger close rolls the repo + ledger back to the pre-step snapshot
         and surfaces a RecoverableError. Terminal *outcomes* (PARKED/FAILED/VERIFY_FAILED)
         are return values, not exceptions, so they persist; only a real failure rolls back.
+
+        REQ-076: this is a headless authoring command — ``claude`` runs after the transaction
+        boundary — so the land is scoped to the session's own delta (a concurrent REQ's dirty
+        file is not swept into this step's commit).
         """
-        with transaction(self.git, label=f"step {step.id}"):
+        with transaction(self.git, label=f"step {step.id}"), self._session_commit_scope():
             res = self.run_step(step, unattended=unattended, on_event=on_event)
             if res.outcome is RunOutcome.PARKED:
                 self._commit_ledger_close(step, "ledger close — parked")

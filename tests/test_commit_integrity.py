@@ -46,7 +46,7 @@ from devsteward.profiles.req import ReqStepSource
 from devsteward.profiles.req.checkpoint import PlanArtifactGate, ReqDoneFlipper
 from devsteward.profiles.req.verify import ReqVerifier
 
-from conftest import FakeRunner, ok_result
+from conftest import AuthoringRunner, ok_result
 
 
 # -- scaffold ------------------------------------------------------------------
@@ -134,14 +134,18 @@ def _log_shas(root: Path) -> list[str]:
     return _git(root, "log", "--format=%H").split()
 
 
-def _executor(root: Path, *, env_file: str | None = ".env") -> Executor:
+def _executor(
+    root: Path, *, env_file: str | None = ".env", writes: dict[str, str] | None = None
+) -> Executor:
     req_dir = root / "docs" / "requirements"
     return Executor(
         root=root,
         source=ReqStepSource(req_dir),
         verifier=ReqVerifier(cwd=str(root), full_suite=None),
         accounts=SingleAccountProvider(),
-        runner=FakeRunner(default=ok_result()),
+        # REQ-076: the session authors its work *during* the run (after the boundary), so the
+        # boundary-scoped commit stages it — the faithful shape of a real develop session.
+        runner=AuthoringRunner(writes),
         on_verified=ReqDoneFlipper(req_dir, req_dir / "REQUIREMENTS_INDEX.md"),
         land_gate=PlanArtifactGate(root / "docs" / "plans"),
         production_branch="main",
@@ -189,16 +193,15 @@ def test_capture_gap_preserves_work_and_surfaces_sha(tmp_path):
     ``FAILED`` (repeatable), and nothing is ``reset --hard``'d."""
     _scaffold(tmp_path, test="python -m pytest tests/test_dep.py")
     (tmp_path / ".gitignore").write_text("secret.txt\n", encoding="utf-8")
-    _init_git(tmp_path)  # commits the scaffold + .gitignore; the work is added below
+    _init_git(tmp_path)  # commits the scaffold + .gitignore; the session authors the work
 
-    # The develop session's work, left uncommitted in the tree (the engine commits it). The
+    # The develop session's work, authored during the run (the engine commits it). The
     # load-bearing file exists so the gate is green, yet is gitignored so the commit drops it.
-    (tmp_path / "tests").mkdir()
-    (tmp_path / "tests" / "test_dep.py").write_text(_DEP_TEST, encoding="utf-8")
-    (tmp_path / "secret.txt").write_text("load-bearing\n", encoding="utf-8")
-
     before_head = _head(tmp_path)
-    ex = _executor(tmp_path)
+    ex = _executor(tmp_path, writes={
+        "tests/test_dep.py": _DEP_TEST,
+        "secret.txt": "load-bearing\n",
+    })
     res = ex.advance_once()
 
     # Withheld, not destroyed: a non-stopping VERIFY_FAILED naming a real, reachable work commit.
@@ -230,11 +233,10 @@ def test_environment_skip_is_not_a_capture_gap(tmp_path):
     (tmp_path / ".gitignore").write_text("lab_present.flag\n", encoding="utf-8")
     _init_git(tmp_path)
 
-    (tmp_path / "tests").mkdir()
-    (tmp_path / "tests" / "test_lab.py").write_text(_LIVE_LAB_TEST, encoding="utf-8")
-    (tmp_path / "lab_present.flag").write_text("up\n", encoding="utf-8")  # gitignored env
-
-    ex = _executor(tmp_path)
+    ex = _executor(tmp_path, writes={
+        "tests/test_lab.py": _LIVE_LAB_TEST,
+        "lab_present.flag": "up\n",  # gitignored env
+    })
     res = ex.advance_once()
 
     assert res.outcome is RunOutcome.DONE
@@ -255,11 +257,10 @@ def test_self_sufficient_green_certifies(tmp_path):
     _scaffold(tmp_path, test="python -m pytest tests/test_dep.py")
     _init_git(tmp_path)
 
-    (tmp_path / "tests").mkdir()
-    (tmp_path / "tests" / "test_dep.py").write_text(_CAPTURED_TEST, encoding="utf-8")
-    (tmp_path / "data.txt").write_text("captured\n", encoding="utf-8")  # tracked, not ignored
-
-    ex = _executor(tmp_path)
+    ex = _executor(tmp_path, writes={
+        "tests/test_dep.py": _CAPTURED_TEST,
+        "data.txt": "captured\n",  # tracked, not ignored
+    })
     res = ex.advance_once()
 
     assert res.outcome is RunOutcome.DONE
@@ -287,11 +288,10 @@ def test_withhold_recovery_is_honest_and_names_sha(tmp_path):
     (tmp_path / ".gitignore").write_text("secret.txt\n", encoding="utf-8")
     _init_git(tmp_path)
 
-    (tmp_path / "tests").mkdir()
-    (tmp_path / "tests" / "test_dep.py").write_text(_DEP_TEST, encoding="utf-8")
-    (tmp_path / "secret.txt").write_text("load-bearing\n", encoding="utf-8")
-
-    ex = _executor(tmp_path)
+    ex = _executor(tmp_path, writes={
+        "tests/test_dep.py": _DEP_TEST,
+        "secret.txt": "load-bearing\n",
+    })
     res = ex.advance_once()
 
     assert res.outcome is RunOutcome.VERIFY_FAILED
@@ -373,11 +373,10 @@ def test_declared_env_file_is_carried_into_extract(tmp_path):
     (tmp_path / ".gitignore").write_text(".env\n", encoding="utf-8")
     _init_git(tmp_path)
 
-    (tmp_path / "tests").mkdir()
-    (tmp_path / "tests" / "test_env.py").write_text(_env_gated_test(), encoding="utf-8")
-    (tmp_path / ".env").write_text("DB_ENGINE=postgres\n", encoding="utf-8")  # gitignored env
-
-    ex = _executor(tmp_path)
+    ex = _executor(tmp_path, writes={
+        "tests/test_env.py": _env_gated_test(),
+        ".env": "DB_ENGINE=postgres\n",  # gitignored env
+    })
     res = ex.advance_once()
 
     assert res.outcome is RunOutcome.DONE
@@ -400,11 +399,11 @@ def test_no_env_file_keeps_hermetic_capture_path(tmp_path):
     green.mkdir()
     _scaffold(green, test="python -m pytest tests/test_dep.py")
     _init_git(green)
-    (green / "tests").mkdir()
-    (green / "tests" / "test_dep.py").write_text(_CAPTURED_TEST, encoding="utf-8")
-    (green / "data.txt").write_text("captured\n", encoding="utf-8")
 
-    res = _executor(green).advance_once()
+    res = _executor(green, writes={
+        "tests/test_dep.py": _CAPTURED_TEST,
+        "data.txt": "captured\n",
+    }).advance_once()
     assert res.outcome is RunOutcome.DONE
     assert Ledger(green).status_of("REQ-001:develop") is StepStatus.DONE
 
@@ -414,11 +413,11 @@ def test_no_env_file_keeps_hermetic_capture_path(tmp_path):
     _scaffold(gap, test="python -m pytest tests/test_dep.py")
     (gap / ".gitignore").write_text("secret.txt\n", encoding="utf-8")
     _init_git(gap)
-    (gap / "tests").mkdir()
-    (gap / "tests" / "test_dep.py").write_text(_DEP_TEST, encoding="utf-8")
-    (gap / "secret.txt").write_text("load-bearing\n", encoding="utf-8")
 
-    res = _executor(gap).advance_once()
+    res = _executor(gap, writes={
+        "tests/test_dep.py": _DEP_TEST,
+        "secret.txt": "load-bearing\n",
+    }).advance_once()
     assert res.outcome is RunOutcome.VERIFY_FAILED
     led = Ledger(gap)
     assert led.status_of("REQ-001:develop") is StepStatus.FAILED
@@ -439,13 +438,11 @@ def test_configured_env_file_name_is_honored(tmp_path):
     _scaffold(custom, test="python -m pytest tests/test_env.py")
     (custom / ".gitignore").write_text("steward.env\n", encoding="utf-8")
     _init_git(custom)
-    (custom / "tests").mkdir()
-    (custom / "tests" / "test_env.py").write_text(
-        _env_gated_test("steward.env"), encoding="utf-8"
-    )
-    (custom / "steward.env").write_text("DB_ENGINE=postgres\n", encoding="utf-8")
 
-    res = _executor(custom, env_file="steward.env").advance_once()
+    res = _executor(custom, env_file="steward.env", writes={
+        "tests/test_env.py": _env_gated_test("steward.env"),
+        "steward.env": "DB_ENGINE=postgres\n",
+    }).advance_once()
     assert res.outcome is RunOutcome.DONE
     assert Ledger(custom).status_of("REQ-001:develop") is StepStatus.DONE
 
@@ -454,11 +451,11 @@ def test_configured_env_file_name_is_honored(tmp_path):
     absent.mkdir()
     _scaffold(absent, test="python -m pytest tests/test_dep.py")
     _init_git(absent)
-    (absent / "tests").mkdir()
-    (absent / "tests" / "test_dep.py").write_text(_CAPTURED_TEST, encoding="utf-8")
-    (absent / "data.txt").write_text("captured\n", encoding="utf-8")
 
-    res = _executor(absent, env_file="steward.env").advance_once()
+    res = _executor(absent, env_file="steward.env", writes={
+        "tests/test_dep.py": _CAPTURED_TEST,
+        "data.txt": "captured\n",
+    }).advance_once()
     assert res.outcome is RunOutcome.DONE
 
     # The config value reaches the engine through the standard assembly.
@@ -476,11 +473,11 @@ def test_capture_gap_message_is_environment_honest(tmp_path):
     _scaffold(tmp_path, test="python -m pytest tests/test_dep.py")
     (tmp_path / ".gitignore").write_text("secret.txt\n", encoding="utf-8")
     _init_git(tmp_path)
-    (tmp_path / "tests").mkdir()
-    (tmp_path / "tests" / "test_dep.py").write_text(_DEP_TEST, encoding="utf-8")
-    (tmp_path / "secret.txt").write_text("load-bearing\n", encoding="utf-8")
 
-    res = _executor(tmp_path).advance_once()
+    res = _executor(tmp_path, writes={
+        "tests/test_dep.py": _DEP_TEST,
+        "secret.txt": "load-bearing\n",
+    }).advance_once()
 
     assert res.outcome is RunOutcome.VERIFY_FAILED
     msg = res.detail

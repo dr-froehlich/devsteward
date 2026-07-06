@@ -17,6 +17,31 @@ import subprocess
 from pathlib import Path
 
 
+def _parse_status_paths(z: str) -> set[str]:
+    """The set of paths in a ``git status --porcelain -z`` payload (REQ-076).
+
+    Each record is ``XY<space>PATH``; a rename/copy (``R``/``C`` in the status field) carries
+    the source path as a separate trailing NUL-token, which is counted too. ``-z`` means the
+    paths are literal (never quoted), so no unescaping is needed."""
+    paths: set[str] = set()
+    tokens = z.split("\0")
+    i = 0
+    while i < len(tokens):
+        tok = tokens[i]
+        if not tok:
+            i += 1
+            continue
+        status, path = tok[:2], tok[3:]
+        paths.add(path)
+        if "R" in status or "C" in status:
+            # A rename/copy record is followed by its source path in the next token.
+            i += 1
+            if i < len(tokens) and tokens[i]:
+                paths.add(tokens[i])
+        i += 1
+    return paths
+
+
 class GitCli:
     """A :class:`devsteward.core.seams.GitTopology` backed by the ``git`` CLI."""
 
@@ -40,19 +65,64 @@ class GitCli:
         """The current ``HEAD`` commit sha (the snapshot the transaction boundary restores)."""
         return self._run("rev-parse", "HEAD").stdout.strip()
 
-    def commit_code(self, message: str) -> str | None:
-        """Stage everything **except** ``.devsteward/`` and commit. Returns the new sha, or
-        ``None`` when there is nothing to commit.
+    def dirty_paths(self) -> set[str]:
+        """The set of code paths dirty relative to ``HEAD`` (staged or unstaged, tracked or
+        untracked), ``.devsteward/`` excluded — the transaction-boundary baseline REQ-076
+        scopes the code commit against."""
+        out = self._run(
+            "status", "--porcelain", "-z", "--", ":(exclude).devsteward"
+        ).stdout
+        return _parse_status_paths(out)
+
+    def _stage_code(self, baseline: set[str] | None) -> None:
+        """Stage the code (never ``.devsteward/``) for the commit or write-tree (REQ-076).
+
+        ``baseline is None`` — the ``checkpoint`` path (dirty-at-entry, no session to
+        distinguish from): stage the whole dirty tree as before. A ``baseline`` set — a headless
+        authoring command whose ``claude`` session ran *after* the boundary: rebuild the index
+        from ``HEAD`` (so a concurrent file already staged at the boundary cannot ride in) and
+        stage only the paths that became dirty *after* the baseline, i.e. this session's own
+        work. A path already dirty at the boundary (a concurrent REQ's in-progress work) is left
+        untouched."""
+        if baseline is None:
+            self._run("add", "-A", "--", ":(exclude).devsteward", check=True)
+            return
+        to_stage = sorted(self.dirty_paths() - baseline)
+        self._run("reset", "-q", check=True)  # rebuild the index from HEAD
+        if to_stage:
+            self._run("add", "-A", "--", *to_stage, check=True)
+
+    def commit_code(self, message: str, baseline: set[str] | None = None) -> str | None:
+        """Stage the code (never ``.devsteward/``) and commit. Returns the new sha, or ``None``
+        when there is nothing to commit.
+
+        ``baseline`` (REQ-076): the dirty-path set captured at the transaction boundary, before
+        this command's authoring session ran. When supplied, the commit is **scoped** to the
+        session's own delta — a file already dirty at the boundary (a concurrent session's
+        in-progress work for a different REQ) is not swept in, so same-commit discipline holds.
+        ``None`` (the ``checkpoint`` path) stages the whole dirty tree as before.
 
         The code-carrying commit (code + REQ frontmatter ``done``-flip + index ``DONE``-sync,
         same-commit discipline) never carries the ledger — the cursor advances in its own
         trailing commit (:meth:`commit_ledger`), so the code history stays clean and a commit
         can be checked for green self-sufficiency (REQ-050)."""
-        self._run("add", "-A", "--", ":(exclude).devsteward", check=True)
+        self._stage_code(baseline)
         if not self._run("diff", "--cached", "--name-only").stdout.strip():
             return None
         self._run("commit", "-m", message, check=True)
         return self.head_sha()
+
+    def write_code_tree(self, baseline: set[str] | None = None) -> str | None:
+        """Stage the code (:meth:`_stage_code`) and serialize the index to a tree object,
+        returning its sha (REQ-076 — the capture-gate mirror of :meth:`commit_code`).
+
+        The REQ-063 self-check runs against this tree, so it must be built from the **same**
+        staging routine ``commit_code`` uses — identical ``baseline`` in, byte-identical scoped
+        tree out — or the gate would certify a different tree than lands. ``None`` if the index
+        serializes nothing."""
+        self._stage_code(baseline)
+        out = self._run("write-tree", check=True)
+        return out.stdout.strip() or None
 
     def commit_ledger(self, message: str) -> str | None:
         """Stage and commit only ``.devsteward/`` (the cursor advance + any captured

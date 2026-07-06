@@ -516,22 +516,29 @@ class ReqValidateRoutine:
         """Shape A (REQ-034 Decision 6): the standard `steward validate` from a plain shell —
         start → bring up the interactive guided session attached to the terminal (the editor
         pattern) → record. Surfaces the nesting refusal when run inside a Claude session."""
-        ctx = self.start(ex, step)
-        if isinstance(ctx, StepResult):
-            return ctx
-        outcome = ex.bring_up_guided_session(
-            step, ctx.evidence_rel, on_event=on_event, ac_flag=_ac_flag(ctx.reval)
-        )
-        if isinstance(outcome, str):
-            # CLAUDECODE refusal — never spawn Claude from within Claude. The start half's
-            # RUNNING survives for a clean re-entry from a plain shell.
-            return StepResult(step, RunOutcome.REFUSED, outcome)
-        # REQ-049: the post-session land/park is atomic — a git failure rolls the repo +
-        # ledger back to the pre-record snapshot. The interactive bring-up above is left
-        # outside the boundary (a Ctrl-C there must not discard captured evidence). The batch
-        # path (``__call__`` → ``_validate``) runs under ``_drive_step``'s own transaction.
-        with transaction(ex.git, label=f"validate {step.req}"):
-            return self.record(ex, ctx, signoff=signoff, on_event=on_event, driver=driver)
+        # REQ-076: capture the boundary baseline before the guided session, so the validate land
+        # (the REQ done-flip + index sync) is scoped to this command's work and does not sweep a
+        # concurrent REQ's file left dirty in the shared ``dev`` tree. The batch path
+        # (``__call__`` → ``_validate``) is already scoped by ``_drive_step``.
+        with ex._session_commit_scope():
+            ctx = self.start(ex, step)
+            if isinstance(ctx, StepResult):
+                return ctx
+            outcome = ex.bring_up_guided_session(
+                step, ctx.evidence_rel, on_event=on_event, ac_flag=_ac_flag(ctx.reval)
+            )
+            if isinstance(outcome, str):
+                # CLAUDECODE refusal — never spawn Claude from within Claude. The start half's
+                # RUNNING survives for a clean re-entry from a plain shell.
+                return StepResult(step, RunOutcome.REFUSED, outcome)
+            # REQ-049: the post-session land/park is atomic — a git failure rolls the repo +
+            # ledger back to the pre-record snapshot. The interactive bring-up above is left
+            # outside the boundary (a Ctrl-C there must not discard captured evidence). The
+            # batch path (``__call__`` → ``_validate``) runs under ``_drive_step``'s transaction.
+            with transaction(ex.git, label=f"validate {step.req}"):
+                return self.record(
+                    ex, ctx, signoff=signoff, on_event=on_event, driver=driver
+                )
 
     # -- the one validation pass -------------------------------------------------
 

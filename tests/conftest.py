@@ -51,6 +51,34 @@ class FakeRunner:
         return self.default
 
 
+class AuthoringRunner:
+    """A fake :func:`run_claude` that authors the session's files *during* the call.
+
+    The real shape the boundary-scoped commit (REQ-076) relies on: the develop/validate session
+    writes its work **after** the transaction boundary, so the engine's scoped stage includes it
+    while a file already dirty at the boundary (a concurrent REQ's work) is excluded. ``writes``
+    maps a repo-relative path → its contents, written into ``cwd`` when the runner is invoked;
+    ``result`` is the returned outcome (default OK). Records each call for assertions.
+    """
+
+    def __init__(self, writes: dict[str, str] | None = None, *,
+                 result: claude_mod.Result | None = None):
+        self.writes = writes or {}
+        self.result = result or ok_result()
+        self.calls: list[dict] = []
+
+    def __call__(self, command, *, argv_prefix=None, cwd=None, env=None,
+                 timeout=1800.0, unattended=True, permission_mode=None,
+                 model=None, effort=None, on_event=None, on_spawn=None):
+        self.calls.append({"command": command, "cwd": cwd, "unattended": unattended})
+        root = Path(cwd)
+        for rel, content in self.writes.items():
+            p = root / rel
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_text(content, encoding="utf-8")
+        return self.result
+
+
 def ok_result(text: str = "ok") -> claude_mod.Result:
     return claude_mod.Result(claude_mod.Outcome.OK, text, [], 0)
 
@@ -108,9 +136,19 @@ class FakeGitTopology:
     def head_sha(self) -> str:
         return f"sha{len(self.commits):04d}"
 
-    def commit_code(self, message: str) -> str | None:
+    def dirty_paths(self) -> set[str]:
+        # No working tree to inspect: an empty baseline scopes to "the whole session" — the
+        # in-memory loop makes no concurrent dirt, so this is faithful.
+        return set()
+
+    def commit_code(self, message: str, baseline: set[str] | None = None) -> str | None:
         self.commits.append((self.current, message))
         return f"sha{len(self.commits):04d}"
+
+    def write_code_tree(self, baseline: set[str] | None = None) -> str | None:
+        # No real object store — the capture self-check is a no-op under the fake (it is also
+        # gated on a real ``.git`` dir before ever reaching here).
+        return None
 
     def commit_ledger(self, message: str) -> str | None:
         self.commits.append((self.current, message))
