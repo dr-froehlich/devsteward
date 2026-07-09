@@ -22,12 +22,17 @@ INDEX_ROW_RE = re.compile(
 )
 
 
+def statuses_from_text(text: str) -> dict[str, str]:
+    """Map REQ id → status (lowercased) from raw index-table text (REQ-077 — lets a caller
+    parse a committed HEAD blob, not only a file on disk)."""
+    return {m.group(2): m.group(4).strip().lower() for m in INDEX_ROW_RE.finditer(text)}
+
+
 def read_statuses(index_path: Path) -> dict[str, str]:
     """Map REQ id → status (lowercased) from the index table."""
     if not index_path.exists():
         return {}
-    text = Path(index_path).read_text(encoding="utf-8")
-    return {m.group(2): m.group(4).strip().lower() for m in INDEX_ROW_RE.finditer(text)}
+    return statuses_from_text(Path(index_path).read_text(encoding="utf-8"))
 
 
 def set_status(index_path: Path, req_id: str, status: str) -> str:

@@ -26,6 +26,7 @@ event records which one drove (``driver: headless | interactive``).
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 import tempfile
@@ -613,9 +614,16 @@ class Executor:
                 step, RunOutcome.VERIFY_FAILED, self._capture_gap_message(step, sha, gap),
                 commit=sha,
             )
+        # REQ-077: the flip (frontmatter + index) is the engine's own bookkeeping — force it
+        # into the one code commit past the boundary scope, or REQ-076's `dirty_paths() -
+        # baseline` subtraction drops it whenever the REQ/index path was baseline-dirty (the
+        # FlowSteward REQ-098/099 drop). `on_verified` returns the absolute paths it wrote.
+        include: set[str] = set()
         if certify and self.on_verified is not None:
-            self.on_verified(step)
-        sha = self._commit(step, baseline)
+            flip_paths = self.on_verified(step) or set()
+            include = {os.path.relpath(p, self.root) for p in flip_paths}
+        sha = self._commit(step, baseline, include=include)
+        self._assert_committed_clean(step, baseline, include)
         led.set_cursor(step.id)
         led.set_status(step.id, StepStatus.DONE)
         led.save()
@@ -810,7 +818,9 @@ class Executor:
             context="\n".join(context_lines),
         )
 
-    def _commit(self, step: Step, baseline: set[str] | None = None) -> str | None:
+    def _commit(
+        self, step: Step, baseline: set[str] | None = None, include: set[str] | None = None
+    ) -> str | None:
         if self.committer is not None:
             return self.committer(step)
         if not self.autocommit:
@@ -822,7 +832,37 @@ class Executor:
         # here is *not* swallowed — it propagates to the transaction boundary, which rolls
         # the half-commit back and surfaces a RecoverableError (no silent None half-state).
         # REQ-076: ``baseline`` scopes the commit to the session's own delta (None = whole tree).
-        return self.git.commit_code(message, baseline)
+        # REQ-077: ``include`` force-stages the flip past that scope so it can't be dropped.
+        return self.git.commit_code(message, baseline, include=include)
+
+    def _assert_committed_clean(
+        self, step: Step, baseline: set[str] | None, include: set[str]
+    ) -> None:
+        """After the code commit, fail loudly if the session's own delta or the flip did not
+        fully land (REQ-077, strengthening REQ-032 from a promise into a checked invariant).
+
+        The only paths allowed to remain dirty are the pre-boundary / concurrent dirt REQ-076
+        deliberately preserves in the tree — the ``baseline`` set, minus the flip paths we just
+        force-committed (so a *dropped* flip, which was baseline-dirty, is caught rather than
+        excused). ``baseline is None`` (the ``checkpoint`` whole-tree stage) allows nothing: a
+        clean land leaves an empty tree. Any leftover means the commit did not capture what it
+        must — raise a plain error so the enclosing ``transaction`` rolls the half-land back and
+        surfaces a ``RecoverableError``; the engine never returns DONE over a dirty tree.
+
+        A no-op under the in-memory fake (its ``dirty_paths`` is empty). Real-git only, and the
+        ``file_at_head``-style safety net does not apply here — a missing seam simply yields no
+        leftover."""
+        dirty = getattr(self.git, "dirty_paths", None)
+        if dirty is None:
+            return
+        allowed: set[str] = set() if baseline is None else (set(baseline) - include)
+        leftover = dirty() - allowed
+        if leftover:
+            raise RuntimeError(
+                f"{step.id}: land left {len(leftover)} path(s) uncommitted after the code "
+                f"commit — {', '.join(sorted(leftover))}. The commit did not capture the "
+                f"REQ flip / index sync (same-commit discipline); rolling back."
+            )
 
     def _commit_ledger_close(self, step: Step | None, subject: str) -> str | None:
         """Commit the trailing ledger write (and any captured evidence) on ``dev`` as a

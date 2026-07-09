@@ -74,7 +74,9 @@ class GitCli:
         ).stdout
         return _parse_status_paths(out)
 
-    def _stage_code(self, baseline: set[str] | None) -> None:
+    def _stage_code(
+        self, baseline: set[str] | None, include: set[str] | None = None
+    ) -> None:
         """Stage the code (never ``.devsteward/``) for the commit or write-tree (REQ-076).
 
         ``baseline is None`` — the ``checkpoint`` path (dirty-at-entry, no session to
@@ -83,7 +85,15 @@ class GitCli:
         from ``HEAD`` (so a concurrent file already staged at the boundary cannot ride in) and
         stage only the paths that became dirty *after* the baseline, i.e. this session's own
         work. A path already dirty at the boundary (a concurrent REQ's in-progress work) is left
-        untouched."""
+        untouched.
+
+        ``include`` (REQ-077): paths the engine authored as its own authoritative bookkeeping —
+        the REQ frontmatter ``done``-flip and the index ``DONE``-sync — that must ride the commit
+        **regardless of the baseline**. The boundary subtraction is meant to drop a *concurrent*
+        session's dirt; it must never drop the flip, which ``on_verified`` writes *after* the
+        boundary to a path that may itself have been baseline-dirty (the FlowSteward REQ-098/099
+        drop). Force-staged on top of the scoped delta; a no-op in the ``baseline is None`` path
+        (``add -A`` already covers them) and when empty."""
         if baseline is None:
             self._run("add", "-A", "--", ":(exclude).devsteward", check=True)
             return
@@ -91,8 +101,16 @@ class GitCli:
         self._run("reset", "-q", check=True)  # rebuild the index from HEAD
         if to_stage:
             self._run("add", "-A", "--", *to_stage, check=True)
+        if include:
+            # The engine's own flip — never subtracted by the boundary scope (REQ-077).
+            self._run("add", "-A", "--", *sorted(include), check=True)
 
-    def commit_code(self, message: str, baseline: set[str] | None = None) -> str | None:
+    def commit_code(
+        self,
+        message: str,
+        baseline: set[str] | None = None,
+        include: set[str] | None = None,
+    ) -> str | None:
         """Stage the code (never ``.devsteward/``) and commit. Returns the new sha, or ``None``
         when there is nothing to commit.
 
@@ -102,15 +120,27 @@ class GitCli:
         in-progress work for a different REQ) is not swept in, so same-commit discipline holds.
         ``None`` (the ``checkpoint`` path) stages the whole dirty tree as before.
 
+        ``include`` (REQ-077): the engine's flip paths, force-staged past the boundary scope so
+        the REQ frontmatter ``done``-flip + index ``DONE``-sync always land in this one commit —
+        the same-commit discipline the boundary subtraction would otherwise break.
+
         The code-carrying commit (code + REQ frontmatter ``done``-flip + index ``DONE``-sync,
         same-commit discipline) never carries the ledger — the cursor advances in its own
         trailing commit (:meth:`commit_ledger`), so the code history stays clean and a commit
         can be checked for green self-sufficiency (REQ-050)."""
-        self._stage_code(baseline)
+        self._stage_code(baseline, include)
         if not self._run("diff", "--cached", "--name-only").stdout.strip():
             return None
         self._run("commit", "-m", message, check=True)
         return self.head_sha()
+
+    def file_at_head(self, relpath: str) -> str | None:
+        """The committed contents of ``relpath`` at ``HEAD``, or ``None`` when it is not tracked
+        there (or there is no commit yet). REQ-077: the marker↔ledger lint guard reads the
+        **committed** marker, not the working tree — a flip written to the worktree but never
+        committed looks consistent on disk and would mask the drift."""
+        proc = self._run("show", f"HEAD:{relpath}")
+        return proc.stdout if proc.returncode == 0 else None
 
     def write_code_tree(self, baseline: set[str] | None = None) -> str | None:
         """Stage the code (:meth:`_stage_code`) and serialize the index to a tree object,

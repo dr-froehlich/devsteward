@@ -177,6 +177,13 @@ _STATUS_LINE_RE = re.compile(
 )
 
 
+def status_from_text(text: str) -> str | None:
+    """The frontmatter ``status:`` value (lowercased) parsed from raw REQ text — REQ-077 reads
+    a committed HEAD blob rather than a file on disk. ``None`` when there is no status line."""
+    m = _STATUS_LINE_RE.search(text)
+    return m.group(3).strip().lower() if m else None
+
+
 def set_frontmatter_status(path: Path, new_status: str) -> str:
     """Rewrite the ``status:`` line inside the ``--- … ---`` frontmatter (REQ-026 D1).
 

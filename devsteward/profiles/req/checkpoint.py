@@ -39,16 +39,23 @@ class ReqDoneFlipper:
         self.req_dir = Path(req_dir)
         self.index_path = Path(index_path)
 
-    def __call__(self, step: Step) -> None:
+    def __call__(self, step: Step) -> set[Path]:
+        """Flip the REQ + index to ``done`` and return the absolute paths written (REQ-077).
+
+        The caller force-stages these into the one code commit so the flip can never be
+        subtracted out by the boundary scope (REQ-076) — the FlowSteward REQ-098/099 drop.
+        Returns an empty set when there is nothing to flip (a non-landing phase or a missing
+        REQ file)."""
         if step.phase not in ("develop", "validate"):
-            return
+            return set()
         reqs = {r.id: r for r in load_reqs(self.req_dir)}
         req = reqs.get(step.req)
         if req is None:  # nothing to flip — a generic step or a missing REQ file
-            return
+            return set()
         if req.status.lower() != "done":
             set_frontmatter_status(req.path, "done")
         index_mod.set_status(self.index_path, step.req, "done")
+        return {Path(req.path), self.index_path}
 
 
 class PlanArtifactGate:

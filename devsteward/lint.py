@@ -11,9 +11,14 @@ Checks, per the plan:
    ``check:`` classification (``regression | artifact | manual``) — presence and enum
    only, never test quality (that is intake's job, not a static linter's);
 6. the frozen north star ``REQ-001`` is not silently mutated away from its declared kind;
-7. **marker ↔ ledger** — a ledger-tracked REQ marked ``done`` in frontmatter has a green
-   ``land`` in the ledger (REQ-028 AC5): the ledger is the cursor of record, and a
-   hand-edited ``done`` over a ``failed``/absent land must not pass unseen.
+7. **marker ↔ ledger** (both directions) — the ledger is the cursor of record and the
+   committed marker must agree with it. (a) *marker-ahead* (REQ-028 AC5): a ledger-tracked
+   REQ marked ``done`` in frontmatter has a green delivering step in the ledger — a
+   hand-edited ``done`` over a ``failed``/absent land must not pass unseen. (b) *ledger-ahead*
+   (REQ-077): a REQ the ledger has **delivered** (its final step DONE) whose committed HEAD
+   frontmatter/index still read a pre-``done`` active status — the flip was written to the
+   worktree but never committed (the FlowSteward REQ-098/099 drift). Read committed HEAD, not
+   the working tree, or a written-but-uncommitted flip masks it.
 
 References in the optional ``process:`` block's ``lab:`` list (REQ-027) resolve like
 ``depends_on`` (check 2).
@@ -24,6 +29,7 @@ Returns a list of human-readable problems; empty ⇒ green.
 from __future__ import annotations
 
 import json
+import os
 from importlib.resources import files
 
 import jsonschema
@@ -188,4 +194,77 @@ def lint(cfg: Config) -> list[str]:
                     f"'{shown}' — the ledger contradicts the marker"
                 )
 
+        # 7b. The symmetric direction (REQ-077): the ledger has LANDED a REQ (its delivering
+        #     step is DONE) but the **committed** marker still reads not-`done`. This is the
+        #     FlowSteward REQ-098/099 drift — the checkpoint's `done` flip was written to the
+        #     worktree but never committed, so `git HEAD` disagrees with the ledger. Read
+        #     committed HEAD, not the working tree: the uncommitted flip on disk looks
+        #     consistent and would mask the drift. The delivering step is `validate` when the
+        #     REQ has one (its develop legitimately lands `done` before the flip — REQ-030 D6),
+        #     else `develop`/legacy `land`; so a develop-done/validate-pending REQ is not
+        #     flagged. Gated on a real git repo + the file present at HEAD — a state that cannot
+        #     be assessed (no git, no committed file) is never false-flagged.
+        problems.extend(_committed_marker_lags_ledger(cfg, reqs, statuses))
+
     return problems
+
+
+def _committed_marker_lags_ledger(
+    cfg: Config, reqs: list[ReqFile], statuses: dict[str, StepStatus]
+) -> list[str]:
+    """REQ-077 rule 7b — hard-error when the ledger has **delivered** a REQ (its final step is
+    DONE) but the committed HEAD frontmatter/index still read a pre-`done` active status: the
+    ``done`` flip was written to the worktree but never committed (the FlowSteward REQ-098/099
+    drift). Returns the problems (empty when there is no git HEAD to read, so a no-git lint stays
+    green).
+
+    Reads the **committed** marker, not the working tree — a flip written-but-uncommitted looks
+    consistent on disk and would mask the drift. Legitimate non-`done` end states are excluded:
+    a REQ delivered then retired reads ``superseded``/``dropped`` at HEAD, and a REQ whose
+    develop is done but whose **validate** phase (:func:`has_validate_step`) is not yet done has
+    not been delivered, so its committed ``open`` is correct."""
+    from .core.git import GitCli
+    from .profiles.req import index as index_mod
+    from .profiles.req.reqfile import TERMINAL_STATUSES, status_from_text
+    from .profiles.req.source import has_validate_step
+
+    git = GitCli(cfg.root)
+    head_index_text = git.file_at_head(os.path.relpath(cfg.index_path, cfg.root))
+    if head_index_text is None:
+        return []  # no committed index at HEAD (no git / fresh repo) — nothing to reconcile
+    head_index = index_mod.statuses_from_text(head_index_text)
+
+    out: list[str] = []
+    for r in reqs:
+        # The delivering step is `validate` when the REQ declares an artifact/manual AC (its
+        # develop lands `done` before the terminal flip — REQ-030 D6), else `develop`/legacy
+        # `land`. Only a delivered REQ is expected to carry a committed `done`.
+        if has_validate_step(r):
+            delivered = statuses.get(f"{r.id}:validate") is StepStatus.DONE
+            delivering = "validate"
+        else:
+            develop = statuses.get(f"{r.id}:develop")
+            land = statuses.get(f"{r.id}:land")
+            delivered = StepStatus.DONE in (develop, land)
+            delivering = "develop"
+        if not delivered:
+            continue
+
+        head_req_text = git.file_at_head(os.path.relpath(r.path, cfg.root))
+        if head_req_text is None:
+            continue  # not committed at HEAD — cannot assess the committed marker
+        committed_status = status_from_text(head_req_text)
+        committed_index = head_index.get(r.id)
+
+        # A committed terminal marker is a legitimate end state (`done`, or `superseded`/
+        # `dropped` for a delivered-then-retired REQ) — as long as frontmatter and index agree.
+        if committed_status in TERMINAL_STATUSES and committed_index == committed_status:
+            continue
+        out.append(
+            f"{r.id}: ledger {delivering} step is 'done' but the committed marker lags — HEAD "
+            f"frontmatter is '{committed_status or 'absent'}', index row is "
+            f"'{(committed_index or 'absent').upper()}' (the status flip was not committed; "
+            f"same-commit discipline). Re-run `steward checkpoint {r.id} develop` or commit "
+            f"the flip."
+        )
+    return out

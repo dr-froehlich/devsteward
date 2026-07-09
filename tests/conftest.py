@@ -141,7 +141,12 @@ class FakeGitTopology:
         # in-memory loop makes no concurrent dirt, so this is faithful.
         return set()
 
-    def commit_code(self, message: str, baseline: set[str] | None = None) -> str | None:
+    def commit_code(
+        self,
+        message: str,
+        baseline: set[str] | None = None,
+        include: set[str] | None = None,
+    ) -> str | None:
         self.commits.append((self.current, message))
         return f"sha{len(self.commits):04d}"
 
