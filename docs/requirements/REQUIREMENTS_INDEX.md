@@ -80,5 +80,6 @@ commit** as its frontmatter and the code.
 | REQ-074 | The `steward decision` surface earns its shape — a genuine-fork tool or a smaller one, decided from real usage | OPEN | [REQ-074](REQ-074.md) | REQ-005, REQ-056, REQ-057 |
 | REQ-075 | Per-AC revalidation — revalidate re-opens only the red ACs, carries green one-off evidence forward, and the engine hands the evidence dir to the grading tests | DONE | [REQ-075](REQ-075.md) | REQ-034, REQ-055, REQ-068, REQ-072 |
 | REQ-076 | Scope the engine's headless code commit to what the command itself authored — a boundary-delta stage so a concurrent session's dirty files can't be swept into another REQ's commit | DONE | [REQ-076](REQ-076.md) | REQ-048, REQ-049, REQ-050, REQ-063 |
+| REQ-077 | The checkpoint commit is atomic — the status flip rides the code commit, a leftover is caught, and the ledger↔marker guard is symmetric | DRAFT | [REQ-077](REQ-077.md) | REQ-018, REQ-028, REQ-032, REQ-063, REQ-076 |
 
 New requirement template: [`_templates/req.md`](../../devsteward/templates/docs/requirements/_templates/req.md)
