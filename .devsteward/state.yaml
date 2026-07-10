@@ -229,10 +229,8 @@ steps:
     status: done
     updated: '2026-07-10T12:19:56+00:00'
   REQ-078:validate:
-    status: blocked-on-decision
-    updated: '2026-07-10T12:19:57+00:00'
-    hold: 'REQ-078 validation: manual AC AC1, AC2, AC3 awaits its human oracle — run
-      `steward validate REQ-078` attended to record the sign-off.'
+    status: done
+    updated: '2026-07-10T12:26:12+00:00'
 decisions:
 - id: DEC-001
   step: REQ-031:validate
@@ -326,4 +324,4 @@ decisions:
   req: REQ-058
   raised_at: '2026-06-20T21:10:10+00:00'
   answered_at: '2026-06-20T21:50:00+00:00'
-seq: 30
+seq: 32
