@@ -336,3 +336,4 @@
 {"ts": "2026-07-10T12:16:55+00:00", "event": "step_started", "step": "REQ-078:develop", "command": "/advance REQ-078 develop", "recover": false}
 {"ts": "2026-07-10T12:19:56+00:00", "event": "verify", "step": "REQ-078:develop", "ok": true, "detail": "[0] full suite clean (python -m pytest)"}
 {"ts": "2026-07-10T12:19:56+00:00", "event": "develop_committed", "step": "REQ-078:develop", "commit": "614eef4a9040e43d4c06d6554c2754cd98b834b6", "driver": "headless"}
+{"ts": "2026-07-10T12:19:57+00:00", "event": "step_started", "step": "REQ-078:validate", "command": "/system-test REQ-078"}
