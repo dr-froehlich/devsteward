@@ -129,6 +129,19 @@ source/test file **or** a runtime environment the check lacked, never "commit th
 The validate phase stays exempt (its green is established against the live lab, not a tree
 extract).
 
+**The code commit stages the whole dirty tree — and one session per repo is doctrine
+(REQ-079).** The land's commit is deliberately unscoped: everything dirty at land time
+(minus `.devsteward/`) is treated as this step's work, because it *is* — a `steward
+repeat` legitimately resumes over a previous failed attempt's files, and the engine's own
+flip writes must ride the same commit. An attempt to scope the commit to a per-session
+boundary delta (REQ-076, "dirty-at-boundary = someone else's") misfiled both of those
+categories and destroyed a consumer session's work (FlowSteward REQ-103: a green verify,
+then a 1-of-10-files commit); REQ-079 subtracted it. The premise it tried to serve —
+tolerating **parallel engine sessions on one repo** — is not engine-solvable and is simply
+forbidden: parallel sessions collide in the working tree, race the ledger, and get swept
+into each other's commits. Run exactly one engine session (interactive or headless) against
+a repo at a time; the engine adds no lock and no detection — the rule is the operator's.
+
 ## The ledger (`.devsteward/`)
 
 - `state.yaml` — round-trip-stable YAML: the profile, the cursor, the per-step status

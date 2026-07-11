@@ -208,6 +208,13 @@ appear in that list — `steward status` shows each hold with the verb that reso
   still surfaces a parked `:validate` decision (a diverged ledger), the sanctioned exit is `steward
   validate REQ-NNN`, which reconciles it from the event log — not a hand-edit.
 - **Never** create, switch, or merge a branch to do REQ work. Everything is on `dev`.
+- **Never** run two engine sessions against one repo at the same time — interactive or headless,
+  in any combination (REQ-079). The engine's commit stages the **whole dirty tree**: everything
+  dirty when a step lands is treated as that step's work, by design (it is how a `steward repeat`
+  resumes a failed attempt's files). A parallel session's edits would be swept into the other
+  REQ's commit, its ledger writes race, and the results are undefined. One session at a time is
+  doctrine, not something the engine locks or detects — finish (or park) one before starting the
+  next.
 - **Never** read the DevSteward engine source to operate it. This manual is the contract; the
   `steward` CLI is the API.
 - Move a REQ's frontmatter, its `REQUIREMENTS_INDEX.md` row, and the code that satisfies it in the

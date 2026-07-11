@@ -40,12 +40,12 @@ class ReqDoneFlipper:
         self.index_path = Path(index_path)
 
     def __call__(self, step: Step) -> set[Path]:
-        """Flip the REQ + index to ``done`` and return the absolute paths written (REQ-077).
+        """Flip the REQ + index to ``done`` and return the absolute paths written.
 
-        The caller force-stages these into the one code commit so the flip can never be
-        subtracted out by the boundary scope (REQ-076) — the FlowSteward REQ-098/099 drop.
-        Returns an empty set when there is nothing to flip (a non-landing phase or a missing
-        REQ file)."""
+        The flip lands in the worktree before the caller's whole-tree code commit (REQ-079),
+        so it rides the one commit like any other write of this step (same-commit
+        discipline). Returns an empty set when there is nothing to flip (a non-landing phase
+        or a missing REQ file)."""
         if step.phase not in ("develop", "validate"):
             return set()
         reqs = {r.id: r for r in load_reqs(self.req_dir)}

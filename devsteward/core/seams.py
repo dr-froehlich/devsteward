@@ -69,18 +69,17 @@ class GitTopology(Protocol):
         """The current ``HEAD`` commit sha (the snapshot the transaction boundary restores)."""
 
     def dirty_paths(self) -> set[str]:
-        """Code paths (``.devsteward/`` excluded) dirty at the boundary — the REQ-076 baseline."""
+        """Code paths (``.devsteward/`` excluded) dirty relative to ``HEAD`` — read by the
+        post-land clean-tree assertion (REQ-077 guard)."""
 
-    def commit_code(self, message: str, baseline: set[str] | None = None) -> str | None:
-        """Stage the code (never ``.devsteward/``) and commit; ``None`` if nothing staged.
+    def commit_code(self, message: str) -> str | None:
+        """Stage the whole dirty tree (never ``.devsteward/``) and commit; ``None`` if
+        nothing staged. Deliberately unscoped (REQ-079): one engine session per repo at a
+        time is doctrine, so everything dirty is this step's work."""
 
-        ``baseline`` (REQ-076): the dirty-path set at the transaction boundary. When supplied,
-        the commit is scoped to the session's own delta (a concurrent REQ's already-dirty file
-        is excluded); ``None`` stages the whole dirty tree (the ``checkpoint`` path)."""
-
-    def write_code_tree(self, baseline: set[str] | None = None) -> str | None:
+    def write_code_tree(self) -> str | None:
         """Stage the code and serialize it to a tree sha — the capture-gate mirror of
-        :meth:`commit_code` built from the same ``baseline`` scoping (REQ-076)."""
+        :meth:`commit_code`, built from the same staging routine."""
 
     def commit_ledger(self, message: str) -> str | None:
         """Stage and commit only ``.devsteward/``; ``None`` when the ledger is unchanged."""

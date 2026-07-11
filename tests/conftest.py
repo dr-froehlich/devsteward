@@ -54,11 +54,10 @@ class FakeRunner:
 class AuthoringRunner:
     """A fake :func:`run_claude` that authors the session's files *during* the call.
 
-    The real shape the boundary-scoped commit (REQ-076) relies on: the develop/validate session
-    writes its work **after** the transaction boundary, so the engine's scoped stage includes it
-    while a file already dirty at the boundary (a concurrent REQ's work) is excluded. ``writes``
-    maps a repo-relative path → its contents, written into ``cwd`` when the runner is invoked;
-    ``result`` is the returned outcome (default OK). Records each call for assertions.
+    The real headless shape: the develop/validate session writes its work into the tree and
+    the engine's whole-tree stage (REQ-079) commits it. ``writes`` maps a repo-relative path
+    → its contents, written into ``cwd`` when the runner is invoked; ``result`` is the
+    returned outcome (default OK). Records each call for assertions.
     """
 
     def __init__(self, writes: dict[str, str] | None = None, *,
@@ -137,20 +136,15 @@ class FakeGitTopology:
         return f"sha{len(self.commits):04d}"
 
     def dirty_paths(self) -> set[str]:
-        # No working tree to inspect: an empty baseline scopes to "the whole session" — the
-        # in-memory loop makes no concurrent dirt, so this is faithful.
+        # No working tree to inspect: nothing is ever left dirty, so the post-land
+        # clean-tree assertion (REQ-077) is trivially satisfied under the fake.
         return set()
 
-    def commit_code(
-        self,
-        message: str,
-        baseline: set[str] | None = None,
-        include: set[str] | None = None,
-    ) -> str | None:
+    def commit_code(self, message: str) -> str | None:
         self.commits.append((self.current, message))
         return f"sha{len(self.commits):04d}"
 
-    def write_code_tree(self, baseline: set[str] | None = None) -> str | None:
+    def write_code_tree(self) -> str | None:
         # No real object store — the capture self-check is a no-op under the fake (it is also
         # gated on a real ``.git`` dir before ever reaching here).
         return None

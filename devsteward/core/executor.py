@@ -26,11 +26,9 @@ event records which one drove (``driver: headless | interactive``).
 
 from __future__ import annotations
 
-import os
 import shutil
 import subprocess
 import tempfile
-from contextlib import contextmanager
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
@@ -145,12 +143,6 @@ class Executor:
         self.implementation_phases = implementation_phases
         self.git: GitTopology = git if git is not None else GitCli(self.root)
         self.ledger = Ledger(self.root)
-        # REQ-076: the dirty-path set at the current command's transaction boundary. Set (via
-        # :meth:`_session_commit_scope`) only for a headless authoring command whose ``claude``
-        # session runs *after* the boundary, so the land commits only the session's own delta.
-        # ``None`` — the default and the ``checkpoint`` path (dirty-at-entry) — stages the whole
-        # tree as before.
-        self._commit_baseline: set[str] | None = None
 
     # -- invariants / read entry point -----------------------------------------
 
@@ -597,15 +589,10 @@ class Executor:
           exception). ``steward repeat`` resumes it once the missing source is tracked.
         """
         led = self.ledger
-        # REQ-076: the boundary baseline (set by _session_commit_scope for a headless authoring
-        # command; None for checkpoint) scopes both the capture-gate tree and the commit to the
-        # session's own delta — the two are built from the one staging routine, so they cannot
-        # diverge.
-        baseline = self._commit_baseline
-        gap = self._capture_gap(step, baseline)
+        gap = self._capture_gap(step)
         if gap is not None:
             # pure code — preserve the session's work, never reset
-            sha = self._commit(step, baseline)
+            sha = self._commit(step)
             led.set_status(step.id, StepStatus.FAILED)
             led.save()
             led.append_event("capture_gap", step=step.id, commit=sha, detail=gap)
@@ -614,16 +601,13 @@ class Executor:
                 step, RunOutcome.VERIFY_FAILED, self._capture_gap_message(step, sha, gap),
                 commit=sha,
             )
-        # REQ-077: the flip (frontmatter + index) is the engine's own bookkeeping — force it
-        # into the one code commit past the boundary scope, or REQ-076's `dirty_paths() -
-        # baseline` subtraction drops it whenever the REQ/index path was baseline-dirty (the
-        # FlowSteward REQ-098/099 drop). `on_verified` returns the absolute paths it wrote.
-        include: set[str] = set()
+        # REQ-077: the flip (frontmatter + index) is written before the commit so it rides the
+        # one code commit (same-commit discipline); the whole-tree stage (REQ-079) picks it up
+        # like any other write of this step.
         if certify and self.on_verified is not None:
-            flip_paths = self.on_verified(step) or set()
-            include = {os.path.relpath(p, self.root) for p in flip_paths}
-        sha = self._commit(step, baseline, include=include)
-        self._assert_committed_clean(step, baseline, include)
+            self.on_verified(step)
+        sha = self._commit(step)
+        self._assert_committed_clean(step)
         led.set_cursor(step.id)
         led.set_status(step.id, StepStatus.DONE)
         led.save()
@@ -818,9 +802,7 @@ class Executor:
             context="\n".join(context_lines),
         )
 
-    def _commit(
-        self, step: Step, baseline: set[str] | None = None, include: set[str] | None = None
-    ) -> str | None:
+    def _commit(self, step: Step) -> str | None:
         if self.committer is not None:
             return self.committer(step)
         if not self.autocommit:
@@ -831,23 +813,17 @@ class Executor:
         # cursor advances in its own trailing .devsteward/ commit. REQ-049: a git failure
         # here is *not* swallowed — it propagates to the transaction boundary, which rolls
         # the half-commit back and surfaces a RecoverableError (no silent None half-state).
-        # REQ-076: ``baseline`` scopes the commit to the session's own delta (None = whole tree).
-        # REQ-077: ``include`` force-stages the flip past that scope so it can't be dropped.
-        return self.git.commit_code(message, baseline, include=include)
+        # REQ-079: the commit stages the whole dirty tree — nothing is scoped away.
+        return self.git.commit_code(message)
 
-    def _assert_committed_clean(
-        self, step: Step, baseline: set[str] | None, include: set[str]
-    ) -> None:
-        """After the code commit, fail loudly if the session's own delta or the flip did not
-        fully land (REQ-077, strengthening REQ-032 from a promise into a checked invariant).
+    def _assert_committed_clean(self, step: Step) -> None:
+        """After the code commit, fail loudly if anything did not fully land (REQ-077,
+        strengthening REQ-032 from a promise into a checked invariant; kept by REQ-079).
 
-        The only paths allowed to remain dirty are the pre-boundary / concurrent dirt REQ-076
-        deliberately preserves in the tree — the ``baseline`` set, minus the flip paths we just
-        force-committed (so a *dropped* flip, which was baseline-dirty, is caught rather than
-        excused). ``baseline is None`` (the ``checkpoint`` whole-tree stage) allows nothing: a
-        clean land leaves an empty tree. Any leftover means the commit did not capture what it
-        must — raise a plain error so the enclosing ``transaction`` rolls the half-land back and
-        surfaces a ``RecoverableError``; the engine never returns DONE over a dirty tree.
+        The whole-tree stage leaves nothing behind by construction, so *any* leftover means
+        the commit did not capture what it must — raise a plain error so the enclosing
+        ``transaction`` rolls the half-land back and surfaces a ``RecoverableError``; the
+        engine never returns DONE over a dirty tree.
 
         A no-op under the in-memory fake (its ``dirty_paths`` is empty). Real-git only, and the
         ``file_at_head``-style safety net does not apply here — a missing seam simply yields no
@@ -855,8 +831,7 @@ class Executor:
         dirty = getattr(self.git, "dirty_paths", None)
         if dirty is None:
             return
-        allowed: set[str] = set() if baseline is None else (set(baseline) - include)
-        leftover = dirty() - allowed
+        leftover = dirty()
         if leftover:
             raise RuntimeError(
                 f"{step.id}: land left {len(leftover)} path(s) uncommitted after the code "
@@ -880,16 +855,15 @@ class Executor:
 
     # -- commit integrity (REQ-050, made non-destructive by REQ-063) -----------
 
-    def _capture_gap(self, step: Step, baseline: set[str] | None = None) -> str | None:
+    def _capture_gap(self, step: Step) -> str | None:
         """Whether the code about to be committed reproduces its own named green (REQ-063).
 
         Run *before* the commit, against the **staged tree** (:meth:`_stage_and_write_tree` —
         exactly what ``commit_code`` will commit: tracked/staged content, no ``.gitignore``d or
-        never-staged working-tree state; REQ-076: scoped to the session's delta via the same
-        ``baseline`` the commit uses, so the checked tree and the landed tree never diverge):
-        re-run the step's named acceptance tests against a
-        clean ``git archive`` extract of that tree. Return a one-line gap description if a named
-        test no longer passes, else ``None``.
+        never-staged working-tree state; built from the one staging routine the commit uses,
+        so the checked tree and the landed tree never diverge): re-run the step's named
+        acceptance tests against a clean ``git archive`` extract of that tree. Return a
+        one-line gap description if a named test no longer passes, else ``None``.
 
         Pre-commit by design (REQ-063 Decision 1): REQ-050 ran this *after* committing and
         ``reset --hard``'d the work away on a gap — conflating a failed quality judgment with a
@@ -912,22 +886,22 @@ class Executor:
             return None
         if not (self.root / ".git").is_dir():
             return None  # the in-memory fake / no repo — nothing to extract
-        tree = self._stage_and_write_tree(baseline)
+        tree = self._stage_and_write_tree()
         if tree is None:
             return None
         return self._green_gap_at(step, tree)
 
-    def _stage_and_write_tree(self, baseline: set[str] | None = None) -> str | None:
+    def _stage_and_write_tree(self) -> str | None:
         """Serialize the tree :meth:`GitCli.commit_code` will commit and return its sha — the
         capture-gate mirror. Delegates to :meth:`GitCli.write_code_tree` so the gate tree and
-        the commit are built from the **one** staging routine with the same ``baseline`` scoping
-        (REQ-076): identical in, byte-identical tree out. Fail-open (``None``) when the git
-        backend has no tree seam (the in-memory fake) or the write fails."""
+        the commit are built from the **one** staging routine: byte-identical tree out.
+        Fail-open (``None``) when the git backend has no tree seam (the in-memory fake) or
+        the write fails."""
         write_code_tree = getattr(self.git, "write_code_tree", None)
         if write_code_tree is None:
             return None
         try:
-            return write_code_tree(baseline)
+            return write_code_tree()
         except (OSError, subprocess.CalledProcessError):
             return None
 
@@ -1065,24 +1039,6 @@ class Executor:
 
     # -- step driver -----------------------------------------------------------
 
-    @contextmanager
-    def _session_commit_scope(self):
-        """Scope the code commit to the session's own authored delta for the duration (REQ-076).
-
-        Capture the dirty-path baseline at the transaction boundary — before this command's
-        ``claude`` session runs — so the land stages only what the session dirtied afterward,
-        excluding a file a concurrent run for a different REQ left dirty at the boundary. The
-        headless authoring paths (``advance``/``run`` develop and validate) enter this scope;
-        the attended ``checkpoint`` path is dirty-at-entry (no session) and does **not**, keeping
-        its whole-tree stage — scoping it by the same rule would stage nothing (REQ Decision 1).
-        Restored on exit so a ``run`` loop's next step re-captures its own boundary."""
-        prev = self._commit_baseline
-        self._commit_baseline = self.git.dirty_paths()
-        try:
-            yield
-        finally:
-            self._commit_baseline = prev
-
     def _drive_step(
         self,
         step: Step,
@@ -1103,11 +1059,8 @@ class Executor:
         and surfaces a RecoverableError. Terminal *outcomes* (PARKED/FAILED/VERIFY_FAILED)
         are return values, not exceptions, so they persist; only a real failure rolls back.
 
-        REQ-076: this is a headless authoring command — ``claude`` runs after the transaction
-        boundary — so the land is scoped to the session's own delta (a concurrent REQ's dirty
-        file is not swept into this step's commit).
         """
-        with transaction(self.git, label=f"step {step.id}"), self._session_commit_scope():
+        with transaction(self.git, label=f"step {step.id}"):
             res = self.run_step(step, unattended=unattended, on_event=on_event)
             if res.outcome is RunOutcome.PARKED:
                 self._commit_ledger_close(step, "ledger close — parked")

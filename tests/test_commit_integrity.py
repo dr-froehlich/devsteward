@@ -143,8 +143,8 @@ def _executor(
         source=ReqStepSource(req_dir),
         verifier=ReqVerifier(cwd=str(root), full_suite=None),
         accounts=SingleAccountProvider(),
-        # REQ-076: the session authors its work *during* the run (after the boundary), so the
-        # boundary-scoped commit stages it — the faithful shape of a real develop session.
+        # The session authors its work *during* the run; the whole-tree commit (REQ-079)
+        # stages it — the faithful shape of a real develop session.
         runner=AuthoringRunner(writes),
         on_verified=ReqDoneFlipper(req_dir, req_dir / "REQUIREMENTS_INDEX.md"),
         land_gate=PlanArtifactGate(root / "docs" / "plans"),

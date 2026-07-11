@@ -79,9 +79,9 @@ commit** as its frontmatter and the code.
 | REQ-073 | Ledger lost-update guard + stale-decision recovery — a save can never silently rewind newer state, and a diverged cursor has a sanctioned way back | DONE | [REQ-073](REQ-073.md) | REQ-003, REQ-005, REQ-035, REQ-055, REQ-057 |
 | REQ-074 | The `steward decision` surface earns its shape — a genuine-fork tool or a smaller one, decided from real usage | OPEN | [REQ-074](REQ-074.md) | REQ-005, REQ-056, REQ-057 |
 | REQ-075 | Per-AC revalidation — revalidate re-opens only the red ACs, carries green one-off evidence forward, and the engine hands the evidence dir to the grading tests | DONE | [REQ-075](REQ-075.md) | REQ-034, REQ-055, REQ-068, REQ-072 |
-| REQ-076 | Scope the engine's headless code commit to what the command itself authored — a boundary-delta stage so a concurrent session's dirty files can't be swept into another REQ's commit | DONE | [REQ-076](REQ-076.md) | REQ-048, REQ-049, REQ-050, REQ-063 |
+| REQ-076 | Scope the engine's headless code commit to what the command itself authored — a boundary-delta stage so a concurrent session's dirty files can't be swept into another REQ's commit | SUPERSEDED | [REQ-076](REQ-076.md) | REQ-048, REQ-049, REQ-050, REQ-063 |
 | REQ-077 | The checkpoint commit is atomic — the status flip rides the code commit, a leftover is caught, and the ledger↔marker guard is symmetric | DONE | [REQ-077](REQ-077.md) | REQ-018, REQ-028, REQ-032, REQ-063, REQ-076 |
 | REQ-078 | /advance targets the in-context REQ and treats validations as out of scope — no more validation-prep drift | DONE | [REQ-078](REQ-078.md) | REQ-030, REQ-042, REQ-065 |
-| REQ-079 | Reestablish the whole-tree code commit — remove the REQ-076 boundary-delta scoping, keep REQ-077's guards, codify one-session-at-a-time as doctrine | OPEN | [REQ-079](REQ-079.md) | REQ-063, REQ-076, REQ-077 |
+| REQ-079 | Reestablish the whole-tree code commit — remove the REQ-076 boundary-delta scoping, keep REQ-077's guards, codify one-session-at-a-time as doctrine | DONE | [REQ-079](REQ-079.md) | REQ-063, REQ-076, REQ-077 |
 
 New requirement template: [`_templates/req.md`](../../devsteward/templates/docs/requirements/_templates/req.md)
