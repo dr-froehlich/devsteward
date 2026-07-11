@@ -1,0 +1,28 @@
+== steward decision list ==
+DEC-001  [REQ-999:develop]
+    Retry policy for the flaky webhook call in the gate-demo lab — exponential backoff or fixed-interval retry?
+    The gate-demo webhook stub intermittently 5xxs under concurrent load. A fixed interval risks synchronized retry storms if several parallel steps retry in lockstep; exponential backoff with jitter avoids that but adds latency variance the demo's timing assertions would need to tolerate.
+    option 1: exponential backoff (5 retries max, cap 30s)
+    option 2: fixed-interval retry (3x, 5s apart)
+    recommendation: exponential backoff (5 retries max, cap 30s)
+    → resolve with `steward decide DEC-001` (plain shell)
+
+== steward status ==
+profile: req    cursor: REQ-002:develop
+
+steps:
+  • REQ-001:develop        pending (eligible)
+  ✓ REQ-002:develop        done
+  • REQ-002:validate       pending (eligible)
+
+parked forks:
+  DEC-001 [REQ-999:develop] Retry policy for the flaky webhook call in the gate-demo lab — exponential backoff or fixed-interval retry?
+  resolve in a guided session: `steward decide DEC-NNN` (plain shell)
+
+stamped artifacts:
+  ⚠ advance        stale  — run `steward sync`
+  ⚠ intake         stale  — run `steward sync`
+  ⚠ STEWARD.md     stale  — run `steward sync`
+
+== steward decide DEC-001 (run from inside this Claude session — expected refusal, guard proof) ==
+Error: refusing to bring up a guided decision session from inside a Claude session (CLAUDECODE set) — Claude is never spawned from within Claude. Open a plain terminal tab and run `steward decide DEC-001` there.
