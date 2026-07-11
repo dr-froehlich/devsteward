@@ -82,5 +82,6 @@ commit** as its frontmatter and the code.
 | REQ-076 | Scope the engine's headless code commit to what the command itself authored — a boundary-delta stage so a concurrent session's dirty files can't be swept into another REQ's commit | DONE | [REQ-076](REQ-076.md) | REQ-048, REQ-049, REQ-050, REQ-063 |
 | REQ-077 | The checkpoint commit is atomic — the status flip rides the code commit, a leftover is caught, and the ledger↔marker guard is symmetric | DONE | [REQ-077](REQ-077.md) | REQ-018, REQ-028, REQ-032, REQ-063, REQ-076 |
 | REQ-078 | /advance targets the in-context REQ and treats validations as out of scope — no more validation-prep drift | DONE | [REQ-078](REQ-078.md) | REQ-030, REQ-042, REQ-065 |
+| REQ-079 | Reestablish the whole-tree code commit — remove the REQ-076 boundary-delta scoping, keep REQ-077's guards, codify one-session-at-a-time as doctrine | DRAFT | [REQ-079](REQ-079.md) | REQ-063, REQ-076, REQ-077 |
 
 New requirement template: [`_templates/req.md`](../../devsteward/templates/docs/requirements/_templates/req.md)
