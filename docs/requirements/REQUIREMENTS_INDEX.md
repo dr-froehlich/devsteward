@@ -83,5 +83,6 @@ commit** as its frontmatter and the code.
 | REQ-077 | The checkpoint commit is atomic — the status flip rides the code commit, a leftover is caught, and the ledger↔marker guard is symmetric | DONE | [REQ-077](REQ-077.md) | REQ-018, REQ-028, REQ-032, REQ-063, REQ-076 |
 | REQ-078 | /advance targets the in-context REQ and treats validations as out of scope — no more validation-prep drift | DONE | [REQ-078](REQ-078.md) | REQ-030, REQ-042, REQ-065 |
 | REQ-079 | Reestablish the whole-tree code commit — remove the REQ-076 boundary-delta scoping, keep REQ-077's guards, codify one-session-at-a-time as doctrine | DONE | [REQ-079](REQ-079.md) | REQ-063, REQ-076, REQ-077 |
+| REQ-080 | steward run rides through a budget limit — clauder-corroborated classification, wait-and-relaunch via the gate, recovery-signaled resume | DRAFT | [REQ-080](REQ-080.md) | REQ-016, REQ-025, REQ-058, REQ-059 |
 
 New requirement template: [`_templates/req.md`](../../devsteward/templates/docs/requirements/_templates/req.md)
