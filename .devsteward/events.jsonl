@@ -350,3 +350,9 @@
 {"ts": "2026-07-17T01:20:40+00:00", "event": "checkpoint", "step": "REQ-080:develop", "commit": "256cda45528a538c12bd21038a06ca3dd10de5d6", "driver": "headless"}
 {"ts": "2026-07-17T05:04:07+00:00", "event": "verify", "step": "REQ-081:develop", "ok": true, "detail": "[0] python -m pytest tests/test_req081_halves.py -k start_half\n    3 passed\n[0] python -m pytest tests/test_req081_halves.py -k record_green\n    1 passed\n[0] python -m pytest tests/test_req081_halves.py -k record_red\n    4 passed\n[0] python -m pytest tests/test_req081_halves.py -k full_cycle\n    2 passed\n[0] python -m pytest tests/test_req081_halves.py -k shape_a\n    3 passed\n[0] full suite clean (python -m pytest)"}
 {"ts": "2026-07-17T05:04:14+00:00", "event": "develop_committed", "step": "REQ-081:develop", "commit": "a3b06b4b7381a138f7ffa32f4f7ec0d5d0ef141e", "driver": "interactive"}
+{"ts": "2026-07-17T06:14:06+00:00", "event": "step_started", "step": "REQ-082:develop", "command": "/advance REQ-082 develop", "recover": false}
+{"ts": "2026-07-17T06:20:04+00:00", "event": "step_failed", "step": "REQ-082:develop", "outcome": "error"}
+{"ts": "2026-07-17T06:21:35+00:00", "event": "step_recover", "req": "REQ-082", "steps": ["REQ-082:develop"]}
+{"ts": "2026-07-17T06:21:43+00:00", "event": "step_started", "step": "REQ-082:develop", "command": "/advance REQ-082 develop --repeat", "recover": true}
+{"ts": "2026-07-17T06:28:21+00:00", "event": "verify", "step": "REQ-082:develop", "ok": true, "detail": "[0] python -m pytest tests/test_cache_verb.py -k slug_discovery\n    5 passed\n[0] python -m pytest tests/test_cache_verb.py -k verdict_ttl\n    5 passed\n[0] python -m pytest tests/test_cache_verb.py -k exit_readonly\n    3 passed\n[0] full suite clean (python -m pytest)"}
+{"ts": "2026-07-17T06:28:24+00:00", "event": "checkpoint", "step": "REQ-082:develop", "commit": "f7e88c47e447c690276583febab68628b1406eac", "driver": "headless"}
