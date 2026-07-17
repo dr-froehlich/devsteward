@@ -20,6 +20,13 @@ Use `AskUserQuestion`. Establish:
 
 Interrogate like `/intake` does — a vague north star poisons everything downstream.
 
+**Mid-turn explanations are swallowed — put context inside the question (2026-07-17
+marker test).** Text emitted *after a tool result and followed by another tool call* is
+never rendered — exactly where an interview's between-question explanations land. Anything
+the operator must read to answer goes **inside the `question` field / option descriptions /
+previews**; when the context is longer than a question can carry, **end the turn** with the
+explanation as final text and ask in plain prose, waiting for the reply.
+
 ## 2. Fill the scaffolding
 
 - Replace every `{{…}}` placeholder in `CLAUDE.md` and `docs/requirements/REQ-001.md`

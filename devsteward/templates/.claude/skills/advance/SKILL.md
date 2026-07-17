@@ -113,7 +113,11 @@ The fused **Develop** checkpoint, in order, in one session:
 ## 3. At a fork (a decision you can't resolve from the REQ + repo)
 
 - *(interactive)* ask via `AskUserQuestion`, then continue. Nothing re-checks this for you —
-  you and the human own the answer.
+  you and the human own the answer. **Put all context inside the question** (2026-07-17
+  marker test): text emitted after a tool result and followed by another tool call is never
+  rendered, so an explanation written between the previous result and the question is lost —
+  embed what the human must read in the `question` field / option descriptions / previews,
+  or end the turn with the explanation as final text and ask in plain prose.
 - *(batch, `DEVSTEWARD_UNATTENDED=1`)* park the fork **with a brief** (REQ-074) and **stop**.
   Do not guess. Append a record to `.devsteward/state.yaml` under `decisions:` —
   `{id, step, question, status: open}` plus the brief fields: `context` (what you tried and
