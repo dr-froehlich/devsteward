@@ -33,6 +33,17 @@ Ask, in `AskUserQuestion` form when interactive, until you genuinely understand:
 - **Localization split:** any user-facing strings? They stay isolated/translatable; all
   code and technical text is English.
 
+**Mid-turn explanations are swallowed — put context inside the question (2026-07-17
+marker test).** In this harness, text emitted *after a tool result and followed by
+another tool call* is **never rendered** — and the interview loop (answer → explanation →
+next `AskUserQuestion`) puts every between-question explanation in exactly that position.
+Only turn-initial text and the turn's final message (no trailing tool call) render.
+Therefore: anything the operator must read to answer — commands to run, findings so far,
+the option trade-offs — goes **inside the `question` field / option descriptions /
+previews**, never in prose between the previous answer and the next question. When the
+needed context is longer than a question can carry, **end the turn** with the explanation
+as final text and ask in plain prose, waiting for the reply.
+
 **A question timeout is not an answer.** If an interactive `AskUserQuestion` gets no
 response (the harness gives up after ~60s and invites "best judgment"), the operator is
 merely away — **re-ask and wait; never proceed on defaults**. Steering these answers is
