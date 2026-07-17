@@ -24,7 +24,26 @@ import json
 import shutil
 import subprocess
 import time
+from enum import Enum
 from typing import Callable
+
+
+class BudgetVerdict(str, Enum):
+    """What the budget oracle says *right now* — one non-waiting probe (REQ-080).
+
+    ``precheck`` collapses clauder's verdict to ``(ok, reason)``, which is all a step-start
+    gate needs but not enough to corroborate an ambiguous session death (REQ-080 Decision 2)
+    or to tell a **degraded** gate from a genuine ``proceed`` (Decision 6). This enum is that
+    finer read; :meth:`ClauderAccountProvider.budget_verdict` produces it.
+    """
+
+    #: clauder says the budget is out — ``wait`` (75) or ``unsatisfiable`` (69).
+    EXHAUSTED = "exhausted"
+    #: clauder says there is budget — ``proceed``/``switch`` (0).
+    AVAILABLE = "available"
+    #: there is **no oracle**: clauder is absent from PATH, or the gate call failed/timed
+    #: out and the provider degraded open. Never a budget claim — the absence of one.
+    NO_ORACLE = "no-oracle"
 
 
 def _normalize_threshold(t: float) -> float:
@@ -90,6 +109,11 @@ class ClauderAccountProvider:
         self._run = run or subprocess.run
         self._sleep = sleep or time.sleep
         self.clauder = shutil.which("clauder")
+        # REQ-080 Decision 5: how many times :meth:`precheck` has actually *slept* on a
+        # ``wait`` verdict. The executor's consecutive-limit guard reads it across a precheck
+        # to tell "the budget window genuinely moved" from "clauder keeps saying proceed and
+        # sessions keep dying instantly" — a real gate wait resets the streak.
+        self.wait_count = 0
 
     @property
     def available(self) -> bool:
@@ -110,8 +134,12 @@ class ClauderAccountProvider:
         """Run ``clauder gate`` once; return ``(returncode, parsed_json)``.
 
         A launch failure / timeout degrades **open** (exit 0, ``proceed``) — clauder is
-        optional and must never hard-fail a run. A malformed JSON body still honours the
-        exit code; the missing fields just fall back to their defaults."""
+        optional and must never hard-fail a run — and marks the body ``degraded: True``.
+        :meth:`precheck` ignores that flag (rc 0 admits either way, unchanged); only
+        :meth:`budget_verdict` reads it, because a fabricated ``proceed`` is the *absence*
+        of an oracle, not a budget claim, and REQ-080 Decision 6 must not resume on it. A
+        malformed JSON body still honours the exit code; the missing fields just fall back
+        to their defaults."""
         argv = [self.clauder, "gate", "--threshold", f"{self.threshold:g}"]
         if self.pin is not None:
             argv += ["--pin", str(self.pin)]  # REQ-061: judge admission on account N alone
@@ -119,7 +147,11 @@ class ClauderAccountProvider:
         try:
             proc = self._run(argv, capture_output=True, text=True, timeout=self._TIMEOUT)
         except (subprocess.SubprocessError, OSError):
-            return 0, {"decision": "proceed", "reason": "clauder gate unavailable — proceeding"}
+            return 0, {
+                "decision": "proceed",
+                "reason": "clauder gate unavailable — proceeding",
+                "degraded": True,
+            }
         try:
             info = json.loads(proc.stdout)
             if not isinstance(info, dict):
@@ -150,6 +182,7 @@ class ClauderAccountProvider:
                 self.announce(
                     f"clauder: wait ~{int(secs)}s ({reason or 'budget saturated'}) — re-gating"
                 )
+                self.wait_count += 1  # REQ-080 D5: the guard's "the window moved" signal
                 self._interruptible_sleep(secs)
                 continue  # re-gate; a stop during the wait is caught at the top of the loop
 
@@ -163,6 +196,43 @@ class ClauderAccountProvider:
             msg = f"clauder: {decision}" + (f" ({reason})" if reason else "")
             self.announce(msg)
             return True, msg
+
+    def budget_verdict(self) -> tuple[BudgetVerdict, str]:
+        """Probe the budget oracle **once**, without waiting (REQ-080).
+
+        The read-only sibling of :meth:`precheck`: same ``clauder gate`` chokepoint, same
+        verdict mapping, but it never sleeps, never re-gates, and never admits anything — it
+        just reports what clauder says right now. The executor uses it at the *moment a
+        session dies*, for two questions ``precheck``'s ``(ok, reason)`` cannot answer:
+
+        * **Corroborate an ambiguous death** (Decision 2): an ``Outcome.ERROR`` that missed
+          the runtime's limit markers but coincides with an ``EXHAUSTED`` verdict is a limit
+          interruption, not a code error. This keeps the runtime signal primary (REQ-016) and
+          spends the *oracle the engine already trusts* on the ambiguity, instead of chasing
+          every future wording of the limit message into ``_LIMIT_MARKERS``.
+        * **Is there an oracle at all** (Decision 6): ``NO_ORACLE`` means auto-resume must not
+          engage — without clauder there is no honest signal for when the budget clears, and
+          the engine will not blind-poll. Note this is *not* ``ok=False``: the run still
+          proceeds through ``precheck``'s open degradation; it simply will not ride out a
+          limit.
+
+        Waiting is emphatically **not** this method's job — that machinery already exists in
+        :meth:`precheck` and is reached by the run loop's next iteration (Decision 3)."""
+        if not self.available:
+            return BudgetVerdict.NO_ORACLE, "clauder absent — no budget oracle"
+        rc, info = self._gate()
+        reason = info.get("reason") or ""
+        if info.get("degraded"):
+            return BudgetVerdict.NO_ORACLE, "clauder gate unavailable — no budget oracle"
+        if rc in (self._EXIT_WAIT, self._EXIT_UNSATISFIABLE):
+            verdict = "wait" if rc == self._EXIT_WAIT else "unsatisfiable"
+            return BudgetVerdict.EXHAUSTED, f"clauder: {verdict}" + (
+                f" ({reason})" if reason else ""
+            )
+        decision = info.get("decision") or ("proceed" if rc == 0 else f"exit {rc}")
+        return BudgetVerdict.AVAILABLE, f"clauder: {decision}" + (
+            f" ({reason})" if reason else ""
+        )
 
     def claude_argv(self) -> list[str]:
         # clauder, like cswap, is a switcher: it has already mutated the active account in

@@ -3,7 +3,9 @@
 For each eligible step (all dependencies ``DONE``, status ``PENDING``):
 
 1. set the cursor and announce ``step_started``;
-2. precheck the account/quota gate (stop the *run* if out of quota — never fail a step);
+2. precheck the account/quota gate — which waits out a saturated budget and re-gates, so a
+   step killed by a limit is requeued ``RECOVER`` and *relaunched* through this same gate
+   rather than ending the run (REQ-080); never fail a step over quota;
 3. invoke ``claude -p "<command>"`` headless via the runner;
 4. **park-and-surface:** if the skill parked a decision (wrote one to the ledger, or
    emitted the ``[[DEVSTEWARD_PARK]]`` sentinel) leave the step ``BLOCKED`` and move on
@@ -35,6 +37,7 @@ from pathlib import Path
 from typing import Callable
 
 from . import claude as claude_mod
+from .accounts import BudgetVerdict
 from .git import GitCli
 from .invariants import check_invariants
 from .ledger import Ledger
@@ -70,6 +73,12 @@ class StepResult:
     outcome: RunOutcome
     detail: str = ""
     commit: str | None = None
+    #: REQ-080: for a ``LIMIT`` outcome only — may ``run`` ride through it rather than stop?
+    #: True when a budget oracle answered and the consecutive-limit guard has not tripped, so
+    #: the next loop iteration's ``precheck`` gate can wait the window out and relaunch. The
+    #: outcome is still LIMIT (the step *was* interrupted); only the loop's reaction varies —
+    #: which is why this is a field and not a second outcome.
+    resumable: bool = False
 
 
 class Executor:
@@ -143,6 +152,16 @@ class Executor:
         self.implementation_phases = implementation_phases
         self.git: GitTopology = git if git is not None else GitCli(self.root)
         self.ledger = Ledger(self.root)
+        # REQ-080 Decision 5: the consecutive-limit guard's state — how many limit deaths in
+        # a row on `_limit_streak_step` with no intervening gate wait and no step completion.
+        self._limit_streak = 0
+        self._limit_streak_step: str | None = None
+
+    #: REQ-080 Decision 5: limit deaths in a row on one step — with clauder saying "proceed"
+    #: throughout and no step completing — before the run stops instead of relaunching again.
+    #: Bounds the tight spin where the account state and clauder's view disagree, and bounds
+    #: Decision 2's accepted risk (a genuine code error coinciding with an exhausted budget).
+    max_consecutive_limits = 3
 
     # -- invariants / read entry point -----------------------------------------
 
@@ -270,6 +289,95 @@ class Executor:
                 recovering = bool(ev.get("recover", False))
         return recovering
 
+    # -- budget-limit interruption (REQ-080) -----------------------------------
+
+    def _budget_verdict(self) -> tuple[BudgetVerdict, str]:
+        """Probe the account provider's budget oracle, or report that there is none.
+
+        The oracle is optional on the :class:`AccountProvider` seam (REQ-080 Decision 6), so
+        read it fail-open like the other optional seams (``dirty_paths``/``write_code_tree``):
+        a provider without ``budget_verdict`` — :class:`SingleAccountProvider`, a consumer's
+        own stand-in — yields ``NO_ORACLE`` and therefore never rides out a limit."""
+        probe = getattr(self.accounts, "budget_verdict", None)
+        if probe is None:
+            return BudgetVerdict.NO_ORACLE, "account provider has no budget oracle"
+        return probe()
+
+    def _reset_limit_streak(self) -> None:
+        """Clear the consecutive-limit guard — real progress happened (REQ-080 Decision 5):
+        either the gate genuinely waited (the budget window moved) or a step completed."""
+        self._limit_streak = 0
+        self._limit_streak_step = None
+
+    def _bump_limit_streak(self, step: Step) -> bool:
+        """Count this limit death against ``step`` and report whether the guard trips.
+
+        A limit death on a *different* step starts a fresh streak: the guard is about one
+        step spinning, not about limits in general."""
+        if self._limit_streak_step != step.id:
+            self._limit_streak_step = step.id
+            self._limit_streak = 0
+        self._limit_streak += 1
+        return self._limit_streak >= self.max_consecutive_limits
+
+    def _requeue_limit(
+        self, step: Step, verdict: BudgetVerdict, reason: str, *, corroborated: bool
+    ) -> StepResult:
+        """A budget limit killed the *session* — requeue the step and say whether the run may
+        ride through it (REQ-080).
+
+        The one path every limit **death** funnels through (a classified ``USAGE_LIMIT``, a
+        clauder-corroborated ``ERROR``, and the repair loop's limit), so the requeue status,
+        the event, and the resume decision cannot drift apart across three call sites.
+
+        * **Always ``RECOVER``** (Decision 4), never ``PENDING``: the killed session left
+          partial edits in the tree, so the relaunch must carry ``--repeat`` and assess them
+          (:meth:`run_step` derives the flag from this status). ``steward repeat`` did this
+          by hand in the manual workflow; the automatic resume must do it deliberately —
+          REQ-079's whole-tree doctrine means those edits *will* be committed by whichever
+          session lands next, so the resuming one had better have read them.
+        * **Resumable** iff an oracle answered (``NO_ORACLE`` → stop, Decision 6: no honest
+          signal for when the budget clears, and the engine does not blind-poll) **and** the
+          guard has not tripped (Decision 5). An ``AVAILABLE`` verdict still resumes: the
+          runtime signal is authoritative that a limit happened and clauder's usage view may
+          simply lag — that disagreement is exactly what the guard bounds.
+
+        Note the *gate*-side stops (``precheck`` returning not-ok: unsatisfiable, or a stop
+        request) do **not** come here — no session ran, so there is nothing to recover, and
+        the REQ's own stop list names them as terminal.
+        """
+        led = self.ledger
+        led.set_status(step.id, StepStatus.RECOVER)
+        led.save()
+        tripped = self._bump_limit_streak(step)
+        resumable = verdict is not BudgetVerdict.NO_ORACLE and not tripped
+        led.append_event(
+            "usage_limit",
+            step=step.id,
+            corroborated=corroborated,
+            verdict=verdict.value,
+            reason=reason,
+            resumable=resumable,
+            consecutive=self._limit_streak,
+        )
+        if tripped:
+            led.append_event(
+                "limit_guard", step=step.id, consecutive=self._limit_streak,
+                detail=(
+                    f"{self._limit_streak} limit deaths in a row on {step.id} with no gate "
+                    f"wait and no progress — stopping instead of relaunching again."
+                ),
+            )
+        if corroborated:
+            detail = f"session error with no limit marker — corroborated as a limit by {reason}"
+        else:
+            detail = f"claude usage limit ({reason})"
+        if tripped:
+            detail += f" — {self._limit_streak} in a row on this step, stopping"
+        elif not resumable:
+            detail += " — no budget oracle, stopping"
+        return StepResult(step, RunOutcome.LIMIT, detail, resumable=resumable)
+
     def only_ineligibility_reason(self, req_id: str) -> str:
         """Name *why* ``--only req_id`` selected nothing (REQ-026 D8) from the actual step
         statuses — never fabricating a dependency cause (REQ-059 Decision 3).
@@ -370,16 +478,24 @@ class Executor:
         led.save()
         led.append_event("step_started", step=step.id, command=command, recover=recovering)
 
-        # When a run is interrupted (quota gate / usage limit) the step is re-queued. Keep
-        # a recovering step as RECOVER so its recovery signal survives the interruption.
+        # When the *gate* blocks a step (no session ran) it is re-queued. Keep a recovering
+        # step as RECOVER so its recovery signal survives the interruption. A limit that kills
+        # a running session is different — it goes through `_requeue_limit`, always RECOVER.
         requeue = StepStatus.RECOVER if recovering else StepStatus.PENDING
 
+        # REQ-080 Decision 5: a gate that actually slept means the budget window moved, so
+        # this is not the tight spin the consecutive-limit guard watches for — reset it.
+        waits_before = getattr(self.accounts, "wait_count", 0)
         ok, reason = self.accounts.precheck()
+        if getattr(self.accounts, "wait_count", 0) > waits_before:
+            self._reset_limit_streak()
         if not ok:
+            # An unsatisfiable budget or a stop request — the REQ-080 stop list. Never
+            # resumable: waiting is precisely what the gate just declined to do.
             led.set_status(step.id, requeue)
             led.save()
             led.append_event("quota_block", step=step.id, reason=reason)
-            return StepResult(step, RunOutcome.LIMIT, reason)
+            return StepResult(step, RunOutcome.LIMIT, reason, resumable=False)
 
         model, effort = self._claude_for("develop")
         result = self.runner(
@@ -397,10 +513,9 @@ class Executor:
             self.stop.clear_child()
 
         if result.outcome is claude_mod.Outcome.USAGE_LIMIT:
-            led.set_status(step.id, requeue)
-            led.save()
-            led.append_event("usage_limit", step=step.id)
-            return StepResult(step, RunOutcome.LIMIT, "claude usage limit")
+            # The runtime said so outright (REQ-016's signal) — no corroboration needed.
+            verdict, reason = self._budget_verdict()
+            return self._requeue_limit(step, verdict, reason, corroborated=False)
 
         if result.outcome is claude_mod.Outcome.LAUNCH_FAILURE:
             # claude never started — a launch failure must name its cause, not record an
@@ -419,7 +534,23 @@ class Executor:
             )
             return StepResult(step, RunOutcome.FAILED, detail)
 
+        if result.outcome is claude_mod.Outcome.ERROR:
+            # REQ-080 Decision 2: the ambiguous shape. The runtime signal (REQ-016) stays the
+            # primary classifier and it said "error" — but the FlowSteward REQ-116 trace was a
+            # budget death whose ending simply missed `_LIMIT_MARKERS`, and an ERROR sets the
+            # step FAILED, a stopping state needing a manual `steward repeat`. Chasing every
+            # future wording of the limit message into the marker table is a losing game; ask
+            # the budget oracle the engine already trusts, at the moment it happened. Only an
+            # EXHAUSTED verdict reclassifies — clauder saying "there is budget" leaves a
+            # genuine error a genuine error.
+            verdict, reason = self._budget_verdict()
+            if verdict is BudgetVerdict.EXHAUSTED:
+                return self._requeue_limit(step, verdict, reason, corroborated=True)
+
         if result.outcome in (claude_mod.Outcome.ERROR, claude_mod.Outcome.TIMEOUT):
+            # A TIMEOUT is deliberately *not* corroborated: it is the watchdog killing a
+            # session that went silent, which is not a budget-death shape (REQ-080 AC1 names
+            # Outcome.ERROR alone).
             led.set_status(step.id, StepStatus.FAILED)
             led.save()
             led.append_event("step_failed", step=step.id, outcome=result.outcome.value)
@@ -687,7 +818,7 @@ class Executor:
                 led.set_status(step.id, StepStatus.PENDING)
                 led.save()
                 led.append_event("quota_block", step=step.id, reason=reason)
-                return StepResult(step, RunOutcome.LIMIT, reason)
+                return StepResult(step, RunOutcome.LIMIT, reason, resumable=False)
             command = self._repair_command(step, brief)
             led.append_event(
                 "repair_started", step=step.id, attempt=attempt, model=model
@@ -707,10 +838,11 @@ class Executor:
                 self.stop.clear_child()
 
             if result.outcome is claude_mod.Outcome.USAGE_LIMIT:
-                led.set_status(step.id, StepStatus.PENDING)
-                led.save()
-                led.append_event("usage_limit", step=step.id)
-                return StepResult(step, RunOutcome.LIMIT, "claude usage limit")
+                # REQ-080: a repair session's limit death is a limit death — same requeue,
+                # same resume decision. The run loop rides it out and the relaunched develop
+                # session assesses the tree; no repair-side machinery of its own.
+                verdict, limit_reason = self._budget_verdict()
+                return self._requeue_limit(step, verdict, limit_reason, corroborated=False)
             if result.outcome in (
                 claude_mod.Outcome.ERROR,
                 claude_mod.Outcome.TIMEOUT,
@@ -1099,6 +1231,15 @@ class Executor:
         A parked step is BLOCKED (not eligible), so the loop naturally advances to the
         next independent step and stops when nothing is eligible. ``only`` restricts the
         whole run to one REQ's steps (REQ-026).
+
+        **A budget limit does not end the run** (REQ-080 Decision 3). Unattended runs exist
+        to ride out exactly these windows — possibly hours until a reset — so a resumable
+        LIMIT simply loops: the interrupted step was requeued RECOVER, :meth:`next_eligible`
+        re-selects it, and :meth:`run_step`'s ``precheck`` enters the **existing**
+        ``clauder gate`` wait/re-gate/switch loop before relaunching it with ``--repeat``.
+        No new waiting machinery lives here; the resume is the absence of the old ``break``.
+        The run stops only on the REQ-080 stop list — no oracle (Decision 6), an
+        unsatisfiable budget, the consecutive-limit guard (Decision 5), or the stop signal.
         """
         check_invariants(self)  # REQ-049: refuse up front on production / mid-merge (raises)
         self._reconcile_stranded_running()  # REQ-059: self-heal any strand before selection
@@ -1117,11 +1258,17 @@ class Executor:
             res = self._drive_step(step, unattended=True, on_event=on_event)
             results.append(res)
             count += 1
+            if res.outcome is RunOutcome.DONE:
+                # REQ-080 D5: progress — a step completed, so no step is spinning. Reset the
+                # consecutive-limit guard (the streak-step check alone would not: a *different*
+                # step's completion must still clear an older step's streak).
+                self._reset_limit_streak()
             if res.outcome is RunOutcome.REFUSED:
                 # A step refused (e.g. a validate waiting on an undone lab): stop for a human.
                 break
-            if res.outcome is RunOutcome.LIMIT:
-                # Out of quota: stop the whole run (step is back to PENDING).
+            if res.outcome is RunOutcome.LIMIT and not res.resumable:
+                # No oracle / unsatisfiable / stop requested / guard tripped — the REQ-080
+                # stop list. The step is requeued for a later run.
                 break
             if res.outcome is RunOutcome.FAILED:
                 # Hard failure: stop so a human can look (step stays FAILED).

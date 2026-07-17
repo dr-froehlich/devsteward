@@ -42,7 +42,17 @@ class Verifier(Protocol):
 @runtime_checkable
 class AccountProvider(Protocol):
     """Supplies the argv prefix for an account/quota-aware ``claude`` invocation, and
-    answers whether there is quota to proceed."""
+    answers whether there is quota to proceed.
+
+    **Optional budget oracle (REQ-080).** A provider *may* also offer
+    ``budget_verdict() -> (BudgetVerdict, reason)`` — a single non-waiting probe of the
+    budget — plus a ``wait_count`` counting the gate waits it has actually slept through
+    (:class:`devsteward.core.accounts.ClauderAccountProvider` does both). The executor reads
+    them via ``getattr`` and degrades to "no oracle" when absent, so a minimal provider like
+    :class:`~devsteward.core.accounts.SingleAccountProvider` implements neither and simply
+    never rides out a mid-run limit. Deliberately kept off the required protocol: waiting out
+    a budget window is a *clauder-backed* capability, not something every provider can claim.
+    """
 
     def precheck(self) -> tuple[bool, str]:
         """Return ``(ok, reason)``. ``ok=False`` means stop (out of quota)."""
