@@ -11,7 +11,7 @@ from pathlib import Path
 
 import click
 
-from . import __version__, skillsync
+from . import __version__, cache as cache_mod, skillsync
 from .build import build_executor
 from .config import Config, ProjectNotFound, load_config
 from .core import claude as claude_mod
@@ -159,6 +159,52 @@ def lint() -> None:
     for p in problems:
         click.echo(click.style(f"  ✗ {p}", fg="red"))
     raise click.ClickException(f"{len(problems)} problem(s)")
+
+
+# -- cache (session prompt-cache warmth) --------------------------------------
+
+
+@main.command()
+@click.option(
+    "--ttl",
+    "ttl_minutes",
+    type=int,
+    metavar="MINUTES",
+    default=cache_mod.DEFAULT_TTL_MINUTES,
+    show_default=True,
+    help="Assumed prompt-cache TTL in minutes (pass 5 when a usage-limit overage applies).",
+)
+@click.pass_context
+def cache(ctx: click.Context, ttl_minutes: int) -> None:
+    """Is this project's Claude session still cache-warm? (0 = warm, 1 = cold, 2 = none.)
+
+    Reports how long ago the newest Claude Code session transcript for this project was
+    written, and whether the prompt cache is warm under the assumed TTL (REQ-082). The
+    verdict is computed purely from the filesystem — the newest transcript's mtime under
+    `$CLAUDE_PROJECTS_DIR/<slug>/` (default `~/.claude/projects/`) — so running it from a
+    second shell never touches the session or its cache, which asking inside the session
+    would. Read-only and ledger-free: it works in any directory and writes nothing.
+    """
+    report = cache_mod.probe(ttl_minutes=ttl_minutes)
+    if not report.found:
+        click.echo(
+            click.style(
+                f"no Claude session transcript for this project — looked in "
+                f"{report.session_dir}",
+                fg="yellow",
+            ),
+            err=True,
+        )
+        ctx.exit(report.exit_code)
+    verdict = (
+        click.style("WARM", fg="green") if report.warm else click.style("cold", fg="red")
+    )
+    click.echo(
+        f"{report.session_id}  last write {report.age_minutes:.0f}m ago  "
+        f"{verdict} (ttl {report.ttl_minutes}m)"
+    )
+    click.echo(click.style(cache_mod.INVALIDATION_CAVEAT, fg="yellow"))
+    ctx.exit(report.exit_code)
 
 
 # -- lifecycle (activate / repeat) --------------------------------------------
