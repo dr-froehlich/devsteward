@@ -73,7 +73,7 @@ def test_onboard_documents_verification_gates():
 
 def test_onboard_merge_and_scope():
     """AC4 — merge-not-overwrite for an existing .claude/ and CLAUDE.md, and
-    scenarios/ROADMAP marked out of scope."""
+    scenarios marked out of scope."""
     md = _md()
     low = md.lower()
 
@@ -81,7 +81,7 @@ def test_onboard_merge_and_scope():
     assert ".claude/" in md and "claude.md" in low
 
     assert "out of scope" in low
-    assert "scenario" in low and "roadmap" in low
+    assert "scenario" in low
 
 
 def test_onboard_documents_park():

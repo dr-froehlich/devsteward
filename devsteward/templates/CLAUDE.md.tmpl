@@ -27,7 +27,7 @@ engine runs them and only marks a step done when they pass.
   and the code that satisfies it move in the **same** commit.
 - **Branching model — trunk-based.** `main` is production (release tags are cut here;
   consumers pin them); `dev` is the integration branch and the default working branch. **All
-  work lands on `dev`:** intake (REQ frontmatter, index row, roadmap), plans, the ledger,
+  work lands on `dev`:** intake (REQ frontmatter, index row), plans, the ledger,
   **and** implementation (code + tests + the status-flip to `done`) are all committed
   directly on `dev` — no feature branches, no worktrees, no engine-initiated branch
   switching. This is engine-enforced and config-driven: the engine refuses to autocommit on

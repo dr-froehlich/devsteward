@@ -192,16 +192,12 @@ and no lab is needed):
   where **every** criterion has an `id`, a `test:`, and a `check:`.
 - Add its row to `REQUIREMENTS_INDEX.md` (status `DRAFT`). The index ↔ frontmatter pair is the
   **single source of truth** for status (`steward lint` keeps them in lockstep).
-- Add it to `ROADMAP.md` (the ordering/dependency view) and the dependency graph — **ordering,
-  deps, and one-line rationale only; never a status label** (no `(draft)`/`(open)`/`(done)`).
-  Status lives in the index, not here; a status copy in the roadmap has no writer at land and
-  only drifts.
 - If scenarios help, add `SCN-NNN` files and reference them in `scenario_refs`.
 - Run `steward lint` and fix anything it reports. Leave it green.
 
-Do all of this in **one commit** (frontmatter + index + roadmap together), co-author
-trailer, on `dev`. A requirement is a *registry declaration*, not implementation;
-committing it serializes id allocation and keeps the index/roadmap consistent.
+Do all of this in **one commit** (frontmatter + index together), co-author trailer, on
+`dev`. A requirement is a *registry declaration*, not implementation; committing it
+serializes id allocation and keeps the index consistent.
 
 **Close by naming the next command precisely (REQ-078).** When you suggest starting
 development, phrase it as **`/advance REQ-NNN develop`** naming *this* just-intook REQ —

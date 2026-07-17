@@ -65,7 +65,7 @@ carrying the project's **real** `production_branch`/`integration_branch`.
 The target already has a `.claude/` and an 8 KB CLAUDE.md — so this is a **merge**:
 
 - Check for **skill-name collisions** and an existing `settings.json` before copying any skill.
-- Keep the target's **richer artifacts** (its ROADMAP, its domain skills) — do not clobber them.
+- Keep the target's **richer artifacts** (its living docs, its domain skills) — do not clobber them.
 - Add only what is missing; leave what the project already owns.
 
 A stamp that overwrites the target's accumulated knowledge is a regression, not a migration.
@@ -97,7 +97,7 @@ guidance, its no-PII invariant) — preserve that voice; add the contracts it no
 
 - **Re-implementing** conversion/seeding logic in this skill — it only orchestrates the tested
   tools (the logic stays in `convert_reqs.py` / `steward seed-ledger`, independently verifiable).
-- **Scenario (`SCN-*`) and ROADMAP conversion** — left as living docs, same boundary as the
+- **Scenario (`SCN-*`) conversion** — left as living docs, same boundary as the
   converter (REQ-010).
 - **Mutating the target's live repo as a deliverable** of this skill — the live retrofit (memzy
   end-to-end) is its own tracked proof REQ (REQ-062), gated by its own `steward lint`/`status`.

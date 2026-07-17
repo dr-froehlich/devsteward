@@ -183,7 +183,7 @@ blocked (and `steward lint` flags it).
 
 DevSteward uses a two-line model. `main` is **production** — release tags are cut here and
 consumers pin them. `dev` is the **integration** branch and the **single working branch**.
-*Everything* lands on `dev` in linear history: intake (REQ frontmatter, index row, roadmap),
+*Everything* lands on `dev` in linear history: intake (REQ frontmatter, index row),
 plans, the ledger, **and** implementation (code + acceptance tests + the flip to `done`) are
 all committed directly on `dev`. There are **no feature branches, no worktrees, and no
 engine-initiated branch switching** — the engine never creates, switches, or merges a branch.

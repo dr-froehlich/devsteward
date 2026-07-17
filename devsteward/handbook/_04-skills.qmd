@@ -9,7 +9,7 @@ headless; a human can also invoke them directly in an interactive session.
 The interrogation skill, and the one to protect. Takes a raw idea and interrogates it —
 problem, scope boundaries, alternatives, risks, dependencies, the acceptance tests, the
 English-code/localized-UI split — then emits a **schema-valid draft REQ** (`status:
-draft`), its index row, its roadmap entry, and any `SCN` scenarios. Leaves `steward lint`
+draft`), its index row, and any `SCN` scenarios. Leaves `steward lint`
 green. A sharp `/intake` is the highest-leverage moment in the method; never rush it.
 
 ## `/advance` — one checkpoint

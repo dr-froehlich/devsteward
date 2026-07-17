@@ -86,6 +86,6 @@ commit** as its frontmatter and the code.
 | REQ-080 | steward run rides through a budget limit — clauder-corroborated classification, wait-and-relaunch via the gate, recovery-signaled resume | DONE | [REQ-080](REQ-080.md) | REQ-016, REQ-025, REQ-058, REQ-059 |
 | REQ-081 | Warm validation cycle — steward validate start/record as real CLI verbs, the verdict recorded from a second shell, the System-Tester session survives a red through rework | OPEN | [REQ-081](REQ-081.md) | REQ-030, REQ-033, REQ-034, REQ-055, REQ-075 |
 | REQ-082 | steward cache — report the current project's Claude session cache warmth from a second shell, without touching the session | DONE | [REQ-082](REQ-082.md) | – |
-| REQ-083 | Retire the roadmap artifact — delete the ROADMAP.md template + roadmap_file config seam, subtract roadmap steps from the stamped intake/bootstrap/onboard skills and the doctrine text; future-REQ layout lives in concept bundles with frozen slicing plans | DRAFT | [REQ-083](REQ-083.md) | – |
+| REQ-083 | Retire the roadmap artifact — delete the ROADMAP.md template + roadmap_file config seam, subtract roadmap steps from the stamped intake/bootstrap/onboard skills and the doctrine text; future-REQ layout lives in concept bundles with frozen slicing plans | DONE | [REQ-083](REQ-083.md) | – |
 
 New requirement template: [`_templates/req.md`](../../devsteward/templates/docs/requirements/_templates/req.md)

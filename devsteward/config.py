@@ -52,7 +52,6 @@ class Config:
     profile: str = "req"
     requirements_dir: str = "docs/requirements"
     index_file: str = "docs/requirements/REQUIREMENTS_INDEX.md"
-    roadmap_file: str = "docs/requirements/ROADMAP.md"
     accounts: dict = field(default_factory=lambda: {"provider": "clauder", "threshold": 70})
     claude: dict = field(
         default_factory=lambda: {
@@ -150,10 +149,6 @@ class Config:
     def index_path(self) -> Path:
         return self.root / self.index_file
 
-    @property
-    def roadmap_path(self) -> Path:
-        return self.root / self.roadmap_file
-
 
 def load_config(root: Path | None = None) -> Config:
     root = Path(root) if root is not None else find_root()
@@ -167,7 +162,6 @@ def load_config(root: Path | None = None) -> Config:
         profile=data.get("profile", "req"),
         requirements_dir=data.get("requirements_dir", "docs/requirements"),
         index_file=data.get("index_file", "docs/requirements/REQUIREMENTS_INDEX.md"),
-        roadmap_file=data.get("roadmap_file", "docs/requirements/ROADMAP.md"),
         accounts=data.get("accounts", {"provider": "clauder"}),
         claude=data.get("claude", {"permission_mode": "dangerously-skip"}),
         git=data.get("git", {}),

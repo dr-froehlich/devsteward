@@ -34,7 +34,7 @@ explanation as final text and ask in plain prose, waiting for the reply.
   REQ-001's acceptance test actually runs).
 - Confirm `.devsteward/config.yaml` matches the chosen layout and account provider.
 - Co-author **REQ-001** properly: a tight, frozen north star — a compass, not a spec.
-- Update `REQUIREMENTS_INDEX.md` and `ROADMAP.md` to match.
+- Update `REQUIREMENTS_INDEX.md` to match.
 
 ## 3. Bring it to life
 

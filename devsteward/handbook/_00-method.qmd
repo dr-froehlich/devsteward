@@ -13,10 +13,8 @@ fail to propagate. DevSteward is the single controlled baseline.
 2. **REQ-001 is a frozen north star.** Direction changes by *superseding* it with a new
    REQ, never by quietly weakening it.
 3. **A dependency DAG orders the work.** `depends_on` makes a REQ eligible only once its
-   prerequisites are done. `ROADMAP.md` is the human view of that graph — *ordering and
-   rationale only*. It deliberately carries **no status**: status is the single
-   `REQUIREMENTS_INDEX.md` ↔ frontmatter pair (run `steward status` for live state). A status
-   copy in the roadmap would have no writer at land and would only drift.
+   prerequisites are done. Status is the single `REQUIREMENTS_INDEX.md` ↔ frontmatter pair
+   (run `steward status` for live state).
 4. **An engine walks the work — and certifies it, whoever drives.** The default is
    **interactive**: a human drives `/advance` in a live session (the interview stays
    live at forks) and closes with `steward checkpoint`, which verifies and lands through

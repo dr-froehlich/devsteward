@@ -1,6 +1,6 @@
 """The REQ-workflow profile — the only content-aware layer.
 
-Derives Design → Build → Land steps from the REQ/ROADMAP files and sequences whole
+Derives Design → Build → Land steps from the REQ files and sequences whole
 requirements in dependency order, while letting independent requirements interleave.
 """
 
