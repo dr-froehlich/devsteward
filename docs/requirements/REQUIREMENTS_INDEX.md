@@ -85,5 +85,6 @@ commit** as its frontmatter and the code.
 | REQ-079 | Reestablish the whole-tree code commit — remove the REQ-076 boundary-delta scoping, keep REQ-077's guards, codify one-session-at-a-time as doctrine | DONE | [REQ-079](REQ-079.md) | REQ-063, REQ-076, REQ-077 |
 | REQ-080 | steward run rides through a budget limit — clauder-corroborated classification, wait-and-relaunch via the gate, recovery-signaled resume | DONE | [REQ-080](REQ-080.md) | REQ-016, REQ-025, REQ-058, REQ-059 |
 | REQ-081 | Warm validation cycle — steward validate start/record as real CLI verbs, the verdict recorded from a second shell, the System-Tester session survives a red through rework | OPEN | [REQ-081](REQ-081.md) | REQ-030, REQ-033, REQ-034, REQ-055, REQ-075 |
+| REQ-082 | steward cache — report the current project's Claude session cache warmth from a second shell, without touching the session | DRAFT | [REQ-082](REQ-082.md) | – |
 
 New requirement template: [`_templates/req.md`](../../devsteward/templates/docs/requirements/_templates/req.md)
