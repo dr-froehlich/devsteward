@@ -87,7 +87,9 @@ If a REQ declares an `artifact` or `manual` acceptance criterion, the green deve
 **commits** the work on `dev` (it does not land yet) and a `REQ-NNN:validate` step follows.
 
 ```sh
-steward validate REQ-NNN    # the single entry point for the validate step
+steward validate REQ-NNN           # shape A: the whole step from a plain shell
+steward validate start REQ-NNN     # warm cycle: open the step (works inside a session)
+steward validate record REQ-NNN    # warm cycle: grade + verdict, from a plain shell
 ```
 
 - A fresh System Tester session (it never sees your diff) brings the lab up and captures
@@ -97,6 +99,17 @@ steward validate REQ-NNN    # the single entry point for the validate step
   records the verdict.
 - On green, the same mechanical land fires (flip + index + ledger, on `dev`). A green validate on
   an already-`done` REQ just appends a fresh evidence event.
+
+**The warm cycle (REQ-081) — a red does not cost the session.** The two halves of the same
+flow are separate verbs, so a validation can run inside an already-warm session: `steward
+validate start REQ-NNN` opens the step and prints the evidence dir (it spawns nothing, so it
+is callable from inside a Claude session); the session does the guided work and captures; then
+the human runs `steward validate record REQ-NNN` from a **second plain shell** — the engine
+grades the capture and takes the verdict through its own interactive prompt (a Claude session
+can never host or relay it). On a red, run `steward rework`/`steward revalidate` and the repair
+from that same shell while the validation session stays warm and **idle** (one session writes
+at a time); once the step is PENDING again, the warm session re-runs `start` — scoped to the
+red ACs (see red-only revalidation below).
 
 **The engine hands each `artifact` grading test its evidence dir.** When the engine runs an
 `artifact` AC's test command it sets **`DEVSTEWARD_EVIDENCE_DIR`** in that command's environment

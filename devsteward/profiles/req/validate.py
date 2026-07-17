@@ -372,21 +372,104 @@ class ReqValidateRoutine:
         preflight = self._preflight_gate(ex, step)
         if preflight is not None:
             return preflight
-        led.set_cursor(step.id)
-        led.set_status(step.id, StepStatus.RUNNING)
-        led.save()
-        led.append_event("step_started", step=step.id, command=step.command)
         # REQ-048: the System-Tester session and evidence both live in the one tree on ``dev``
         # (``ex.root``); the ledger commit captures the evidence in place.
         evidence_dir = ex.root / LEDGER_DIRNAME / EVIDENCE_DIRNAME / req.id / _now_stamp()
         evidence_dir.mkdir(parents=True, exist_ok=True)
+        evidence_rel = str(evidence_dir.relative_to(ex.root))
+        led.set_cursor(step.id)
+        led.set_status(step.id, StepStatus.RUNNING)
+        led.save()
+        # REQ-081 Decision 6: the start event carries the evidence dir — the cross-process
+        # handoff a standalone record half resolves, with no second state file.
+        led.append_event(
+            "step_started", step=step.id, command=step.command, evidence=evidence_rel
+        )
         return StartContext(
             req=req,
             step=step,
             evidence_dir=evidence_dir,
-            evidence_rel=str(evidence_dir.relative_to(ex.root)),
+            evidence_rel=evidence_rel,
             in_flight=True,
             reval=_pending_revalidate(led, req.id),  # REQ-075 AC1: scoped re-run, if any
+        )
+
+    def resume_context(self, ex, req_id: str) -> "StartContext | StepResult":
+        """Rebuild the :class:`StartContext` for a **standalone record half** (REQ-081).
+
+        The start half ran in one process (typically the warm System-Tester session); the
+        record half runs in another (the operator's plain shell). Everything the record
+        half needs is re-derived from the ledger: the RUNNING step, the evidence dir the
+        start event recorded (falling back to the latest dated dir), and any pending
+        REQ-075 revalidate scope. A step in any other state refuses with a routing
+        diagnostic — record grades exactly one started, unrecorded validation."""
+        led: Ledger = ex.ledger
+        req = self._req(req_id)
+        if req is None:
+            return StepResult(None, RunOutcome.FAILED, f"{req_id}: REQ file not found")
+        step = ex.step_by_id(f"{req_id}:validate")
+        if step is None:
+            return StepResult(
+                None,
+                RunOutcome.REFUSED,
+                f"{req_id} has no validate step — it declares no artifact/manual "
+                f"acceptance criterion, so there is nothing to record",
+            )
+        status = led.status_of(step.id)
+        if status is not StepStatus.RUNNING:
+            routing = {
+                StepStatus.PENDING: (
+                    f"the validation has not been started — run "
+                    f"`steward validate start {req_id}` first"
+                ),
+                StepStatus.BLOCKED: (
+                    f"its validation is already recorded (parked) — for a red use "
+                    f"`steward rework {req_id}` or `steward revalidate {req_id}`; for a "
+                    f"pending sign-off run `steward validate {req_id}`"
+                ),
+                StepStatus.DONE: (
+                    f"the validation already landed — a fresh re-run is "
+                    f"`steward validate {req_id}`"
+                ),
+                StepStatus.FAILED: (
+                    f"the step is failed — `steward repeat {req_id}` (or `steward reland "
+                    f"{req_id}` after a land-gate refusal)"
+                ),
+            }.get(status, f"unexpected step status {status.value}")
+            return StepResult(
+                step,
+                RunOutcome.REFUSED,
+                f"nothing to record for {step.id} ({status.value}): {routing}",
+            )
+        evidence_rel: str | None = None
+        for ev in led.events():
+            if (
+                ev.get("event") == "step_started"
+                and ev.get("step") == step.id
+                and ev.get("evidence")
+            ):
+                evidence_rel = ev["evidence"]
+        if evidence_rel is None:
+            # Pre-REQ-081 start events carried no evidence path — fall back to the latest
+            # dated dir (names are UTC stamps, so lexical order is chronological).
+            base = ex.root / LEDGER_DIRNAME / EVIDENCE_DIRNAME / req_id
+            dirs = sorted(d for d in base.iterdir() if d.is_dir()) if base.is_dir() else []
+            if dirs:
+                evidence_rel = str(dirs[-1].relative_to(ex.root))
+        if evidence_rel is None or not (ex.root / evidence_rel).is_dir():
+            return StepResult(
+                step,
+                RunOutcome.REFUSED,
+                f"{step.id} is running but its evidence dir cannot be resolved — "
+                f"re-run `steward validate start {req_id}` to ready a fresh one",
+            )
+        return StartContext(
+            req=req,
+            step=step,
+            evidence_dir=ex.root / evidence_rel,
+            evidence_rel=evidence_rel,
+            in_flight=True,
+            reval=_pending_revalidate(led, req_id),
         )
 
     def record(

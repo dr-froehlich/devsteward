@@ -684,19 +684,40 @@ def _interactive_signoff(root: Path):
 
 
 @main.command()
-@click.argument("req_id")
+@click.argument("words", nargs=-1, required=True, metavar="[start|record] REQ_ID")
 @click.option("--quiet", is_flag=True, help="Suppress live claude output; show only the report.")
-def validate(req_id: str, quiet: bool) -> None:
+def validate(words: tuple[str, ...], quiet: bool) -> None:
     """Run REQ_ID's System-Test phase — the single entry point (REQ-030).
 
-    On an in-flight REQ this executes the pending ``validate`` step: the fresh System
-    Tester session preps the lab and captures artifacts, the engine runs each
+    Three forms. ``steward validate REQ-NNN`` (shape A, from a plain shell): the fresh
+    System Tester session preps the lab and captures artifacts, the engine runs each
     ``artifact`` AC's named test itself, ``manual`` ACs take your sign-off here, and on
-    green the REQ lands mechanically (flip, index, commit, merge). On a **done** REQ it
-    appends a fresh dated evidence event and leaves the REQ file untouched — status *and*
+    green the REQ lands mechanically (flip, index, commit). On a **done** REQ it appends
+    a fresh dated evidence event and leaves the REQ file untouched — status *and*
     ``verified_by`` stay the frozen landing provenance (re-run policy, REQ-030 Decision 5
     as clarified by REQ-035). A red validation parks with the failure brief — no repair loop.
+
+    The warm cycle (REQ-081) splits the same flow into its two REQ-034 halves so the
+    System-Tester session survives a red: ``steward validate start REQ-NNN`` opens the
+    step and readies the evidence dir (callable from inside the warm session — it spawns
+    nothing); the guided work and capture happen there; then ``steward validate record
+    REQ-NNN`` from a **second plain shell** runs the artifact gate, takes the human
+    verdict via the engine's interactive prompt, and routes the same three outcomes.
+    After a red, run the rework from that shell — the warm session re-runs ``start``.
     """
+    if len(words) == 1 and words[0] not in ("start", "record"):
+        req_id = words[0]
+    elif len(words) == 2 and words[0] in ("start", "record"):
+        if words[0] == "start":
+            _validate_start(words[1])
+        else:
+            _validate_record(words[1])
+        return
+    else:
+        raise click.UsageError(
+            "usage: steward validate REQ-NNN  |  steward validate start REQ-NNN  |  "
+            "steward validate record REQ-NNN"
+        )
     cfg = _load_or_die()
     ctrl = StopController()
     ctrl.install()
@@ -756,13 +777,16 @@ def validate(req_id: str, quiet: bool) -> None:
             f"checkpoint (run `steward checkpoint {req_id} develop` first)"
         )
     # REQ-034 Decision 6: the bring-up path never spawns Claude from within Claude — refuse
-    # early when already inside a Claude session, pointing at a plain terminal / the skill.
+    # early when already inside a Claude session, pointing at a plain terminal or the
+    # warm-cycle halves (REQ-081).
     if claude_mod.in_claude_session():
         raise click.ClickException(
             f"refusing to bring up a guided validation session from inside a Claude "
             f"session (CLAUDECODE set) — Claude is never spawned from within Claude. Open a "
-            f"plain terminal tab and run `steward validate {req_id}` there, or drive the "
-            f"validation in this session via the /system-test skill's start/record steps."
+            f"plain terminal tab and run `steward validate {req_id}` there, or drive it "
+            f"warm (REQ-081): `steward validate start {req_id}` in this session, capture "
+            f"the evidence here, then record the verdict from a plain shell with "
+            f"`steward validate record {req_id}`."
         )
     check_invariants(ex)  # REQ-049: refuse on production / mid-merge (raises; handled top-level)
     # REQ-034 Decision 6 (shape A): start → interactive guided bring-up (editor pattern) →
@@ -770,6 +794,107 @@ def validate(req_id: str, quiet: bool) -> None:
     res = routine.guided_validate(
         ex, step, signoff=signoff, on_event=on_event, driver="interactive",
     )
+    if res.outcome is RunOutcome.REFUSED:
+        raise click.ClickException(res.detail)
+    if res.outcome is RunOutcome.PARKED:
+        click.echo(click.style(f"validation parked: {res.detail}", fg="yellow"))
+        raise SystemExit(1)
+    _print_report(ex, res)
+
+
+def _validate_start(req_id: str) -> None:
+    """The standalone **start** half (REQ-081): open the validate step and ready the
+    evidence dir, spawning nothing.
+
+    Callable from inside a Claude session — the warm System-Tester session *is* the
+    session, so there is no bring-up and no CLAUDECODE refusal. Everything else mirrors
+    shape A's pre-flight: develop must be checkpointed, the declared lab done, and the
+    REQ-065 formality gate clear (both live inside ``routine.start``)."""
+    cfg = _load_or_die()
+    ex = build_executor(cfg, announce=_stderr_announcer)
+    routine = ex.validate_runner
+    if routine is None:
+        raise click.ClickException("the generic profile has no validation phase")
+    from .profiles.req.reqfile import load_reqs
+
+    req = next((r for r in load_reqs(cfg.req_dir) if r.id == req_id), None)
+    if req is None:
+        raise click.ClickException(f"{req_id}: no such requirement")
+    if req.status == "done":
+        raise click.ClickException(
+            f"{req_id} is done — a fresh re-validation is `steward validate {req_id}` "
+            f"from a plain shell (REQ-035: provenance stays frozen)"
+        )
+    step = ex.step_by_id(f"{req_id}:validate")
+    if step is None:
+        raise click.ClickException(
+            f"{req_id} has no validate step — it declares no artifact/manual acceptance "
+            f"criterion, or it is not active"
+        )
+    # REQ-041: the develop-done pre-flight reads the live ledger (as in shape A).
+    if ex.live_ledger().status_of(f"{req_id}:develop") is not StepStatus.DONE:
+        raise click.ClickException(
+            f"{req_id}:develop is not closed yet — validation follows the develop "
+            f"checkpoint (run `steward checkpoint {req_id} develop` first)"
+        )
+    status = ex.ledger.status_of(step.id)
+    # PENDING opens fresh; RUNNING is the clean re-entry (a fresh dated dir, mirroring
+    # shape A's re-entry after a killed session). Anything else routes elsewhere.
+    if status not in (StepStatus.PENDING, StepStatus.RUNNING):
+        raise click.ClickException(
+            f"{step.id} is {status.value} — nothing to start. A parked red returns via "
+            f"`steward rework {req_id}` / `steward revalidate {req_id}`; a failed step "
+            f"via `steward repeat {req_id}`."
+        )
+    check_invariants(ex)  # REQ-049: refuse on production / mid-merge
+    ctx = routine.start(ex, step)
+    if isinstance(ctx, StepResult):
+        raise click.ClickException(ctx.detail)
+    click.echo(click.style(f"validation started: {step.id}", fg="green"))
+    click.echo(f"evidence dir: {ctx.evidence_rel}")
+    if ctx.reval is not None and ctx.reval.get("scope"):
+        click.echo(f"scoped re-run (REQ-075): {', '.join(ctx.reval['scope'])}")
+    click.echo(
+        "capture the validation artifacts there, then record the verdict from a plain "
+        f"shell: steward validate record {req_id}"
+    )
+
+
+def _validate_record(req_id: str) -> None:
+    """The standalone **record** half (REQ-081): grade what the started validation
+    captured and take the human verdict — from a plain shell, while the System-Tester
+    session stays warm.
+
+    The verdict channel is the engine's interactive prompt and nothing else (REQ-034
+    Decision 2: the session never collects, relays, or asserts it) — so when a fresh
+    ``manual`` AC needs a verdict and we are inside a Claude session (no terminal to
+    prompt on, and the session must never relay the verdict), record refuses instead of
+    aborting mid-transaction."""
+    cfg = _load_or_die()
+    ex = build_executor(cfg, announce=_stderr_announcer)
+    routine = ex.validate_runner
+    if routine is None:
+        raise click.ClickException("the generic profile has no validation phase")
+    ctx = routine.resume_context(ex, req_id)
+    if isinstance(ctx, StepResult):
+        raise click.ClickException(ctx.detail)
+    carried_ids = {c["ac"] for c in (ctx.reval.get("carried") if ctx.reval else []) or []}
+    fresh_manual = [
+        c for c in ctx.req.acceptance if c.check == "manual" and c.id not in carried_ids
+    ]
+    if fresh_manual and claude_mod.in_claude_session():
+        raise click.ClickException(
+            f"{req_id} has manual AC(s) awaiting a human verdict — the verdict is taken "
+            f"only by the engine's interactive prompt, which a Claude session cannot host "
+            f"(and the session must never relay it). Run `steward validate record "
+            f"{req_id}` from a plain shell; this warm session stays as it is."
+        )
+    check_invariants(ex)  # REQ-049: refuse on production / mid-merge
+    # REQ-049: the record/land/park is atomic, exactly as shape A's record half.
+    with transaction(ex.git, label=f"validate {req_id}"):
+        res = routine.record(
+            ex, ctx, signoff=_interactive_signoff(cfg.root), driver="interactive"
+        )
     if res.outcome is RunOutcome.REFUSED:
         raise click.ClickException(res.detail)
     if res.outcome is RunOutcome.PARKED:

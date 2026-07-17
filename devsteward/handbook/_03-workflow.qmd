@@ -89,9 +89,21 @@ Mechanics around the gate:
   reviewer, scope) as the evidence event. The human got the *beginning* of validation
   (preparation, guidance), not just the `y/N` at the end. **Claude is never spawned from
   within Claude:** the bring-up refuses inside a Claude session (`CLAUDECODE`) and points at
-  a plain terminal tab or the in-session skill, which calls the discrete **start** and
-  **record** halves itself. The engine-run gate + engine-recorded verdict are what keep the
-  guided session from self-certifying, whatever it reports.
+  a plain terminal tab or the warm cycle (below). The engine-run gate + engine-recorded
+  verdict are what keep the guided session from self-certifying, whatever it reports.
+- **The warm cycle (REQ-081) — a red does not cost the session.** The two REQ-034 halves
+  are first-class verbs, so a validation can run inside an already-warm session instead of
+  through the shape-A bring-up: `steward validate start REQ-NNN` opens the step and readies
+  the evidence dir (it spawns nothing, so it is callable inside a Claude session); the warm
+  session does the guided work and captures; the human then runs `steward validate record
+  REQ-NNN` from a **second plain shell** — the engine grades the capture and takes the
+  verdict through its own interactive prompt (a Claude session can neither host nor relay
+  it; `record` refuses there when a manual verdict is due). On a red, the rework/revalidate
+  and the repair run from that same shell while the validation session stays warm and
+  **idle** (one session writes at a time, REQ-079); once the step is back to `PENDING`, the
+  warm session re-runs `start`, scoped to the red ACs (REQ-075). Shape A remains the
+  cold-start path; the halves are the same flow, not a second one — same pre-flight, same
+  gate, same three outcomes, and the verdict prompt is the only verdict channel in both.
 - **A pending validation is async QA, not a project freeze (REQ-034).** When the human
   defers, the validation parks cleanly — a clean working tree on `dev`, the work already
   committed there (`develop_committed`) but not yet flipped to `done` — and `steward run`
