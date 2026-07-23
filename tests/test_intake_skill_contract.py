@@ -74,3 +74,33 @@ def test_intake_screens_environment_bound_regression():
     # coupled-needs-runtime -> keep regression + record the required environment.
     assert "runtime" in md
     assert "required environment" in md
+
+
+def test_intake_screens_live_proof_belongs_in_develop():
+    """The skill screens every corpus-shaped criterion for whether its live/real-system
+    proof belongs in the attended develop session rather than being mechanically deferred
+    to the fixless System-Test phase — so the teeth-bearing proof is not routed to a
+    validator that never sees the diff and cannot fix anything."""
+    md = STAMPED.read_text(encoding="utf-8")
+
+    # the false rule is named and rejected; the standing ruling is the opposite.
+    assert "no rule that development must stay off the live/production system" in md
+    assert "don't defer the critical proof to the validator" in md
+
+    # the failure mode: the System Tester is a fresh, fixless session with no repair loop.
+    assert "cannot fix anything" in md
+    assert "no repair loop" in md
+
+    # the risk that synthetic fixtures miss lives in the real production corpus.
+    assert "real\nproduction corpus" in md or "real production corpus" in md
+
+    # the fix: make it a develop-session obligation, iterated attended and fixable in place.
+    assert "develop-session obligation" in md
+    assert "fixable in\nplace" in md or "fixable in place" in md
+
+    # keep a synthetic-fixture regression alongside to prove the mechanism in the gate.
+    assert "synthetic-fixture" in md and "mechanism" in md
+
+    # the two over-generalizations that breed the false rule are called out.
+    assert "over-generalization" in md
+    assert "committing prod-content assertions to the gate" in md

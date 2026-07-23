@@ -145,6 +145,27 @@ This does not *forbid* an environment-bound `regression` — the engine tolerate
 land (REQ-063) — it makes the author's choice **deliberate**, never a silent default that only
 surfaces when a paid-for session is lost.
 
+**The live-proof-in-develop screen — don't defer the teeth to a toothless validator.** There
+is **no rule that development must stay off the live/production system** — the standing ruling
+is the opposite: *don't defer the critical proof to the validator.* The System Tester runs in a
+**fresh session that never sees the diff and cannot fix anything**, so a proof routed to the
+System-Test phase (`artifact`/`manual`) has **no repair loop** — on a red it bounces back as
+rework a whole session later. Yet the failures that matter most often live only in the **real
+production corpus**, where every edge case a synthetic fixture could never invent actually
+exists. So screen every criterion whose real risk is corpus-shaped with one question — *is this
+only trustworthy after running against the live/real system and iterating on what it turns up?*
+If yes, do **not** mechanically file it `artifact`/`manual` and ship it to validation: make the
+live proof a **develop-session obligation** — performed and iterated attended, **fixable in
+place**, stated in the Requirement + a Decision (`develop: split` is its natural shape), *not*
+an acceptance criterion routed to the fixless System-Test phase. Keep a synthetic-fixture
+`regression` alongside to prove the *mechanism* disconfirmably in the gate. Reserve
+`artifact`/`manual` System-Test deferral for proofs a synthetic fixture genuinely can't stand in
+for **and** whose oracle needs no fixing loop. Beware the two over-generalizations that breed
+the false "develop must not touch prod" rule: the no-prod-content-in-`regression` rule bars
+*committing prod-content assertions to the gate*, **not** *testing against* the live system in
+develop; and the empirical-concept-phase deploy permission is a grant, not a restriction that
+**only** concept phases may reach the live system.
+
 ### 2c. The three process declarations (while the human is present)
 
 Decide these now — they must not be made headless later — and record them in the
