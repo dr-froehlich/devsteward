@@ -1,7 +1,10 @@
 # DevSteward dogfoods itself: this is its own per-project config.
 profile: req
+# Doc paths (REQ-084) — all four are per-project; DevSteward uses the conventional layout.
 requirements_dir: docs/requirements
 index_file: docs/requirements/REQUIREMENTS_INDEX.md
+plans_dir: docs/plans
+concepts_dir: docs/concepts
 accounts:
   # clauder provider delegates the per-step budget gate to the external `clauder` CLI
   # (REQ-058): `clauder gate` decides proceed/switch/wait against the combined budget and
