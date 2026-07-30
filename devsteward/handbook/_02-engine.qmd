@@ -64,11 +64,15 @@ On a **green** develop gate the engine performs the **mechanical land** itself �
 flip, index `DONE`-sync, the single commit on `dev`, ledger advance — invoking
 **no Claude** (paying Opus to watch pytest run bought nothing; the verifier is the
 authority). The same mechanical-land routine is what interactive `steward checkpoint` runs,
-so a REQ lands identically however it was driven. The land also refuses when **no file in
-`docs/plans/` names the REQ id** (plan-first, enforced at the one moment it is cheap and
-load-bearing — never plan *quality*). For a REQ that declared `concept: true` the same gate
-*additionally* refuses unless a **concept deliverable** exists — a flat `docs/concepts/REQ-NNN.md`
-**or** a non-empty bundle directory `docs/concepts/REQ-NNN/` (REQ-067) — and the REQ's
+so a REQ lands identically however it was driven. The land also refuses when **no file in the
+plans dir names the REQ id** (plan-first, enforced at the one moment it is cheap and
+load-bearing — never plan *quality*). Where the documents live is the project's call, not the
+engine's: `requirements_dir`, `index_file`, `plans_dir` and `concepts_dir` in
+`.devsteward/config.yaml` (defaults `docs/requirements/`, `docs/plans/`, `docs/concepts/`) —
+a project whose `docs/` is owned by a docs generator points them elsewhere, and the gates,
+the skills and the refusal messages all follow (REQ-084). For a REQ that declared `concept: true` the same gate
+*additionally* refuses unless a **concept deliverable** exists — a flat `<concepts_dir>/REQ-NNN.md`
+**or** a non-empty bundle directory `<concepts_dir>/REQ-NNN/` (REQ-067) — and the REQ's
 `concept_refs:` names it (the flat file or a path inside the directory). The bundle form is the
 natural home when the concept phase keeps a **committed prototype** as its deliverable: REQ-039's
 spike is throwaway by default, but a concept phase whose risk is *empirical* (does this surface

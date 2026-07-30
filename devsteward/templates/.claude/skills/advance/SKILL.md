@@ -81,8 +81,8 @@ The fused **Develop** checkpoint, in order, in one session:
 - **Concept first, if declared (REQ-039/067).** If the REQ set `process.concept: true`, this
   attended develop session *is* its concept phase: do the architecture / risk buy-down /
   spike work first and capture the conclusion (chosen design path, rejected alternatives,
-  spike findings) in a **concept deliverable** — a flat `docs/concepts/REQ-NNN.md` or a
-  `docs/concepts/REQ-NNN/` bundle directory — referenced from the REQ's `concept_refs:`.
+  spike findings) in a **concept deliverable** — a flat `<concepts_dir>/REQ-NNN.md` or a
+  `<concepts_dir>/REQ-NNN/` bundle directory — referenced from the REQ's `concept_refs:`.
   The land **refuses** unless that deliverable exists and `concept_refs:` names it. A
   design-only spike stays throwaway (capture the doc, discard the prototype code) — but an
   **empirical** concept deliverable, a committed frozen prototype (REQ-067) or frozen live
@@ -94,10 +94,11 @@ The fused **Develop** checkpoint, in order, in one session:
   frozen — it is sanctioned over an already-clean tree and records the step over an
   effectively no-op commit. Then write the implementation plan *against* the approved
   concept. (REQs without the flag skip this.)
-- **Plan first.** Turn the REQ into a concrete approach and capture it in `docs/plans/`
-  (data shapes, interfaces, the files you'll touch, the tests you'll write). The plan
-  artifact is **required**: the engine refuses to land a REQ when no file in `docs/plans/`
-  names its id. Promote the REQ `status: draft → open`/`in-progress` if appropriate.
+- **Plan first.** Turn the REQ into a concrete approach and capture it in the project's
+  **plans dir** — `plans_dir` in `.devsteward/config.yaml`, default `docs/plans/` (data
+  shapes, interfaces, the files you'll touch, the tests you'll write). The plan artifact is
+  **required**: the engine refuses to land a REQ when no file there names its id. Same for
+  the concepts dir (`concepts_dir`) above; read the config before writing either. Promote the REQ `status: draft → open`/`in-progress` if appropriate.
 - **Build.** Implement the approach. Write the code **and** the acceptance tests named in
   the REQ's `yaml acceptance` block, so they exist and the engine can run them. Match the
   surrounding code's style. English-only code; isolate any localized UI strings.

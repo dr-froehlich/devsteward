@@ -20,8 +20,17 @@ proof REQ (REQ-062), not part of running this skill the first time.
 
 ## 0. Orient
 
-- Confirm the target: the project's repo root, its current REQ-corpus location
-  (`docs/requirements/`), and its real branch names (you need them for config).
+- Confirm the target: the project's repo root, its current REQ-corpus location, and its real
+  branch names (you need them for config).
+- **Decide where the engine's documents go, before touching anything (REQ-084).** Four paths
+  are configurable — `requirements_dir`, `index_file`, `plans_dir`, `concepts_dir` (defaults
+  `docs/requirements/`, `docs/plans/`, `docs/concepts/`). A retrofit target often cannot use
+  them: if its `docs/` is owned by a docs generator (mkdocs, Sphinx, Docusaurus — everything
+  under it is built and deployed), putting REQs, plans or concepts there publishes the
+  engine's internals. **Ask the operator** where they should live (e.g. a top-level
+  `requirements/` with `requirements/plans/`), and treat the answer as binding for every
+  later step. This is where recipes was bitten: its corpus was placed correctly and its
+  plans landed in the published `docs/` tree because nothing had been decided for them.
 - Read the target's existing `CLAUDE.md`, `.claude/`, and `REQUIREMENTS_INDEX.md` before
   touching anything — onboarding **merges into** accumulated knowledge, it does not stamp over it.
 
@@ -30,7 +39,7 @@ proof REQ (REQ-062), not part of running this skill the first time.
 Run the converter in place — it is non-destructive and idempotent:
 
 ```sh
-python3 <devsteward>/scripts/convert_reqs.py docs/requirements docs/requirements
+python3 <devsteward>/scripts/convert_reqs.py <corpus-dir> <corpus-dir>   # e.g. docs/requirements
 ```
 
 This injects `kind`, lifts `## Acceptance criteria` checkboxes into `yaml acceptance` blocks,
@@ -58,9 +67,15 @@ incomplete — **stop** and reconcile before stamping.
 
 ## 3. Stamp the scaffold — **merge, never overwrite**
 
-Bring in the scaffolding the engine needs: the **widened** REQ schema (REQ-021 lettered ids),
-`_templates/`, `.gitignore` additions for the `.devsteward/` runtime, and a `.devsteward/config`
-carrying the project's **real** `production_branch`/`integration_branch`.
+**Write the config first (REQ-084).** Before copying a single artifact, put
+`.devsteward/config.yaml` in place carrying the project's **real**
+`production_branch`/`integration_branch` **and** the four doc paths decided in §0 —
+`requirements_dir`, `index_file`, `plans_dir`, `concepts_dir`. Everything below then goes to
+*those* paths; nothing is written under `docs/` unless the config says so. The engine reads
+the same keys, so the land gates look exactly where you put the artifacts.
+
+Then bring in the scaffolding the engine needs: the **widened** REQ schema (REQ-021 lettered
+ids), `_templates/`, a plans dir, and `.gitignore` additions for the `.devsteward/` runtime.
 
 The target already has a `.claude/` and an 8 KB CLAUDE.md — so this is a **merge**:
 
@@ -78,7 +93,10 @@ engine-owned artifacts (the bundled skills **and** the root `STEWARD.md`) from t
 template and writes a populated `.devsteward/stamped.lock`, giving the retrofitted project the
 same baseline a fresh `steward new` project gets. `sync`'s customized-refusal **preserves any
 same-named artifact the project already owns** (reported customized, refused without `--force`)
-— so this honours "merge, never overwrite" while closing the manual gap.
+— so this honours "merge, never overwrite" while closing the manual gap. `sync` seeds the
+**consumer** skills only; this skill is operator-only and is never stamped into a target
+(REQ-024 Decision 2, enforced by `skillsync.OPERATOR_ONLY` since REQ-084) — a migrated project
+is already onboarded.
 
 ## 4. Reconcile CLAUDE.md — fold in, don't flatten
 

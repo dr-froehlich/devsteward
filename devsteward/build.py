@@ -45,8 +45,8 @@ def build_land_gate(cfg: Config):
     if cfg.profile == "generic":
         return None
     return CompositeLandGate(
-        PlanArtifactGate(cfg.plans_dir),
-        ConceptArtifactGate(cfg.concepts_dir, cfg.req_dir),
+        PlanArtifactGate(cfg.plans_path, cfg.plans_dir),
+        ConceptArtifactGate(cfg.concepts_path, cfg.req_dir, cfg.concepts_dir),
     )
 
 

@@ -115,6 +115,11 @@ def _stamp(src: Path, dst: Path) -> int:
     for path in sorted(src.rglob("*")):
         rel = path.relative_to(src)
         out = dst / rel
+        # REQ-084: an operator-only skill (`onboard`) shares the template tree because that
+        # tree is also DevSteward's own `.claude/skills`, but it is not consumer scaffolding
+        # — a stamped project is already onboarded. Skip the directory and its contents.
+        if skillsync.is_operator_only(rel):
+            continue
         if path.is_dir():
             out.mkdir(parents=True, exist_ok=True)
             continue

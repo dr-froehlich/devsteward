@@ -61,7 +61,8 @@ project keeps moving — resume it later from a plain shell with `steward valida
 
 ## Do
 
-1. **Orient narrowly.** Read the target REQ (`docs/requirements/REQ-NNN.md`) — its
+1. **Orient narrowly.** Read the target REQ (`REQ-NNN.md` in the requirements dir —
+   `requirements_dir` in `.devsteward/config.yaml`, default `docs/requirements/`) — its
    Requirement, acceptance block, and `process.lab` declarations — plus `CLAUDE.md` for
    how to run things. Do **not** read the develop diff, the develop session's plan
    reasoning, or `git log -p` for the builder's commits: validating against the builder's

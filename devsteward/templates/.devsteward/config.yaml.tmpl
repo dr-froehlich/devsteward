@@ -3,9 +3,18 @@
 
 profile: req
 
-# Where the requirements live, relative to the repo root.
+# Where the engine's documents live, relative to the repo root. All four are yours to
+# place: a project whose `docs/` is owned by a docs generator (mkdocs, Sphinx, Docusaurus
+# — everything under it gets built and deployed) keeps the engine's artifacts out of that
+# tree by pointing these elsewhere, e.g. `requirements/`, `requirements/plans/`.
+#   requirements_dir — the REQ corpus (`steward lint`/`status` read it)
+#   index_file       — REQUIREMENTS_INDEX.md; status source of truth with the frontmatter
+#   plans_dir        — plan artifacts; the land refuses a REQ no file here names (REQ-029)
+#   concepts_dir     — concept deliverables for a REQ with `process.concept` (REQ-039)
 requirements_dir: docs/requirements
 index_file: docs/requirements/REQUIREMENTS_INDEX.md
+plans_dir: docs/plans
+concepts_dir: docs/concepts
 
 # Account / quota provider for headless runs.
 #   clauder — delegate the per-step budget gate to the external `clauder` CLI (REQ-058):

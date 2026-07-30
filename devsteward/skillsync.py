@@ -44,6 +44,14 @@ LEGACY_LOCK_FILENAME = "skills.lock"
 SKILLS_RELDIR = Path(".claude") / "skills"
 #: The one file that defines a skill (its presence marks a skill directory).
 SKILL_FILE = "SKILL.md"
+#: Skills the engine keeps for **its own operator** and never ships to a consumer (REQ-084,
+#: restoring REQ-024 Decision 2). ``onboard`` migrates an *existing* project under the engine;
+#: a stamped project is already onboarded and can only misuse it (its first step re-converts
+#: the corpus in place). The skill still lives under ``templates/`` — that directory is also
+#: DevSteward's own ``.claude/skills`` through a symlink, so it is the operator's copy — but
+#: ``steward new`` does not stamp it and ``sync``/``status`` do not track it. A named
+#: exclusion, not a marker: one entry, pinned in both directions by a meta-test.
+OPERATOR_ONLY = frozenset({"onboard"})
 #: The root-file engine-owned artifact: the black-box ``steward`` manual (REQ-057/066).
 MANUAL_FILENAME = "STEWARD.md"
 #: Suffix for the backup a forced refresh leaves before overwriting a customized artifact.
@@ -100,11 +108,33 @@ def _template_skills_dir(templates_root: Path) -> Path:
 
 
 def bundled_skill_names(templates_root: Path) -> list[str]:
-    """The engine-owned skill names the installed template ships, sorted."""
+    """The engine-owned skill names the installed template **ships**, sorted.
+
+    Operator-only skills (:data:`OPERATOR_ONLY`) are excluded: they live in the template
+    tree because it doubles as DevSteward's own skill path, but they are never stamped
+    into or tracked for a consumer (REQ-084)."""
     d = _template_skills_dir(templates_root)
     if not d.is_dir():
         return []
-    return sorted(p.name for p in d.iterdir() if (p / SKILL_FILE).is_file())
+    return sorted(
+        p.name
+        for p in d.iterdir()
+        if (p / SKILL_FILE).is_file() and p.name not in OPERATOR_ONLY
+    )
+
+
+def is_operator_only(rel: Path) -> bool:
+    """True for a template path inside an operator-only skill directory (REQ-084).
+
+    ``rel`` is relative to the templates root, so ``steward new``'s stamp can drop the
+    whole directory — the skill dir itself and every file under it."""
+    parts = Path(rel).parts
+    depth = len(SKILLS_RELDIR.parts)
+    return (
+        parts[:depth] == SKILLS_RELDIR.parts
+        and len(parts) > depth
+        and parts[depth] in OPERATOR_ONLY
+    )
 
 
 def stamped_skill_file(root: Path, name: str) -> Path:
@@ -305,5 +335,10 @@ def sync(root: Path, templates_root: Path, *, force: bool = False) -> SyncResult
         h = _sha256(Path(templates_root) / art.relpath)
         if h is not None:
             lock[d.name] = h
-    write_lock(root, lock)
+    # REQ-084: the manifest records the *currently tracked* artifacts and nothing else.
+    # When the engine retires an artifact (``onboard`` leaving ``templates/``), its key
+    # would otherwise sit in every consumer's lock forever — a provenance baseline for a
+    # file the engine no longer owns. Pruning is bookkeeping only: the consumer's copy on
+    # disk is left untouched, theirs to keep or delete.
+    write_lock(root, {key: h for key, h in lock.items() if key in arts})
     return result

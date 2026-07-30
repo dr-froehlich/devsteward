@@ -29,10 +29,14 @@ explanation as final text and ask in plain prose, waiting for the reply.
 
 ## 2. Fill the scaffolding
 
-- Replace every `{{…}}` placeholder in `CLAUDE.md` and `docs/requirements/REQ-001.md`
+- Replace every `{{…}}` placeholder in `CLAUDE.md` and `REQ-001.md` (in the requirements
+  dir — `requirements_dir` in `.devsteward/config.yaml`, default `docs/requirements/`)
   (set `{{TODAY}}` to today's date; `{{TEST_COMMAND}}` must be the real test command, so
   REQ-001's acceptance test actually runs).
-- Confirm `.devsteward/config.yaml` matches the chosen layout and account provider.
+- Confirm `.devsteward/config.yaml` matches the chosen layout and account provider — in
+  particular the four doc-path keys (`requirements_dir`, `index_file`, `plans_dir`,
+  `concepts_dir`). If this project's `docs/` belongs to a docs generator, point them
+  somewhere else **now** and move the stamped scaffolding to match.
 - Co-author **REQ-001** properly: a tight, frozen north star — a compass, not a spec.
 - Update `REQUIREMENTS_INDEX.md` to match.
 

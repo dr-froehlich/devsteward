@@ -52,6 +52,8 @@ class Config:
     profile: str = "req"
     requirements_dir: str = "docs/requirements"
     index_file: str = "docs/requirements/REQUIREMENTS_INDEX.md"
+    plans_dir: str = "docs/plans"
+    concepts_dir: str = "docs/concepts"
     accounts: dict = field(default_factory=lambda: {"provider": "clauder", "threshold": 70})
     claude: dict = field(
         default_factory=lambda: {
@@ -133,17 +135,23 @@ class Config:
         return (self.verify or {}).get("env_file", ".env")
 
     @property
-    def plans_dir(self) -> Path:
+    def plans_path(self) -> Path:
         """Where plan artifacts live (REQ-029 Decision 6 — the mechanical land refuses to
-        land a REQ no plan here names). Conventionally ``docs/plans/`` under the repo root."""
-        return self.root / "docs" / "plans"
+        land a REQ no plan here names), resolved under the repo root.
+
+        Configurable since REQ-084 (``plans_dir``), like ``requirements_dir`` before it: a
+        project whose ``docs/`` is owned by a docs generator (recipes publishes it with
+        mkdocs) must be able to keep the engine's artifacts out of that tree. Defaults to
+        the conventional ``docs/plans/``."""
+        return self.root / self.plans_dir
 
     @property
-    def concepts_dir(self) -> Path:
+    def concepts_path(self) -> Path:
         """Where concept docs live (REQ-039 — when a REQ declares ``process.concept``, the
-        develop land refuses to land it unless ``docs/concepts/REQ-NNN.md`` exists and the
-        REQ's ``concept_refs`` reference it). Conventionally ``docs/concepts/``."""
-        return self.root / "docs" / "concepts"
+        develop land refuses to land it unless the deliverable exists and the REQ's
+        ``concept_refs`` reference it), resolved under the repo root. Configurable since
+        REQ-084 (``concepts_dir``); defaults to ``docs/concepts/``."""
+        return self.root / self.concepts_dir
 
     @property
     def index_path(self) -> Path:
@@ -162,6 +170,8 @@ def load_config(root: Path | None = None) -> Config:
         profile=data.get("profile", "req"),
         requirements_dir=data.get("requirements_dir", "docs/requirements"),
         index_file=data.get("index_file", "docs/requirements/REQUIREMENTS_INDEX.md"),
+        plans_dir=data.get("plans_dir", "docs/plans"),
+        concepts_dir=data.get("concepts_dir", "docs/concepts"),
         accounts=data.get("accounts", {"provider": "clauder"}),
         claude=data.get("claude", {"permission_mode": "dangerously-skip"}),
         git=data.get("git", {}),

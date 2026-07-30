@@ -12,9 +12,13 @@ seed here is what every later step inherits.
 
 ## 1. Orient
 
-- Read `CLAUDE.md`, `docs/requirements/REQ-001.md` (the north star), and
-  `docs/requirements/REQUIREMENTS_INDEX.md`. The new REQ must advance REQ-001 or be
-  explicitly scoped against it.
+- **Where the documents live:** `.devsteward/config.yaml` names the requirements dir, the
+  index, the plans dir and the concepts dir (`requirements_dir`, `index_file`, `plans_dir`,
+  `concepts_dir`; defaults `docs/requirements/`, `docs/plans/`, `docs/concepts/`). Read it
+  first and use *those* paths throughout — a project whose `docs/` belongs to a docs
+  generator keeps them elsewhere.
+- Read `CLAUDE.md`, `REQ-001.md` (the north star) and `REQUIREMENTS_INDEX.md` in the
+  requirements dir. The new REQ must advance REQ-001 or be explicitly scoped against it.
 - Find the next free id: highest `REQ-NNN` in the index + 1, zero-padded. Ids may carry a
   trailing letter (`REQ-028p`, an umbrella split into sub-parts) — **strip any trailing
   letter before taking the max**, so `REQ-028p` counts as `028`, never `028` + 1 skipped.
@@ -175,9 +179,9 @@ and no lab is needed):
 - `concept:` — is a **concept phase** (architecture / risk buy-down / spike) warranted
   before develop? Default `false`. Setting it makes the develop step *attended* (batch
   parks it) and the develop land **refuses** unless a concept deliverable — a flat
-  `docs/concepts/REQ-NNN.md` **or** a non-empty `docs/concepts/REQ-NNN/` **bundle directory**
+  `<concepts_dir>/REQ-NNN.md` **or** a non-empty `<concepts_dir>/REQ-NNN/` **bundle directory**
   (REQ-067) — exists and the REQ's `concept_refs:` names it (the flat file or a path inside the
-  directory; REQ-039 — the doc-gate, mirroring `docs/plans/`). The spike is throwaway by default,
+  directory; REQ-039 — the doc-gate, mirroring the plans dir). The spike is throwaway by default,
   but when the bought-down risk is *empirical* (e.g. operator consent to a concrete UI,
   unanswerable by a REQ or wireframe) the concept phase MAY keep a **committed, frozen prototype**
   as its deliverable — the build wires it (the bundle directory is its natural home). The author
@@ -207,7 +211,7 @@ and no lab is needed):
 
 ## 3. Emit
 
-- Write `docs/requirements/REQ-NNN.md` from `_templates/req.md` with `status: draft`,
+- Write `REQ-NNN.md` into the requirements dir from `_templates/req.md` with `status: draft`,
   filled frontmatter (including the `process:` block when it deviates from defaults or
   declares a lab), a real Context/Decisions/Requirement, and a `yaml acceptance` block
   where **every** criterion has an `id`, a `test:`, and a `check:`.

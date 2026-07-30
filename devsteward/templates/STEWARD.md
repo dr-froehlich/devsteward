@@ -10,7 +10,11 @@ reverse-engineering the engine.
 
 ## The model in one breath
 
-A **REQ** (`docs/requirements/REQ-NNN.md`) is a spec with a machine-readable acceptance block.
+A **REQ** (`REQ-NNN.md` in the requirements dir) is a spec with a machine-readable acceptance
+block. Where the documents live is per-project: `requirements_dir`, `index_file`, `plans_dir`
+and `concepts_dir` in `.devsteward/config.yaml` — read them before writing anything. Their
+defaults are `docs/requirements/`, `docs/plans/` and `docs/concepts/`, but a project whose
+`docs/` is owned by a docs generator keeps them elsewhere.
 The **ledger** (`.devsteward/`) is the cursor: where work is and what happened. You do the
 thinking; **the engine verifies and commits** — it runs the acceptance tests itself and only
 marks a step `done` when they pass. You never write `status: done` and you never hand-edit the
@@ -45,15 +49,15 @@ steward checkpoint        # close it: the engine re-runs the tests and lands on 
   commit. (One exception: an *empirical* `concept: true` phase may commit mid-phase — see the
   concept-gate paragraph below.)
 - **`steward checkpoint [REQ-NNN develop]`** is the interactive close. It re-runs the named
-  acceptance tests through the land-grade gate, checks a `docs/plans/` file names the REQ, and on
+  acceptance tests through the land-grade gate, checks a file in the plans dir names the REQ, and on
   green makes the one authoritative commit (frontmatter + index + code) and advances the ledger —
   all on `dev`. **On red nothing lands**: fix the cause and re-run `checkpoint`. The gate cannot
   be talked into green; certification is the engine's, never yours to assert.
 
-Plan-first is enforced: the land **refuses** unless a file in `docs/plans/` names the REQ id.
+Plan-first is enforced: the land **refuses** unless a file in the plans dir names the REQ id.
 Concept-first is enforced the same way for a REQ that declared `process.concept: true`: the land
-also **refuses** unless a concept deliverable — `docs/concepts/REQ-NNN.md` **or** a non-empty
-`docs/concepts/REQ-NNN/` bundle directory — exists and the REQ's `concept_refs:` names it (the flat
+also **refuses** unless a concept deliverable — `<concepts_dir>/REQ-NNN.md` **or** a non-empty
+`<concepts_dir>/REQ-NNN/` bundle directory — exists and the REQ's `concept_refs:` names it (the flat
 file or a path inside the directory). The bundle form is for a concept phase that keeps a committed
 prototype as its deliverable, not only a throwaway spike.
 

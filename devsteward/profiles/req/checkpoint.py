@@ -59,8 +59,9 @@ class ReqDoneFlipper:
 
 
 class PlanArtifactGate:
-    """REQ-029 Decision 6 — the mechanical land refuses to land a REQ when no file in
-    ``docs/plans/`` names its REQ id.
+    """REQ-029 Decision 6 — the mechanical land refuses to land a REQ when no file in the
+    project's plans directory (``docs/plans/`` by default, ``plans_dir`` in config) names
+    its REQ id.
 
     A grep-shaped *existence* check at the one moment it is both cheap and load-bearing
     (the land), never plan *quality*. Deliberately not a lint rule: lint would fire during
@@ -69,8 +70,13 @@ class PlanArtifactGate:
     lets it proceed. A generic/phase-less step (no ``req``) is not gated.
     """
 
-    def __init__(self, plans_dir: Path):
+    def __init__(self, plans_dir: Path, display: str | None = None):
         self.plans_dir = Path(plans_dir)
+        # REQ-084: what the refusal calls the directory. The configured path *relative to
+        # the repo root* (``requirements/plans``), because the bare last segment is
+        # ambiguous exactly when the layout is unconventional — i.e. exactly when the
+        # operator needs to be told where the engine looked. Defaults to today's wording.
+        self.display = display or self.plans_dir.name
 
     def __call__(self, step: Step) -> str | None:
         req = step.req
@@ -81,7 +87,7 @@ class PlanArtifactGate:
                 if req in p.read_text(encoding="utf-8"):
                     return None
         return (
-            f"refusing to land {req} — no file in {self.plans_dir.name}/ names {req} "
+            f"refusing to land {req} — no file in {self.display}/ names {req} "
             f"(plan-first discipline; write the plan before landing)"
         )
 
@@ -101,9 +107,11 @@ class ConceptArtifactGate:
     declare a concept phase is untouched. A generic/phase-less step (no ``req``) is not gated.
     """
 
-    def __init__(self, concepts_dir: Path, req_dir: Path):
+    def __init__(self, concepts_dir: Path, req_dir: Path, display: str | None = None):
         self.concepts_dir = Path(concepts_dir)
         self.req_dir = Path(req_dir)
+        #: The configured concepts path relative to the repo root, for the refusals (REQ-084).
+        self.display = display or self.concepts_dir.name
 
     def __call__(self, step: Step) -> str | None:
         req_id = step.req
@@ -122,8 +130,8 @@ class ConceptArtifactGate:
         if not (has_flat or has_bundle):
             return (
                 f"refusing to land {req_id} — it declared a concept phase but no "
-                f"{self.concepts_dir.name}/{req_id}.md file or non-empty "
-                f"{self.concepts_dir.name}/{req_id}/ bundle directory exists "
+                f"{self.display}/{req_id}.md file or non-empty "
+                f"{self.display}/{req_id}/ bundle directory exists "
                 f"(run the attended concept session and capture the architecture first)"
             )
         # Link: a ``concept_refs`` entry must name the flat file (``REQ-NNN.md``) or point
@@ -134,8 +142,8 @@ class ConceptArtifactGate:
         ):
             return (
                 f"refusing to land {req_id} — its concept deliverable exists but the REQ's "
-                f"concept_refs references neither {self.concepts_dir.name}/{req_id}.md nor a "
-                f"path under {self.concepts_dir.name}/{req_id}/ "
+                f"concept_refs references neither {self.display}/{req_id}.md nor a "
+                f"path under {self.display}/{req_id}/ "
                 f"(link the deliverable in concept_refs)"
             )
         return None
