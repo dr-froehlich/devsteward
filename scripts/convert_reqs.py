@@ -11,7 +11,9 @@ the named gaps ``steward lint`` reports against memzy's corpus (REQ-010):
   single fenced ``yaml acceptance`` block the REQ profile's parser can read, **preserving
   each verdict** (``[x]`` → ``passed``, ``[ ]`` → ``pending``) and the text verbatim.
 * ``supersedes`` — ``[]`` → ``null``; ``[REQ-NNN]`` → the string ``"REQ-NNN"``; the
-  non-schema ``superseded_by`` key is dropped.
+  non-schema ``superseded_by`` key is dropped. Every dropped non-schema key is **reported**
+  per file (REQ-086) — the schema does not grow, but the operator gets to judge whether a
+  deliberate relation is being discarded.
 * Index — rewritten so every row matches the linter's ``_INDEX_ROW_RE`` with status in
   sync with its REQ.
 
@@ -151,6 +153,44 @@ def normalize_frontmatter(frontmatter: dict) -> dict:
     fm.setdefault("scenario_refs", [])
     fm.setdefault("tags", [])
     return fm
+
+
+def dropped_frontmatter_keys(frontmatter: dict) -> list[str]:
+    """The source frontmatter keys the conversion **drops**, in source order (REQ-086).
+
+    :func:`dump_frontmatter` emits :data:`_FIELD_ORDER` and nothing else, so every non-schema
+    key is discarded — not only the known-and-intended ``superseded_by``. memzy's REQ-039
+    carried an ``amends: [REQ-013]`` its author recorded deliberately and the converter
+    dropped it without a word.
+
+    The cure is a **report, not preservation** (REQ-086 Decision 5): inventing frontmatter
+    homes for another project's private relations is the scope creep REQ-010 Decision 3
+    forbids, and the output schema does not grow. What the operator lost was not the key, it
+    was the *chance to judge* — so this restores the judgement. Pure and read-only: it neither
+    mutates the input nor changes a single converted byte.
+    """
+    return [key for key in frontmatter if key not in _FIELD_ORDER]
+
+
+def scan_dropped_keys(src_dir: Path) -> dict[str, list[str]]:
+    """``{filename: dropped keys}`` over a corpus, for every file that drops at least one.
+
+    Read from the **source** files, before conversion — the only point at which the keys are
+    still observable. Files without frontmatter (or with unparseable frontmatter) are skipped
+    silently: :func:`convert_req_text` is the one that judges them.
+    """
+    out: dict[str, list[str]] = {}
+    for path in sorted(Path(src_dir).glob("REQ-*.md")):
+        m = _FRONTMATTER_RE.match(path.read_text(encoding="utf-8"))
+        if not m:
+            continue
+        try:
+            frontmatter = _yaml.load(io.StringIO(m.group(1))) or {}
+        except Exception:  # noqa: BLE001 — malformed YAML is convert_req_text's verdict
+            continue
+        if dropped := dropped_frontmatter_keys(frontmatter):
+            out[path.name] = dropped
+    return out
 
 
 def dump_frontmatter(frontmatter: dict) -> str:
@@ -334,8 +374,16 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("src", type=Path, help="source docs/requirements/ (memzy dialect)")
     parser.add_argument("dst", type=Path, help="destination dir for the normalized copy")
     args = parser.parse_args(argv)
+    # Scanned *before* the conversion writes: in-place onboarding runs with src == dst, so
+    # afterwards the dropped keys are gone from disk and unreportable (REQ-086 Finding 3).
+    dropped = scan_dropped_keys(args.src)
     reqs = convert_corpus(args.src, args.dst)
     print(f"converted {len(reqs)} REQ(s) → {args.dst}")
+    for filename, keys in dropped.items():
+        print(
+            f"  {filename}: dropped non-schema frontmatter key(s) {', '.join(keys)} — "
+            f"not in the hybrid schema; check none of them records a relation you meant to keep"
+        )
     return 0
 
 

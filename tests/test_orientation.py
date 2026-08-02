@@ -137,11 +137,16 @@ def _executor(root: Path, *, runner=None) -> Executor:
 def _run_cli(monkeypatch, tmp_path, args):
     """Invoke a CLI command the way `steward` does — a *fresh* executor per call (the bug
     only shows when each command binds the ledger itself, not via a shared in-memory one)."""
-    # cfg needs root/req_dir: `steward status` reads cfg.root for the REQ-036 skill-drift
-    # signal, and other read commands read cfg.req_dir — a bare SimpleNamespace AttributeErrors.
+    # cfg needs root/req_dir/requirements_dir: `steward status` reads cfg.root and (REQ-086)
+    # cfg.requirements_dir for the REQ-036 stamped-artifact drift signal, and other read
+    # commands read cfg.req_dir — a bare SimpleNamespace AttributeErrors.
     monkeypatch.setattr(
         cli, "_load_or_die",
-        lambda: SimpleNamespace(root=tmp_path, req_dir=tmp_path / "docs" / "requirements"),
+        lambda: SimpleNamespace(
+            root=tmp_path,
+            req_dir=tmp_path / "docs" / "requirements",
+            requirements_dir="docs/requirements",
+        ),
     )
     monkeypatch.setattr(cli, "build_executor", lambda cfg, **kw: _executor(tmp_path))
     return CliRunner().invoke(main, args)

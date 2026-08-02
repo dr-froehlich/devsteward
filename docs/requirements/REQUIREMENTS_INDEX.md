@@ -88,7 +88,7 @@ commit** as its frontmatter and the code.
 | REQ-082 | steward cache — report the current project's Claude session cache warmth from a second shell, without touching the session | DONE | [REQ-082](REQ-082.md) | – |
 | REQ-083 | Retire the roadmap artifact — delete the ROADMAP.md template + roadmap_file config seam, subtract roadmap steps from the stamped intake/bootstrap/onboard skills and the doctrine text; future-REQ layout lives in concept bundles with frozen slicing plans | DONE | [REQ-083](REQ-083.md) | – |
 | REQ-084 | The doc layout is the consumer's, not the engine's — config seams for plans_dir/concepts_dir honored by the gates, the stamp and the stamped skills; and the operator-only onboard skill leaves the stamped set | DONE | [REQ-084](REQ-084.md) | REQ-024, REQ-029, REQ-036, REQ-039, REQ-066 |
-| REQ-085 | THermo prose retrofit — extend the prose converter to the grammar the live corpus actually has, and drive the onboarding | DRAFT | [REQ-085](REQ-085.md) | REQ-017, REQ-024, REQ-084, REQ-086 |
-| REQ-086 | Onboarding machinery repairs from the memzy run — commit-before-seed ordering, sync seeds _templates/, and the converter reports dropped keys | DRAFT | [REQ-086](REQ-086.md) | REQ-010, REQ-022, REQ-024, REQ-066 |
+| REQ-085 | THermo prose retrofit — extend the prose converter to the grammar the live corpus actually has, and drive the onboarding | OPEN | [REQ-085](REQ-085.md) | REQ-017, REQ-024, REQ-084, REQ-086 |
+| REQ-086 | Onboarding machinery repairs from the memzy run — commit-before-seed ordering, sync seeds _templates/, and the converter reports dropped keys | DONE | [REQ-086](REQ-086.md) | REQ-010, REQ-022, REQ-024, REQ-066 |
 
 New requirement template: [`_templates/req.md`](../../devsteward/templates/docs/requirements/_templates/req.md)

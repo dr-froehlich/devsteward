@@ -16,12 +16,13 @@ Three reference points per **tracked artifact**, by sha256 of the file bytes:
 * **T** — the installed *template* copy (the engine's bundled ``templates/``).
 
 The tracked set is **engine-derived** (REQ-066): read off whatever the installed template
-actually ships — the discovered skill directories *and* the ``STEWARD.md`` it ships — never
-a hand-maintained list that can fall out of step. ``STEWARD.md`` is the same species as the
-skills: engine behaviour that must track the engine, never per-project content (unlike
-``CLAUDE.md``/settings, which REQ-036 Decision 1 deliberately excludes). This module is pure
-and git-free; ``templates_root`` is injected so it is testable without a real install, and
-``steward`` passes the package's bundled ``templates/``.
+actually ships — the discovered skill directories, the ``STEWARD.md`` it ships, and the
+``_templates/req.md`` REQ template (REQ-086) — never a hand-maintained list that can fall out
+of step. All three are the same species: engine behaviour that must track the engine, never
+per-project content (unlike ``CLAUDE.md``/settings, which REQ-036 Decision 1 deliberately
+excludes). This module is pure and git-free; ``templates_root`` is injected so it is testable
+without a real install, and ``steward`` passes the package's bundled ``templates/`` plus the
+project's ``requirements_dir`` (the one tracked artifact the consumer relocates).
 """
 
 from __future__ import annotations
@@ -54,6 +55,20 @@ SKILL_FILE = "SKILL.md"
 OPERATOR_ONLY = frozenset({"onboard"})
 #: The root-file engine-owned artifact: the black-box ``steward`` manual (REQ-057/066).
 MANUAL_FILENAME = "STEWARD.md"
+#: The REQ template the stamped ``/intake`` skill writes every new REQ from (REQ-086
+#: Finding 2). It is an engine-owned stamped artifact by the same definition as the skills —
+#: engine behaviour that must track the engine — and an onboarded project that never received
+#: it gets an ``/intake`` referencing a file it does not have, so its very next intake breaks.
+#: Unlike every other tracked artifact it does **not** live at the same relative path on both
+#: sides: it ships at a fixed path in the template tree but lands under the consumer's
+#: configured ``requirements_dir`` (REQ-084) — hence :attr:`Tracked.dstpath`.
+REQ_TEMPLATE_RELDIR = Path("_templates")
+REQ_TEMPLATE_FILE = "req.md"
+#: The lock key, stable wherever the consumer puts its requirements dir.
+REQ_TEMPLATE_KEY = "_templates/req.md"
+#: The conventional ``requirements_dir`` — the template tree's own layout, and the default
+#: for callers that have no :class:`~devsteward.config.Config` to hand.
+DEFAULT_REQUIREMENTS_DIR = "docs/requirements"
 #: Suffix for the backup a forced refresh leaves before overwriting a customized artifact.
 BACKUP_SUFFIX = ".orig"
 
@@ -150,21 +165,37 @@ class Tracked:
     """An engine-owned stamped artifact (REQ-066).
 
     ``key`` is its identity in the lock and in drift/status output; ``relpath`` is its path
-    relative to **both** the consumer root and the templates root (the stamping is a
-    same-relative-path byte copy), so one field locates it on either side.
+    relative to the **templates** root and ``dstpath`` its path relative to the **consumer**
+    root. For the skills and the manual the stamping is a same-relative-path byte copy and the
+    two are equal, which is why ``dstpath`` defaults to ``relpath``; the REQ template (REQ-086)
+    is the one artifact whose destination is relocated by the consumer's ``requirements_dir``.
     """
 
     key: str
     relpath: Path
+    dstpath: Path | None = None
+
+    @property
+    def consumer_relpath(self) -> Path:
+        return self.relpath if self.dstpath is None else self.dstpath
 
 
-def tracked_artifacts(templates_root: Path) -> list[Tracked]:
+def req_template_dst(requirements_dir: str = DEFAULT_REQUIREMENTS_DIR) -> Path:
+    """Where the REQ template lands in a consumer whose corpus lives at ``requirements_dir``."""
+    return Path(requirements_dir) / REQ_TEMPLATE_RELDIR / REQ_TEMPLATE_FILE
+
+
+def tracked_artifacts(
+    templates_root: Path, requirements_dir: str = DEFAULT_REQUIREMENTS_DIR
+) -> list[Tracked]:
     """Every engine-owned stamped artifact the installed template ships, **engine-derived**.
 
-    The bundled skills (discovered ``.claude/skills/<name>/SKILL.md`` directories) plus the
-    root ``STEWARD.md`` **iff the template ships it** — never a hand-maintained list
-    (REQ-066, preserving REQ-036's engine-derived guarantee). The set covers a
-    discovered-directory form (skills) and a named root-file form (the manual).
+    The bundled skills (discovered ``.claude/skills/<name>/SKILL.md`` directories), the root
+    ``STEWARD.md``, and the REQ template ``_templates/req.md`` — each **iff the template ships
+    it**, never a hand-maintained list (REQ-066, preserving REQ-036's engine-derived
+    guarantee). The set covers a discovered-directory form (skills), a named root-file form
+    (the manual), and a *relocated* form (the REQ template, which lands under the consumer's
+    configured ``requirements_dir`` — REQ-084/086).
     """
     root = Path(templates_root)
     arts = [
@@ -173,6 +204,11 @@ def tracked_artifacts(templates_root: Path) -> list[Tracked]:
     ]
     if (root / MANUAL_FILENAME).is_file():
         arts.append(Tracked(MANUAL_FILENAME, Path(MANUAL_FILENAME)))
+    tmpl_src = req_template_dst(DEFAULT_REQUIREMENTS_DIR)  # fixed inside the template tree
+    if (root / tmpl_src).is_file():
+        arts.append(
+            Tracked(REQ_TEMPLATE_KEY, tmpl_src, req_template_dst(requirements_dir))
+        )
     return arts
 
 
@@ -242,30 +278,42 @@ def _bucket(stamped: str | None, lock: str | None, template: str | None) -> Buck
     return Bucket.BOTH_MOVED
 
 
-def classify(root: Path, templates_root: Path) -> list[Drift]:
+def classify(
+    root: Path,
+    templates_root: Path,
+    requirements_dir: str = DEFAULT_REQUIREMENTS_DIR,
+) -> list[Drift]:
     """Bucket every engine-owned stamped artifact for ``root`` against the installed template."""
     lock = read_lock(root)
     out: list[Drift] = []
-    for art in tracked_artifacts(templates_root):
-        s = _sha256(Path(root) / art.relpath)
+    for art in tracked_artifacts(templates_root, requirements_dir):
+        s = _sha256(Path(root) / art.consumer_relpath)
         t = _sha256(Path(templates_root) / art.relpath)
         out.append(Drift(art.key, _bucket(s, lock.get(art.key), t)))
     return out
 
 
-def drift(root: Path, templates_root: Path) -> list[Drift]:
+def drift(
+    root: Path,
+    templates_root: Path,
+    requirements_dir: str = DEFAULT_REQUIREMENTS_DIR,
+) -> list[Drift]:
     """Only the non-in-sync artifacts — what ``steward status`` reports."""
-    return [d for d in classify(root, templates_root) if not d.in_sync]
+    return [d for d in classify(root, templates_root, requirements_dir) if not d.in_sync]
 
 
 # -- seeding & sync -----------------------------------------------------------
 
 
-def seed_lock(root: Path, templates_root: Path) -> dict[str, str]:
+def seed_lock(
+    root: Path,
+    templates_root: Path,
+    requirements_dir: str = DEFAULT_REQUIREMENTS_DIR,
+) -> dict[str, str]:
     """Record each tracked artifact's source template hash (``steward new`` baseline)."""
     mapping = {
         art.key: h
-        for art in tracked_artifacts(templates_root)
+        for art in tracked_artifacts(templates_root, requirements_dir)
         if (h := _sha256(Path(templates_root) / art.relpath)) is not None
     }
     write_lock(root, mapping)
@@ -288,25 +336,34 @@ class SyncResult:
 def _refresh(root: Path, templates_root: Path, art: Tracked) -> None:
     """Byte-copy the installed template's artifact over the stamped copy."""
     src = Path(templates_root) / art.relpath
-    dst = Path(root) / art.relpath
+    dst = Path(root) / art.consumer_relpath
     dst.parent.mkdir(parents=True, exist_ok=True)
     dst.write_bytes(src.read_bytes())
 
 
-def sync(root: Path, templates_root: Path, *, force: bool = False) -> SyncResult:
+def sync(
+    root: Path,
+    templates_root: Path,
+    requirements_dir: str = DEFAULT_REQUIREMENTS_DIR,
+    *,
+    force: bool = False,
+) -> SyncResult:
     """Refresh stale/missing tracked artifacts to byte-match the template, re-record the lock.
 
     ``stale`` (and a not-yet-stamped ``missing``) artifacts are refreshed and the lock
-    updated — so a consumer lacking ``STEWARD.md`` *acquires* it through the same path.
+    updated — so a consumer lacking ``STEWARD.md``, or an onboarded project lacking the
+    ``_templates/req.md`` its stamped ``/intake`` writes new REQs from (REQ-086), *acquires*
+    it through the same path. ``requirements_dir`` says where that template lands — pass the
+    project's configured value (REQ-084) or the conventional default.
     A ``customized``/``both-moved`` artifact is **refused** untouched unless ``force`` is
     given, in which case its current bytes are backed up to ``<name>.orig`` before the
     refresh and the lock is re-recorded (Decision 4 — never a silent clobber, never a prose
     merge).
     """
-    arts = {a.key: a for a in tracked_artifacts(templates_root)}
+    arts = {a.key: a for a in tracked_artifacts(templates_root, requirements_dir)}
     lock = read_lock(root)
     result = SyncResult()
-    for d in classify(root, templates_root):
+    for d in classify(root, templates_root, requirements_dir):
         art = arts[d.name]
         if d.bucket is Bucket.IN_SYNC:
             result.unchanged.append(d.name)
@@ -324,7 +381,7 @@ def sync(root: Path, templates_root: Path, *, force: bool = False) -> SyncResult
             result.refused.append(d.name)
             continue
         if d.is_customization:  # force: back the consumer's copy up first
-            current = Path(root) / art.relpath
+            current = Path(root) / art.consumer_relpath
             backup = current.with_name(current.name + BACKUP_SUFFIX)
             backup.write_bytes(current.read_bytes())
             result.backups[d.name] = str(backup)

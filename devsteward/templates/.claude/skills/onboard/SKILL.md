@@ -11,9 +11,20 @@ DevSteward. It is an **operator tool**: run by the person performing the migrati
 the project being migrated, *not* shipped to consumers (a stamped project is already onboarded
 and never runs this). The skill **orchestrates already-tested tools and owns no migration logic**
 — it is the procedure and the per-project judgement over `convert_reqs.py`, `steward
-seed-ledger`, `steward new`, and a CLAUDE.md merge. Drive the five steps **in order**, and
+seed-ledger`, `steward new`, and a CLAUDE.md merge. Drive the steps **in order**, and
 **stop on any red verification gate** — onboarding must never declare success on an unlinted
 corpus or an empty ledger.
+
+The order is load-bearing, not stylistic — §2 exists because §3's gate cannot mean anything
+before it (REQ-086 Finding 1):
+
+| # | step | gate |
+|---|------|------|
+| 1 | Convert the REQ corpus | `steward lint` clean |
+| 2 | **Commit the converted corpus** | working tree clean |
+| 3 | Seed the ledger | `steward status` empty queue, `steward lint` still clean |
+| 4 | Stamp the scaffold | — |
+| 5 | Reconcile CLAUDE.md | — |
 
 memzy is the first project retrofitted with this skill; the live memzy run is its own tracked
 proof REQ (REQ-062), not part of running this skill the first time.
@@ -49,9 +60,35 @@ prose, e.g. a "Planned" table or "Scenarios" section).
 
 **Gate:** run `steward lint` from the target root. It must be **clean**. If it is red — a kind it
 could not infer, an id the schema rejects, a missing row — **stop**: fix the cause (or park, see
-§5) before seeding. Never seed an unlinted corpus.
+§6) before seeding. Never seed an unlinted corpus.
 
-## 2. Seed the ledger (gate: `steward status`)
+## 2. Commit the converted corpus — **before** seeding the ledger
+
+Commit the conversion in the target's git (on its integration branch, with the co-author
+trailer) so the working tree is clean before `seed-ledger` runs.
+
+**This ordering is required, not tidiness.** REQ-077's symmetric lint rule compares each
+ledger step seeded `done` against the **committed** marker — the frontmatter and index row at
+**HEAD**, not in the working tree. Seed before committing and HEAD still holds the
+*pre-conversion* corpus, whose historic index cells carry annotations the row regex rejects
+(`superseded *(by REQ-020)*`, `done *(2026-07-26)*`) — exactly the rows the converter has just
+normalized *in the working tree*. Lint then reports them as `ABSENT`:
+
+```
+✗ REQ-018: ledger develop step is 'done' but the committed marker lags —
+           HEAD frontmatter 'superseded', index row 'ABSENT'
+```
+
+The rule is firing correctly; it is being asked a question that has no meaningful answer yet.
+The rule can only fire *after* seeding (before that the ledger has no `done` steps to compare),
+so the only cure is to make HEAD current first. That is what this step does — and it is why a
+correct onboarding must never present its operator with a red lint gate to wave through. If
+the gate is red **after** the commit, it is a real problem: **stop** (§6).
+
+Do **not** weaken or suppress the lint rule to get past this. REQ-077's guard exists because it
+caught real divergence; the ordering is the honest fix.
+
+## 3. Seed the ledger (gate: `steward status`)
 
 The corpus is built history; the engine must see every terminal REQ's phase-step(s) as `done` or
 it will try to re-Design built work.
@@ -63,9 +100,11 @@ steward seed-ledger   # marks every terminal REQ's develop (+ validate) step don
 
 **Gate:** run `steward status`. It must show the finished corpus **all-done with an empty work
 queue** (no eligible steps until a new REQ is intaken). If active steps remain, the seed is
-incomplete — **stop** and reconcile before stamping.
+incomplete — **stop** and reconcile before stamping. Re-run `steward lint` here too: with §2's
+commit in place it is now comparing the seeded steps against a current HEAD, so a red here is
+a real divergence and a hard stop.
 
-## 3. Stamp the scaffold — **merge, never overwrite**
+## 4. Stamp the scaffold — **merge, never overwrite**
 
 **Write the config first (REQ-084).** Before copying a single artifact, put
 `.devsteward/config.yaml` in place carrying the project's **real**
@@ -75,7 +114,9 @@ incomplete — **stop** and reconcile before stamping.
 the same keys, so the land gates look exactly where you put the artifacts.
 
 Then bring in the scaffolding the engine needs: the **widened** REQ schema (REQ-021 lettered
-ids), `_templates/`, a plans dir, and `.gitignore` additions for the `.devsteward/` runtime.
+ids), a plans dir, and `.gitignore` additions for the `.devsteward/` runtime.
+(`<requirements_dir>/_templates/req.md` — the file the stamped `/intake` writes new REQs from
+— is *not* a hand-copy: `steward sync` below seeds it, REQ-086 Finding 2.)
 
 The target already has a `.claude/` and an 8 KB CLAUDE.md — so this is a **merge**:
 
@@ -89,16 +130,19 @@ A stamp that overwrites the target's accumulated knowledge is a regression, not 
 `steward new`, so it never seeded the provenance lock — that is *why* a project onboarded
 before REQ-057 (e.g. FlowSteward) ended with neither a `STEWARD.md` manual nor a
 `.devsteward/stamped.lock`. Run **`steward sync`** as part of this step: it stamps the missing
-engine-owned artifacts (the bundled skills **and** the root `STEWARD.md`) from the installed
-template and writes a populated `.devsteward/stamped.lock`, giving the retrofitted project the
-same baseline a fresh `steward new` project gets. `sync`'s customized-refusal **preserves any
+engine-owned artifacts (the bundled skills, the root `STEWARD.md`, and the REQ template at
+`<requirements_dir>/_templates/req.md`) from the installed template and writes a populated
+`.devsteward/stamped.lock`, giving the retrofitted project the
+same baseline a fresh `steward new` project gets. **Run it *after* the config is written** —
+the REQ template lands at the `requirements_dir` the config names, not under `docs/` by
+assumption. `sync`'s customized-refusal **preserves any
 same-named artifact the project already owns** (reported customized, refused without `--force`)
 — so this honours "merge, never overwrite" while closing the manual gap. `sync` seeds the
 **consumer** skills only; this skill is operator-only and is never stamped into a target
 (REQ-024 Decision 2, enforced by `skillsync.OPERATOR_ONLY` since REQ-084) — a migrated project
 is already onboarded.
 
-## 4. Reconcile CLAUDE.md — fold in, don't flatten
+## 5. Reconcile CLAUDE.md — fold in, don't flatten
 
 Fold the **house conventions** into the target's existing CLAUDE.md *without discarding its domain
 guidance*:
@@ -120,7 +164,7 @@ guidance, its no-PII invariant) — preserve that voice; add the contracts it no
 - **Mutating the target's live repo as a deliverable** of this skill — the live retrofit (memzy
   end-to-end) is its own tracked proof REQ (REQ-062), gated by its own `steward lint`/`status`.
 
-## 5. Park-and-surface
+## 6. Park-and-surface
 
 `/onboard` is normally run interactively, where a fork (an ambiguous `kind`, a `.claude/` or
 CLAUDE.md merge conflict, a branch-name you cannot confirm) is a question you **ask**. If it is

@@ -151,8 +151,11 @@ def test_onboard_skill_places_docs_by_config():
     for key in ("requirements_dir", "index_file", "plans_dir", "concepts_dir"):
         assert key in md, f"the onboard skill must name {key}"
 
-    # The stamp step writes the config first and then honours it.
-    stamp_section = md.split("## 3.", 1)[1].split("## 4.", 1)[0]
+    # The stamp step writes the config first and then honours it. Located by *name*, not by
+    # its number — REQ-086 inserted a commit step ahead of it and renumbered the sequence.
+    rest = md.partition("## 4. Stamp the scaffold")[2]
+    assert rest, "the stamp step must be present (as step 4 since REQ-086)"
+    stamp_section = rest.split("\n## ", 1)[0]
     low = stamp_section.lower()
     assert "config first" in low or "before copying" in low, (
         "the stamp step must tell the session to write the config before copying artifacts"

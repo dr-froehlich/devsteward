@@ -442,7 +442,7 @@ def status() -> None:
     # skill or the STEWARD.md manual) drifting from the installed engine is an informational
     # warning — visible (the fix for "silent"), never a blocking gate; the hint names the
     # generalized `steward sync` verb.
-    drifted = skillsync.drift(cfg.root, _package_templates())
+    drifted = skillsync.drift(cfg.root, _package_templates(), cfg.requirements_dir)
     if drifted:
         click.echo(click.style("\nstamped artifacts:", fg="yellow"))
         for d in drifted:
@@ -463,7 +463,9 @@ def status() -> None:
 def sync(force: bool) -> None:
     """Refresh stale/missing engine-owned stamped artifacts from the template (REQ-036/066).
 
-    Covers the bundled skills **and** the root ``STEWARD.md`` manual. A *stale* artifact
+    Covers the bundled skills, the root ``STEWARD.md`` manual, and the REQ template at
+    ``<requirements_dir>/_templates/req.md`` the stamped ``/intake`` writes from
+    (REQ-086). A *stale* artifact
     (untouched since stamp, template advanced) or a *missing* one (e.g. a consumer that never
     had ``STEWARD.md``) is refreshed to byte-match the installed engine and the provenance
     lock updated. A *customized* artifact (edited locally) is left untouched and reported
@@ -471,7 +473,9 @@ def sync(force: bool) -> None:
     ``<name>.orig`` before the refresh. ``sync-skills`` is a back-compat alias.
     """
     cfg = _load_or_die()
-    res = skillsync.sync(cfg.root, _package_templates(), force=force)
+    res = skillsync.sync(
+        cfg.root, _package_templates(), cfg.requirements_dir, force=force
+    )
     for name in res.synced:
         click.echo(click.style(f"  ✓ {name}: refreshed (was stale)", fg="green"))
     for name in res.forced:
