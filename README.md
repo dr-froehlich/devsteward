@@ -26,8 +26,8 @@ steward lint                  # schema-validate REQs; deps resolve; index↔REQ 
 steward status               # show the ledger cursor and what's eligible next
 steward advance              # attended: do exactly one checkpoint, interactively
 steward run                  # unattended: march eligible steps headless; park on forks
-steward decision list        # show parked decisions raised while unattended
-steward decision answer DEC-001 "..."
+steward decision-list        # show parked decisions raised while unattended
+steward decision-answer DEC-001 "..."
 ```
 
 ## The model

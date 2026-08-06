@@ -282,6 +282,10 @@ def rework(req_id: str) -> None:
     event carrying the red evidence dir — the resuming `/advance` session reads it as its
     repair context. Touches no git and no REQ file. Refuses when there is no red validation
     to rework (a done REQ → supersede instead; nothing parked red → nothing to do).
+
+    REQ-089: every AC the red validation recorded green is **carried forward** with its
+    provenance, so the re-validation re-opens only what was red — a long manual walkthrough
+    is not re-walked because of a code fix elsewhere. The carried ACs are printed here.
     """
     cfg = _load_or_die()
     ex = build_executor(cfg)
@@ -299,6 +303,14 @@ def rework(req_id: str) -> None:
             fg="green",
         )
     )
+    # REQ-089 Decision 7: the carry is unconditional, so make it *visible* — the operator
+    # sees what the resumed validation will not re-walk before it starts.
+    if res.carried:
+        click.echo(
+            "carried forward (not re-walked): "
+            + ", ".join(f"{c['ac']} [{c['check']}]" for c in res.carried)
+        )
+        click.echo(f"re-opening only: {', '.join(res.scope) or '(nothing — all green)'}")
 
 
 @main.command()
@@ -608,7 +620,7 @@ def advance(
 
     Like ``run`` this drives ``claude -p`` (no interactive client), so forks
     park-and-surface — there is no human channel for ``AskUserQuestion`` here.
-    Resolve any parked fork with ``steward decision answer`` and re-run.
+    Resolve any parked fork with ``steward decision-answer`` and re-run.
     """
     target = _resolve_target(req_id, only)
     cfg = _load_or_die()
@@ -633,6 +645,46 @@ def advance(
 # -- checkpoint (interactive land tail) ---------------------------------------
 
 
+def _resolve_step_target(cfg, ex, req_id: str | None, phase: str | None, *, verb: str):
+    """Resolve the ``[REQ_ID] [PHASE]`` target the operator named, or the cursor step.
+
+    Shared by ``checkpoint`` (which then mutates) and ``gate`` (which never does), so a
+    preview and the close it previews can never disagree about *which* step they mean.
+    Raises the same ``ClickException`` taxonomy for both; ``verb`` only shapes the message.
+    """
+    if req_id is None:
+        # REQ-041: resolve the cursor from the live integration-branch ledger, not an
+        # unbound snapshot of another branch (REQ-040 Decision 1, completed across read sites).
+        step_id = ex.live_ledger().cursor_step
+        # REQ-060: an unset cursor — or one pinned to a done/non-derivable step (the
+        # all-caught-up terminal) — means nothing is in flight. Say so plainly rather than
+        # push a stale cursor into the "not a derivable step" error below.
+        if not step_id or ex.step_by_id(step_id) is None:
+            raise click.ClickException(
+                f"nothing in flight to {verb} — pass a target explicitly: "
+                f"`steward {verb} REQ-NNN [PHASE]`"
+            )
+    else:
+        step_id = f"{req_id}:{phase or 'develop'}"
+    step = ex.step_by_id(step_id)
+    if step is None:
+        # REQ-060: name *why* an explicit target is not derivable — tell, don't interrogate.
+        # The common case is a finished REQ, which has a clear forward action (supersede).
+        from .profiles.req.reqfile import load_reqs
+
+        req = step_id.partition(":")[0]
+        target = next((r for r in load_reqs(cfg.req_dir) if r.id == req), None)
+        if target is not None and target.status == "done":
+            raise click.ClickException(
+                f"{req} is done — nothing to {verb}; supersede it to change direction"
+            )
+        raise click.ClickException(
+            f"{step_id} is not a derivable step — is {req} active "
+            f"(not draft/done) and is the phase 'develop'?"
+        )
+    return step
+
+
 @main.command()
 @click.argument("req_id", required=False, default=None)
 @click.argument("phase", required=False, default=None)
@@ -649,36 +701,7 @@ def checkpoint(req_id: str | None, phase: str | None) -> None:
     """
     cfg = _load_or_die()
     ex = build_executor(cfg)
-    if req_id is None:
-        # REQ-041: resolve the cursor from the live integration-branch ledger, not an
-        # unbound snapshot of another branch (REQ-040 Decision 1, completed across read sites).
-        step_id = ex.live_ledger().cursor_step
-        # REQ-060: an unset cursor — or one pinned to a done/non-derivable step (the
-        # all-caught-up terminal) — means nothing is in flight. Say so plainly rather than
-        # push a stale cursor into the "not a derivable step" error below.
-        if not step_id or ex.step_by_id(step_id) is None:
-            raise click.ClickException(
-                "nothing in flight to checkpoint — pass a target explicitly: "
-                "`steward checkpoint REQ-NNN [PHASE]`"
-            )
-    else:
-        step_id = f"{req_id}:{phase or 'develop'}"
-    step = ex.step_by_id(step_id)
-    if step is None:
-        # REQ-060: name *why* an explicit target is not derivable — tell, don't interrogate.
-        # The common case is a finished REQ, which has a clear forward action (supersede).
-        from .profiles.req.reqfile import load_reqs
-
-        req = step_id.partition(":")[0]
-        target = next((r for r in load_reqs(cfg.req_dir) if r.id == req), None)
-        if target is not None and target.status == "done":
-            raise click.ClickException(
-                f"{req} is done — nothing to checkpoint; supersede it to change direction"
-            )
-        raise click.ClickException(
-            f"{step_id} is not a derivable step — is {req} active "
-            f"(not draft/done) and is the phase 'develop'?"
-        )
+    step = _resolve_step_target(cfg, ex, req_id, phase, verb="checkpoint")
     if step.phase == "validate":
         # The System-Test phase has its own gate (engine-run artifact ACs, evidence,
         # sign-offs) — checkpointing it here would land on marker-trust (REQ-030).
@@ -691,6 +714,70 @@ def checkpoint(req_id: str | None, phase: str | None) -> None:
     if res.outcome is RunOutcome.VERIFY_FAILED:
         raise click.ClickException(f"verify failed — not checkpointed:\n{res.detail}")
     _print_report(ex, res)
+
+
+# -- gate (read-only verdict preview) ------------------------------------------
+
+#: REQ-089 Decision 5: what a green ``gate`` does and does not promise. Printed on every run
+#: — green *and* red — because the whole failure mode this guards against is a session
+#: reading a green preview as a land guarantee.
+_GATE_DISCLAIMER = (
+    "This is the *verify* gate only — the step's named acceptance tests, run exactly as the "
+    "develop gate runs them. It is not REQ-063's capture check (does the recorded commit "
+    "reproduce this green?) and not the artifact/manual gates of the System-Test phase, so a "
+    "green `gate` is not a promise that `steward checkpoint` will land. Nothing was "
+    "committed, staged, recorded or advanced."
+)
+
+
+@main.command()
+@click.argument("req_id", required=False, default=None)
+@click.argument("phase", required=False, default=None)
+def gate(req_id: str | None, phase: str | None) -> None:
+    """Preview a step's acceptance-test verdict without committing or landing anything.
+
+    Mid-development the land-grade gate was reachable only by *attempting* a land, so a
+    session could not see where it stood without trying to close (REQ-089 Decision 4). This
+    runs the same verifier the develop gate runs — the same resolved interpreter, the same
+    `check:`-routed selection of named tests, the same environment — and prints the verdict
+    plus each failing test. With no REQ_ID the target is the current cursor step; PHASE
+    defaults to `develop`. Exits non-zero on red.
+
+    **Read-only, by construction.** No commit, no staging, no evidence dir, no event, no
+    ledger write, no status flip — HEAD, the working tree, the git index and `.devsteward/`
+    are untouched. It deliberately does *not* run REQ-063's capture check: that requires
+    staging the tree, which is a mutation (and the staging path REQ-077/079/088 all found
+    defects in). Separating "am I green?" from "commit" is the point — use `steward
+    checkpoint` to close.
+    """
+    cfg = _load_or_die()
+    # Read-only: no `check_invariants` (a precondition guard is for mutations, and refusing
+    # on a non-`dev` HEAD would disable the preview exactly where it helps) and no
+    # `transaction` (nothing to roll back).
+    ex = build_executor(cfg)
+    step = _resolve_step_target(cfg, ex, req_id, phase, verb="gate")
+    if step.phase == "validate":
+        raise click.ClickException(
+            f"{step.id} is a System-Test step — its gate is the artifact/manual oracle, "
+            f"which needs the lab and an evidence dir. Run `steward validate {step.req}`."
+        )
+    if not step.verify:
+        click.echo(click.style(
+            f"{step.id}: no named acceptance tests on this step — nothing for the verify "
+            f"gate to run.", fg="yellow",
+        ))
+        click.echo(_GATE_DISCLAIMER)
+        return
+    click.echo(f"gate {step.id} — running {len(step.verify)} named acceptance test(s)…")
+    ok, detail = ex.verifier.verify(step)
+    if detail:
+        click.echo(detail)
+    click.echo(click.style(
+        f"gate {step.id}: {'GREEN' if ok else 'RED'}", fg="green" if ok else "red", bold=True,
+    ))
+    click.echo(_GATE_DISCLAIMER)
+    if not ok:
+        raise SystemExit(1)
 
 
 # -- validate (System-Test phase) ----------------------------------------------
@@ -739,40 +826,24 @@ def _interactive_signoff(root: Path):
 
 
 @main.command()
-@click.argument("words", nargs=-1, required=True, metavar="[start|record] REQ_ID")
+@click.argument("req_id")
 @click.option("--quiet", is_flag=True, help="Suppress live claude output; show only the report.")
-def validate(words: tuple[str, ...], quiet: bool) -> None:
+def validate(req_id: str, quiet: bool) -> None:
     """Run REQ_ID's System-Test phase — the single entry point (REQ-030).
 
-    Three forms. ``steward validate REQ-NNN`` (shape A, from a plain shell): the fresh
-    System Tester session preps the lab and captures artifacts, the engine runs each
-    ``artifact`` AC's named test itself, ``manual`` ACs take your sign-off here, and on
-    green the REQ lands mechanically (flip, index, commit). On a **done** REQ it appends
-    a fresh dated evidence event and leaves the REQ file untouched — status *and*
-    ``verified_by`` stay the frozen landing provenance (re-run policy, REQ-030 Decision 5
-    as clarified by REQ-035). A red validation parks with the failure brief — no repair loop.
+    ``steward validate REQ-NNN`` (shape A, from a plain shell): the fresh System Tester
+    session preps the lab and captures artifacts, the engine runs each ``artifact`` AC's
+    named test itself, ``manual`` ACs take your sign-off here, and on green the REQ lands
+    mechanically (flip, index, commit). On a **done** REQ it appends a fresh dated evidence
+    event and leaves the REQ file untouched — status *and* ``verified_by`` stay the frozen
+    landing provenance (re-run policy, REQ-030 Decision 5 as clarified by REQ-035). A red
+    validation parks with the failure brief — no repair loop.
 
     The warm cycle (REQ-081) splits the same flow into its two REQ-034 halves so the
-    System-Tester session survives a red: ``steward validate start REQ-NNN`` opens the
-    step and readies the evidence dir (callable from inside the warm session — it spawns
-    nothing); the guided work and capture happen there; then ``steward validate record
-    REQ-NNN`` from a **second plain shell** runs the artifact gate, takes the human
-    verdict via the engine's interactive prompt, and routes the same three outcomes.
-    After a red, run the rework from that shell — the warm session re-runs ``start``.
+    System-Tester session survives a red — see ``steward validate-start`` and
+    ``steward validate-record``, which are ordinary top-level commands (REQ-089 flattened
+    the old two-word spellings away).
     """
-    if len(words) == 1 and words[0] not in ("start", "record"):
-        req_id = words[0]
-    elif len(words) == 2 and words[0] in ("start", "record"):
-        if words[0] == "start":
-            _validate_start(words[1])
-        else:
-            _validate_record(words[1])
-        return
-    else:
-        raise click.UsageError(
-            "usage: steward validate REQ-NNN  |  steward validate start REQ-NNN  |  "
-            "steward validate record REQ-NNN"
-        )
     cfg = _load_or_die()
     ctrl = StopController()
     ctrl.install()
@@ -791,9 +862,9 @@ def validate(words: tuple[str, ...], quiet: bool) -> None:
     if req.status == "done":
         # REQ-073 D2 recovery: a done REQ still surfacing an open :validate decision is a
         # diverged ledger (a stale save rewound the cursor behind the committed land). Close
-        # it here — the verb the REQ-057 `decision answer` guard already redirects to — before
+        # it here — the verb the REQ-057 `decision-answer` guard already redirects to — before
         # the (non-mutating) re-validation, so the two remedies terminate instead of looping.
-        # HEAD-agnostic like `decision answer` (single-ledger invariant only): recovery must
+        # HEAD-agnostic like `decision-answer` (single-ledger invariant only): recovery must
         # not depend on which branch is checked out.
         check_invariants(ex, allow_any_head=True)
         with transaction(ex.git, label=f"reconcile stale validation {req_id}"):
@@ -839,9 +910,9 @@ def validate(words: tuple[str, ...], quiet: bool) -> None:
             f"refusing to bring up a guided validation session from inside a Claude "
             f"session (CLAUDECODE set) — Claude is never spawned from within Claude. Open a "
             f"plain terminal tab and run `steward validate {req_id}` there, or drive it "
-            f"warm (REQ-081): `steward validate start {req_id}` in this session, capture "
+            f"warm (REQ-081): `steward validate-start {req_id}` in this session, capture "
             f"the evidence here, then record the verdict from a plain shell with "
-            f"`steward validate record {req_id}`."
+            f"`steward validate-record {req_id}`."
         )
     check_invariants(ex)  # REQ-049: refuse on production / mid-merge (raises; handled top-level)
     # REQ-034 Decision 6 (shape A): start → interactive guided bring-up (editor pattern) →
@@ -857,14 +928,15 @@ def validate(words: tuple[str, ...], quiet: bool) -> None:
     _print_report(ex, res)
 
 
-def _validate_start(req_id: str) -> None:
-    """The standalone **start** half (REQ-081): open the validate step and ready the
-    evidence dir, spawning nothing.
+@main.command("validate-start")
+@click.argument("req_id")
+def validate_start(req_id: str) -> None:
+    """Warm cycle (REQ-081): open REQ_ID's validate step and ready its evidence dir.
 
-    Callable from inside a Claude session — the warm System-Tester session *is* the
-    session, so there is no bring-up and no CLAUDECODE refusal. Everything else mirrors
-    shape A's pre-flight: develop must be checkpointed, the declared lab done, and the
-    REQ-065 formality gate clear (both live inside ``routine.start``)."""
+    The standalone **start** half — it spawns nothing, so unlike ``steward validate`` it is
+    callable from inside a Claude session (the warm System-Tester session *is* the session).
+    Everything else mirrors shape A's pre-flight: develop must be checkpointed, the declared
+    lab done, and the REQ-065 formality gate clear (all inside ``routine.start``)."""
     cfg = _load_or_die()
     ex = build_executor(cfg, announce=_stderr_announcer)
     routine = ex.validate_runner
@@ -911,13 +983,16 @@ def _validate_start(req_id: str) -> None:
         click.echo(f"scoped re-run (REQ-075): {', '.join(ctx.reval['scope'])}")
     click.echo(
         "capture the validation artifacts there, then record the verdict from a plain "
-        f"shell: steward validate record {req_id}"
+        f"shell: steward validate-record {req_id}"
     )
 
 
-def _validate_record(req_id: str) -> None:
-    """The standalone **record** half (REQ-081): grade what the started validation
-    captured and take the human verdict — from a plain shell, while the System-Tester
+@main.command("validate-record")
+@click.argument("req_id")
+def validate_record(req_id: str) -> None:
+    """Warm cycle (REQ-081): grade REQ_ID's captured validation and take the human verdict.
+
+    The standalone **record** half — run it from a plain shell while the System-Tester
     session stays warm.
 
     The verdict channel is the engine's interactive prompt and nothing else (REQ-034
@@ -941,7 +1016,7 @@ def _validate_record(req_id: str) -> None:
         raise click.ClickException(
             f"{req_id} has manual AC(s) awaiting a human verdict — the verdict is taken "
             f"only by the engine's interactive prompt, which a Claude session cannot host "
-            f"(and the session must never relay it). Run `steward validate record "
+            f"(and the session must never relay it). Run `steward validate-record "
             f"{req_id}` from a plain shell; this warm session stays as it is."
         )
     check_invariants(ex)  # REQ-049: refuse on production / mid-merge
@@ -1016,7 +1091,7 @@ def run(
             click.echo(
                 click.style(
                     f"\n{len(forks)} fork(s) parked — resolve with `steward decide "
-                    f"{ids if len(forks) == 1 else 'DEC-NNN'}` (see `steward decision list`).",
+                    f"{ids if len(forks) == 1 else 'DEC-NNN'}` (see `steward decision-list`).",
                     fg="yellow",
                 )
             )
@@ -1071,13 +1146,9 @@ def _print_report(ex, res: StepResult) -> None:
 # -- decision -----------------------------------------------------------------
 
 
-@main.group()
-def decision() -> None:
-    """Inspect and resolve forks parked while running unattended."""
-
-
-@decision.command("list")
+@main.command("decision-list")
 def decision_list() -> None:
+    """Show the forks parked while running unattended, with their briefs."""
     cfg = _load_or_die()
     led = Ledger(cfg.root)
     open_d = led.open_decisions()
@@ -1098,10 +1169,11 @@ def decision_list() -> None:
         click.echo(f"    → resolve with `steward decide {d.id}` (plain shell)")
 
 
-@decision.command("answer")
+@main.command("decision-answer")
 @click.argument("decision_id")
 @click.argument("answer")
 def decision_answer(decision_id: str, answer: str) -> None:
+    """Record ANSWER against the parked fork DECISION_ID, unblocking its step."""
     cfg = _load_or_die()
     ex = build_executor(cfg)
     # REQ-049 AC3: answering a parked decision succeeds regardless of HEAD — the historical
@@ -1170,7 +1242,7 @@ def decide(decision_id: str) -> None:
     """
     cfg = _load_or_die()
     ex = build_executor(cfg)
-    check_invariants(ex, allow_any_head=True)  # single-ledger only, like `decision answer`
+    check_invariants(ex, allow_any_head=True)  # single-ledger only, like `decision-answer`
     if os.environ.get("DEVSTEWARD_UNATTENDED"):
         raise click.ClickException(
             "steward decide is the attended resolution of a parked fork — it cannot run "

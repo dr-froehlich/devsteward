@@ -93,9 +93,9 @@ Mechanics around the gate:
   verdict are what keep the guided session from self-certifying, whatever it reports.
 - **The warm cycle (REQ-081) — a red does not cost the session.** The two REQ-034 halves
   are first-class verbs, so a validation can run inside an already-warm session instead of
-  through the shape-A bring-up: `steward validate start REQ-NNN` opens the step and readies
+  through the shape-A bring-up: `steward validate-start REQ-NNN` opens the step and readies
   the evidence dir (it spawns nothing, so it is callable inside a Claude session); the warm
-  session does the guided work and captures; the human then runs `steward validate record
+  session does the guided work and captures; the human then runs `steward validate-record
   REQ-NNN` from a **second plain shell** — the engine grades the capture and takes the
   verdict through its own interactive prompt (a Claude session can neither host nor relay
   it; `record` refuses there when a manual verdict is due). On a red, the rework/revalidate
@@ -110,8 +110,7 @@ Mechanics around the gate:
   advances other eligible REQs; the waiting human is a standing work-item, not a blocked
   pipeline. `steward validate REQ-NNN` resumes it at any later time, and a green verdict
   fires the deferred land. A declined verdict is a red validation that routes to `steward
-  rework` (below). The clear verb here is `steward validate`, **not** `steward decision
-  answer` — answering the parked QA ticket as if it were a fork is refused and redirected
+  rework` (below). The clear verb here is `steward validate`, **not** `steward decision-answer` — answering the parked QA ticket as if it were a fork is refused and redirected
   (REQ-057), because flipping the validate step back to pending only re-parks it.
 - **A red validation parks immediately — no repair loop.** A red here means the develop
   was hollow or the lab is broken; both are human questions, so the engine never auto-loops
@@ -269,7 +268,7 @@ are reserved for genuine human forks.
   (REQ-074) brings up a guided session that briefs you and supports live interrogation; after
   it exits the engine records your choice + rationale, unblocks the step, and **delivers the
   decision into the resuming session's prompt** — the next `steward run` continues with the
-  fork cleared. (`steward decision answer DEC-NNN "<answer>"` remains as non-guided plumbing.)
+  fork cleared. (`steward decision-answer DEC-NNN "<answer>"` remains as non-guided plumbing.)
 - **A pending `manual`-AC validation (state F) → `steward validate REQ-NNN`, not a
   decision.** An open validation is an open validation (REQ-074): the wait is a ledger
   **hold** shown by `steward status` with its verb, never a decision record — running
@@ -308,7 +307,7 @@ steward lint                         # green?
 steward checkpoint REQ-014           # engine verifies and lands on `dev` — one transaction
 # or, the batch lane for a queue of well-specified REQs:
 steward run                          # march everything eligible; park on forks
-steward decision list                # any genuine fork parked? (holds live in `status`)
+steward decision-list                # any genuine fork parked? (holds live in `status`)
 steward decide DEC-001               # guided: brief → interrogate → your choice recorded
 steward run                          # resume — the choice travels into the session
 ```

@@ -441,7 +441,7 @@ def test_lab_dependency_blocks_validation(tmp_path, monkeypatch):
 
 
 def test_pending_validation_decision_answer_redirects(tmp_path, monkeypatch):
-    """REQ-057 AC1: `steward decision answer` on a pending-validation (manual-AC) hold refuses
+    """REQ-057 AC1: `steward decision-answer` on a pending-validation (manual-AC) hold refuses
     and redirects to `steward validate REQ`, leaving the validate step BLOCKED — it does NOT
     flip to PENDING / re-park (the circular trap REQ-056 removed for D/H). A genuine develop
     fork is unaffected: it still answers and unblocks."""
@@ -460,7 +460,7 @@ def test_pending_validation_decision_answer_redirects(tmp_path, monkeypatch):
     ))
     assert Ledger(tmp_path).status_of("REQ-001:validate") is StepStatus.BLOCKED
 
-    refused = CliRunner().invoke(cli_main, ["decision", "answer", "DEC-001", "looks good"])
+    refused = CliRunner().invoke(cli_main, ["decision-answer", "DEC-001", "looks good"])
     assert refused.exit_code != 0
     assert "steward validate REQ-001" in refused.output
     # Refused before any mutation: still BLOCKED, decision still OPEN (not re-armed / re-parked).
@@ -475,7 +475,7 @@ def test_pending_validation_decision_answer_redirects(tmp_path, monkeypatch):
         id=led2.next_decision_id(), step="REQ-001:develop", req="REQ-001",
         question="Which CSV quoting?",
     ))
-    answered = CliRunner().invoke(cli_main, ["decision", "answer", "DEC-002", "RFC 4180"])
+    answered = CliRunner().invoke(cli_main, ["decision-answer", "DEC-002", "RFC 4180"])
     assert answered.exit_code == 0, answered.output
     final = Ledger(tmp_path)
     assert final.status_of("REQ-001:develop") is StepStatus.PENDING

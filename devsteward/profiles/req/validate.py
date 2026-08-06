@@ -129,20 +129,30 @@ def _sha256(path: Path) -> str:
     return h.hexdigest()
 
 
-def _pending_revalidate(led: Ledger, req_id: str) -> dict | None:
-    """The scoped ``revalidate`` event awaiting its run (REQ-075 AC1), or ``None``.
+#: The return edges that may carry a re-run scope (REQ-075 ``revalidate``; REQ-089 Decision 6
+#: added ``rework``). Both are the *same* pending-scope shape — the only difference is what
+#: they did to the develop step, which the carry does not care about.
+_SCOPING_EVENTS = ("revalidate", "rework")
 
-    Returns the latest ``revalidate`` event for ``req_id`` that carries a ``scope`` and has
-    no ``validation`` event after it (nothing has consumed the scope yet). ``None`` means a
-    full re-run — a plain/degenerate revalidate that recorded no scope, or a scope already
-    spent by a later validation."""
+
+def _pending_revalidate(led: Ledger, req_id: str) -> dict | None:
+    """The scoped return-edge event awaiting its run (REQ-075 AC1 / REQ-089 AC4), or ``None``.
+
+    Returns the latest ``revalidate`` **or** ``rework`` event for ``req_id`` that carries a
+    ``scope`` and has no ``validation`` event after it (nothing has consumed the scope yet).
+    ``None`` means a full re-run — a plain/degenerate return edge that recorded no scope, or a
+    scope already spent by a later validation.
+
+    REQ-089 Decision 6: reading ``rework`` here is the half that would otherwise silently do
+    nothing — ``lifecycle.rework`` writing ``scope``/``carried`` onto its event is inert
+    unless this consumes it, so the two move together."""
     pending: dict | None = None
     for ev in led.events():
         if ev.get("req") != req_id:
             continue
         if ev.get("event") == "validation":
-            pending = None  # a validation consumes any earlier revalidate scope
-        elif ev.get("event") == "revalidate" and ev.get("scope") is not None:
+            pending = None  # a validation consumes any earlier return-edge scope
+        elif ev.get("event") in _SCOPING_EVENTS and ev.get("scope") is not None:
             pending = ev
     return pending
 
@@ -438,7 +448,7 @@ class ReqValidateRoutine:
             routing = {
                 StepStatus.PENDING: (
                     f"the validation has not been started — run "
-                    f"`steward validate start {req_id}` first"
+                    f"`steward validate-start {req_id}` first"
                 ),
                 StepStatus.BLOCKED: (
                     f"its validation is already recorded (parked) — for a red use "
@@ -481,7 +491,7 @@ class ReqValidateRoutine:
                 step,
                 RunOutcome.REFUSED,
                 f"{step.id} is running but its evidence dir cannot be resolved — "
-                f"re-run `steward validate start {req_id}` to ready a fresh one",
+                f"re-run `steward validate-start {req_id}` to ready a fresh one",
             )
         return StartContext(
             req=req,

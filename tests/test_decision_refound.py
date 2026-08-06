@@ -171,7 +171,7 @@ _BRIEF_TEXT = (
 
 def test_skill_fork_parks_with_brief_and_list_renders_it(tmp_path, monkeypatch):
     """Both park paths carry the fork brief: the sentinel block parses into question +
-    context + options + recommendation, and `steward decision list` renders it all."""
+    context + options + recommendation, and `steward decision-list` renders it all."""
     from test_transaction_boundary import _init_git, _scaffold
 
     _scaffold(tmp_path, acs=(("AC1", "true", "regression"),))
@@ -192,7 +192,7 @@ def test_skill_fork_parks_with_brief_and_list_renders_it(tmp_path, monkeypatch):
     assert dec.recommendation.startswith("sqlite")
     assert "migration differs" in dec.context
 
-    out = CliRunner().invoke(cli_main, ["decision", "list"])
+    out = CliRunner().invoke(cli_main, ["decision-list"])
     assert out.exit_code == 0, out.output
     assert "Which database engine" in out.output
     assert "option 1: sqlite (zero-ops, single file)" in out.output

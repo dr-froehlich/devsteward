@@ -81,6 +81,8 @@ class ReworkResult:
     evidence: str | None  # the red validation's evidence dir (the repair context)
     brief: str  # the red validation's failure brief
     decision: str | None  # the parked validate decision answered, if any
+    scope: list[str] | None  # the red/unrecorded AC ids to re-capture; None = full re-run
+    carried: list[dict] | None  # per carried green AC {ac, check, source_evidence, ...}
 
 
 @dataclass
@@ -267,6 +269,20 @@ def rework(cfg: Config, ledger: Ledger, req_id: str) -> ReworkResult:
     step, and append a ``rework`` event carrying the red validation's evidence path and
     failure brief. Touches neither git nor the REQ file (D5).
 
+    **REQ-089 Decision 6 — the carry.** The operator's real workflow is: a red pauses a long
+    manual walkthrough, a develop session fixes the cause, and the *same* validation resumes
+    without re-walking what already passed. That fell between the two verbs — ``revalidate``
+    carried green ACs forward but left develop ``DONE`` (no gate for a code fix), while
+    ``rework`` reopened develop but threw every sign-off away. So ``rework`` now runs
+    REQ-075's :func:`_scope_revalidation` too and writes ``scope`` + ``carried`` onto its
+    event; :func:`~devsteward.profiles.req.validate._pending_revalidate` reads a
+    scope-bearing ``rework`` exactly as it reads a ``revalidate``. The carry is
+    **unconditional** (Decision 7) — every AC the red validation recorded green carries, with
+    no per-AC opt-out. Its accepted hazard is a sign-off of code the fix then changed; the
+    defence is provenance (``source_evidence`` + ``source_event`` on each carried AC) and the
+    ``scoped re-run (REQ-075): …`` announcement the resumed session prints *before* the
+    walkthrough, so what is not being re-walked is visible in advance.
+
     Refuses (:class:`LifecycleError`, mapped to a non-zero exit by the CLI) when there is
     no red validation to rework: an unknown id, a ``done`` REQ (points at supersede — done
     is never weakened, D3), a REQ with no validate step, or a validate step that is not
@@ -282,11 +298,16 @@ def rework(cfg: Config, ledger: Ledger, req_id: str) -> ReworkResult:
         "reworked: human returned the red validation to develop for a fix",
     )
 
+    # REQ-089 Decision 6: carry the green one-offs forward, exactly as ``revalidate`` does.
+    # Degenerate cases (no per-AC results / nothing green) return None and the event omits
+    # the scope — a full re-run, exactly the pre-REQ-089 behavior.
+    req = next((r for r in load_reqs(cfg.req_dir) if r.id == req_id), None)
+    scope, carried = _scope_revalidation(req, ledger.latest_validation(req_id))
+
     ledger.set_status(develop, StepStatus.RECOVER)
     ledger.set_status(validate, StepStatus.PENDING)
     ledger.save()
-    ledger.append_event(
-        "rework",
+    event_fields = dict(
         req=req_id,
         develop=develop,
         validate=validate,
@@ -294,7 +315,13 @@ def rework(cfg: Config, ledger: Ledger, req_id: str) -> ReworkResult:
         brief=brief[:2000],
         decision=decision_id,
     )
-    return ReworkResult(req_id, develop, validate, evidence, brief, decision_id)
+    if scope is not None:
+        event_fields["scope"] = scope
+        event_fields["carried"] = carried
+    ledger.append_event("rework", **event_fields)
+    return ReworkResult(
+        req_id, develop, validate, evidence, brief, decision_id, scope, carried
+    )
 
 
 def revalidate(cfg: Config, ledger: Ledger, req_id: str) -> RevalidateResult:

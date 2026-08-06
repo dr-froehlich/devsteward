@@ -1,4 +1,4 @@
-"""REQ-081 — the warm validation cycle: `steward validate start/record` as real CLI verbs.
+"""REQ-081 — the warm validation cycle: `steward validate-start/record` as real CLI verbs.
 
 The REQ-034 two-phase halves get entrypoints so a red validation no longer costs the
 System-Tester session: `start` opens the step and readies the evidence dir from inside the
@@ -110,19 +110,19 @@ def _invoke(root: Path, args, input=None):
 
 
 def test_start_half_opens_step_inside_claude_session(tmp_path, monkeypatch):
-    """`steward validate start` sets RUNNING, readies + prints the evidence dir, records
+    """`steward validate-start` sets RUNNING, readies + prints the evidence dir, records
     it on the start event, and spawns nothing — so it works with CLAUDECODE set (the warm
     System-Tester session *is* the session)."""
     _project(tmp_path, [_ARTIFACT_OK, _MANUAL])
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("CLAUDECODE", "1")
 
-    res = _invoke(tmp_path, ["validate", "start", "REQ-001"])
+    res = _invoke(tmp_path, ["validate-start", "REQ-001"])
 
     assert res.exit_code == 0, res.output
     assert "validation started: REQ-001:validate" in res.output
     assert "evidence dir: .devsteward/evidence/REQ-001/" in res.output
-    assert "steward validate record REQ-001" in res.output  # the handoff hint
+    assert "steward validate-record REQ-001" in res.output  # the handoff hint
     led = Ledger(tmp_path)
     assert led.status_of("REQ-001:validate") is StepStatus.RUNNING
     assert _started_evidence(tmp_path).is_dir()
@@ -133,11 +133,11 @@ def test_start_half_reentry_mints_fresh_evidence_dir(tmp_path, monkeypatch):
     killed session): a fresh dated dir, and record resolves the *latest* one."""
     _project(tmp_path, [_ARTIFACT_OK])
     monkeypatch.chdir(tmp_path)
-    assert _invoke(tmp_path, ["validate", "start", "REQ-001"]).exit_code == 0
+    assert _invoke(tmp_path, ["validate-start", "REQ-001"]).exit_code == 0
     first = _started_evidence(tmp_path)
     # No sleep: the mint is collision-free (REQ-088), so back-to-back starts mint back-to-back
     # dirs. This assertion is only a real test of "mints fresh" without the pad.
-    res = _invoke(tmp_path, ["validate", "start", "REQ-001"])
+    res = _invoke(tmp_path, ["validate-start", "REQ-001"])
     assert res.exit_code == 0, res.output
     second = _started_evidence(tmp_path)
     assert second != first
@@ -152,14 +152,14 @@ def test_start_half_preflight_refusals(tmp_path, monkeypatch):
     a.mkdir()
     _project(a, [_ARTIFACT_OK], develop_done=False)
     monkeypatch.chdir(a)
-    res = _invoke(a, ["validate", "start", "REQ-001"])
+    res = _invoke(a, ["validate-start", "REQ-001"])
     assert res.exit_code != 0 and "develop is not closed" in res.output
 
     b = tmp_path / "b"
     b.mkdir()
     _project(b, [_ARTIFACT_OK], process={"lab": ["REQ-777"]})
     monkeypatch.chdir(b)
-    res = _invoke(b, ["validate", "start", "REQ-001"])
+    res = _invoke(b, ["validate-start", "REQ-001"])
     assert res.exit_code != 0 and "waiting on REQ-777" in res.output
     assert Ledger(b).status_of("REQ-001:validate") is StepStatus.PENDING
 
@@ -167,7 +167,7 @@ def test_start_half_preflight_refusals(tmp_path, monkeypatch):
     c.mkdir()
     _project(c, [_ARTIFACT_OK], plan=False)
     monkeypatch.chdir(c)
-    res = _invoke(c, ["validate", "start", "REQ-001"])
+    res = _invoke(c, ["validate-start", "REQ-001"])
     assert res.exit_code != 0 and "plan" in res.output.lower()
     assert Ledger(c).status_of("REQ-001:validate") is StepStatus.PENDING
 
@@ -180,7 +180,7 @@ def test_start_half_preflight_refusals(tmp_path, monkeypatch):
         encoding="utf-8",
     )
     monkeypatch.chdir(d)
-    res = _invoke(d, ["validate", "start", "REQ-001"])
+    res = _invoke(d, ["validate-start", "REQ-001"])
     assert res.exit_code != 0 and "steward validate REQ-001" in res.output
 
 
@@ -193,10 +193,10 @@ def test_record_green_lands_from_second_process(tmp_path, monkeypatch):
     engine's interactive prompt, and lands mechanically — flip, index sync, clean tree."""
     _project(tmp_path, [_ARTIFACT_OK, _MANUAL])
     monkeypatch.chdir(tmp_path)
-    assert _invoke(tmp_path, ["validate", "start", "REQ-001"]).exit_code == 0
+    assert _invoke(tmp_path, ["validate-start", "REQ-001"]).exit_code == 0
     _capture(tmp_path)
 
-    res = _invoke(tmp_path, ["validate", "record", "REQ-001"], input="a\nproof run reviewed\n")
+    res = _invoke(tmp_path, ["validate-record", "REQ-001"], input="a\nproof run reviewed\n")
 
     assert res.exit_code == 0, res.output
     assert parse_req(tmp_path / "docs/requirements/REQ-001.md").status == "done"
@@ -218,10 +218,10 @@ def test_record_red_parks_and_rework_accepts_immediately(tmp_path, monkeypatch):
     precondition, unchanged, is already satisfied)."""
     _project(tmp_path, [_ARTIFACT_OK, _MANUAL])
     monkeypatch.chdir(tmp_path)
-    assert _invoke(tmp_path, ["validate", "start", "REQ-001"]).exit_code == 0
+    assert _invoke(tmp_path, ["validate-start", "REQ-001"]).exit_code == 0
     _capture(tmp_path)
 
-    res = _invoke(tmp_path, ["validate", "record", "REQ-001"], input="d\n")
+    res = _invoke(tmp_path, ["validate-record", "REQ-001"], input="d\n")
 
     assert res.exit_code == 1
     assert "validation parked" in res.output and "steward rework REQ-001" in res.output
@@ -243,9 +243,9 @@ def test_record_red_revalidate_also_accepts(tmp_path, monkeypatch):
     stays DONE, only validate re-arms."""
     _project(tmp_path, [_ARTIFACT_OK, _MANUAL])
     monkeypatch.chdir(tmp_path)
-    assert _invoke(tmp_path, ["validate", "start", "REQ-001"]).exit_code == 0
+    assert _invoke(tmp_path, ["validate-start", "REQ-001"]).exit_code == 0
     _capture(tmp_path)
-    assert _invoke(tmp_path, ["validate", "record", "REQ-001"], input="d\n").exit_code == 1
+    assert _invoke(tmp_path, ["validate-record", "REQ-001"], input="d\n").exit_code == 1
 
     reval = _invoke(tmp_path, ["revalidate", "REQ-001"])
     assert reval.exit_code == 0, reval.output
@@ -259,10 +259,10 @@ def test_record_red_deferred_verdict_parks_pending(tmp_path, monkeypatch):
     tree, nothing recorded — the warm work-item stands."""
     _project(tmp_path, [_ARTIFACT_OK, _MANUAL])
     monkeypatch.chdir(tmp_path)
-    assert _invoke(tmp_path, ["validate", "start", "REQ-001"]).exit_code == 0
+    assert _invoke(tmp_path, ["validate-start", "REQ-001"]).exit_code == 0
     _capture(tmp_path)
 
-    res = _invoke(tmp_path, ["validate", "record", "REQ-001"], input="p\n")
+    res = _invoke(tmp_path, ["validate-record", "REQ-001"], input="p\n")
 
     assert res.exit_code == 1 and "async QA" in res.output
     assert not [e for e in _events(tmp_path) if e["event"] == "validation"]
@@ -275,11 +275,11 @@ def test_record_red_refuses_manual_verdict_inside_claude_session(tmp_path, monke
     verdict) and the started step stays RUNNING — the warm cycle is not consumed."""
     _project(tmp_path, [_ARTIFACT_OK, _MANUAL])
     monkeypatch.chdir(tmp_path)
-    assert _invoke(tmp_path, ["validate", "start", "REQ-001"]).exit_code == 0
+    assert _invoke(tmp_path, ["validate-start", "REQ-001"]).exit_code == 0
     _capture(tmp_path)
     monkeypatch.setenv("CLAUDECODE", "1")
 
-    res = _invoke(tmp_path, ["validate", "record", "REQ-001"], input="a\n\n")
+    res = _invoke(tmp_path, ["validate-record", "REQ-001"], input="a\n\n")
 
     assert res.exit_code != 0 and "plain shell" in res.output
     assert Ledger(tmp_path).status_of("REQ-001:validate") is StepStatus.RUNNING
@@ -295,9 +295,9 @@ def test_full_cycle_red_rework_revalidate_green(tmp_path, monkeypatch):
     leg its own process, no step ever forcing the (simulated) warm session down."""
     _project(tmp_path, [_ARTIFACT_OK, _MANUAL])
     monkeypatch.chdir(tmp_path)
-    assert _invoke(tmp_path, ["validate", "start", "REQ-001"]).exit_code == 0
+    assert _invoke(tmp_path, ["validate-start", "REQ-001"]).exit_code == 0
     _capture(tmp_path)
-    assert _invoke(tmp_path, ["validate", "record", "REQ-001"], input="d\n").exit_code == 1
+    assert _invoke(tmp_path, ["validate-record", "REQ-001"], input="d\n").exit_code == 1
     assert _invoke(tmp_path, ["rework", "REQ-001"]).exit_code == 0
 
     # The repaired develop, checkpointed (the checkpoint machinery has its own tests).
@@ -305,10 +305,10 @@ def test_full_cycle_red_rework_revalidate_green(tmp_path, monkeypatch):
     led.set_status("REQ-001:develop", StepStatus.DONE)
     led.save()
 
-    res = _invoke(tmp_path, ["validate", "start", "REQ-001"])
+    res = _invoke(tmp_path, ["validate-start", "REQ-001"])
     assert res.exit_code == 0, res.output
     _capture(tmp_path, "repaired behaviour\n")
-    res = _invoke(tmp_path, ["validate", "record", "REQ-001"], input="a\n\n")
+    res = _invoke(tmp_path, ["validate-record", "REQ-001"], input="a\n\n")
     assert res.exit_code == 0, res.output
 
     vals = [e for e in _events(tmp_path) if e["event"] == "validation"]
@@ -324,9 +324,9 @@ def test_full_cycle_revalidate_scoped_carry(tmp_path, monkeypatch):
     red_ac = {"id": "AC4", "test": "test -f fixed.marker", "check": "artifact"}
     _project(tmp_path, [_ARTIFACT_OK, red_ac])
     monkeypatch.chdir(tmp_path)
-    assert _invoke(tmp_path, ["validate", "start", "REQ-001"]).exit_code == 0
+    assert _invoke(tmp_path, ["validate-start", "REQ-001"]).exit_code == 0
     _capture(tmp_path)
-    res = _invoke(tmp_path, ["validate", "record", "REQ-001"])  # no manual → no prompt
+    res = _invoke(tmp_path, ["validate-record", "REQ-001"])  # no manual → no prompt
     assert res.exit_code == 1  # AC4 red (fixed.marker absent)
 
     assert _invoke(tmp_path, ["revalidate", "REQ-001"]).exit_code == 0
@@ -334,10 +334,10 @@ def test_full_cycle_revalidate_scoped_carry(tmp_path, monkeypatch):
 
     # No sleep: REQ-088 made the evidence-dir mint collision-free, so the carry gets a
     # distinct dir however fast the re-run follows.
-    res = _invoke(tmp_path, ["validate", "start", "REQ-001"])
+    res = _invoke(tmp_path, ["validate-start", "REQ-001"])
     assert res.exit_code == 0, res.output
     assert "scoped re-run (REQ-075): AC4" in res.output
-    res = _invoke(tmp_path, ["validate", "record", "REQ-001"])
+    res = _invoke(tmp_path, ["validate-record", "REQ-001"])
     assert res.exit_code == 0, res.output
 
     vals = [e for e in _events(tmp_path) if e["event"] == "validation"]
@@ -361,8 +361,8 @@ def test_shape_a_claudecode_refusal_names_the_halves(tmp_path, monkeypatch):
     res = _invoke(tmp_path, ["validate", "REQ-001"])
 
     assert res.exit_code != 0
-    assert "steward validate start REQ-001" in res.output
-    assert "steward validate record REQ-001" in res.output
+    assert "steward validate-start REQ-001" in res.output
+    assert "steward validate-record REQ-001" in res.output
     assert Ledger(tmp_path).status_of("REQ-001:validate") is StepStatus.PENDING
 
 
@@ -372,10 +372,10 @@ def test_shape_a_record_without_start_refuses(tmp_path, monkeypatch):
     _project(tmp_path, [_ARTIFACT_OK, _MANUAL])
     monkeypatch.chdir(tmp_path)
 
-    res = _invoke(tmp_path, ["validate", "record", "REQ-001"])
+    res = _invoke(tmp_path, ["validate-record", "REQ-001"])
 
     assert res.exit_code != 0
-    assert "steward validate start REQ-001" in res.output
+    assert "steward validate-start REQ-001" in res.output
 
 
 def test_shape_a_usage_forms(tmp_path, monkeypatch):
@@ -383,7 +383,7 @@ def test_shape_a_usage_forms(tmp_path, monkeypatch):
     _project(tmp_path, [_ARTIFACT_OK])
     monkeypatch.chdir(tmp_path)
     assert _invoke(tmp_path, ["validate", "start"]).exit_code != 0
-    assert _invoke(tmp_path, ["validate", "start", "REQ-001", "extra"]).exit_code != 0
+    assert _invoke(tmp_path, ["validate-start", "REQ-001", "extra"]).exit_code != 0
     res = _invoke(tmp_path, ["validate", "bogus", "REQ-001"])
     assert res.exit_code != 0 and "usage" in res.output.lower()
 

@@ -221,7 +221,7 @@ def test_invariants_exempt_recovery_verbs_from_branch_gate(tmp_path):
 
 def test_decision_and_repeat_succeed_on_production_branch(tmp_path, monkeypatch):
     """AC3 (end to end): a decision parked on ``dev``, then HEAD moved to the production
-    branch, is answered by ``steward decision answer`` — and ``steward repeat`` (the
+    branch, is answered by ``steward decision-answer`` — and ``steward repeat`` (the
     recovery verb renamed from ``recover`` by REQ-054) re-arms a failed step — both with
     exit 0, regardless of HEAD. The historical stalemate (a parked decision no command
     could recover) is unreachable."""
@@ -243,9 +243,9 @@ def test_decision_and_repeat_succeed_on_production_branch(tmp_path, monkeypatch)
     monkeypatch.chdir(tmp_path)
     runner = CliRunner()
 
-    # `steward decision answer` succeeds on the production branch (no branch gate).
+    # `steward decision-answer` succeeds on the production branch (no branch gate).
     answer = runner.invoke(
-        cli_main, ["decision", "answer", "DEC-001", "resolved"], catch_exceptions=False
+        cli_main, ["decision-answer", "DEC-001", "resolved"], catch_exceptions=False
     )
     assert answer.exit_code == 0, answer.output
     led2 = Ledger(tmp_path)

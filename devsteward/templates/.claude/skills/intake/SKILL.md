@@ -167,8 +167,19 @@ an acceptance criterion routed to the fixless System-Test phase. Keep a syntheti
 for **and** whose oracle needs no fixing loop. Beware the two over-generalizations that breed
 the false "develop must not touch prod" rule: the no-prod-content-in-`regression` rule bars
 *committing prod-content assertions to the gate*, **not** *testing against* the live system in
-develop; and the empirical-concept-phase deploy permission is a grant, not a restriction that
-**only** concept phases may reach the live system.
+develop; and the mid-phase deploy permission is a grant, not a restriction that **only**
+concept phases may reach the live system — `/advance` §4 states it as an **attended** grant
+covering any work that needs a round-trip through external infrastructure (REQ-089), so the
+two documents now say the same thing.
+
+**The deploy-shaped case, explicitly (REQ-089).** When the code only exists somewhere runnable
+*after* a push — CI builds the image, a pipeline deploys it to a remote host — the proof
+belongs in the **develop session**, which may push and deploy as often as the iteration needs
+and fix what the deploy turns up **in place**. Routing that proof to `artifact`/`manual` is the
+worst available destination: the System Tester never sees the diff and cannot fix anything, so
+the proof gets **no repair loop** and every red costs a whole extra session. File the live
+proof as a develop obligation in the Requirement + a Decision, and keep a synthetic-fixture
+`regression` AC for the mechanism.
 
 ### 2c. The three process declarations (while the human is present)
 

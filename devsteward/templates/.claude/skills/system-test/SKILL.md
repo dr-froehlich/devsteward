@@ -38,20 +38,20 @@ path already gets.
 4. **Hand off to the human's shell** — the **engine** takes the human's verdict (approve /
    decline / defer-as-pending) and records it. Brought up by shape A (`steward validate`
    from a plain shell), that means ending the session — the verdict prompt runs after you
-   exit. In the warm cycle (below), it means the human runs `steward validate record
+   exit. In the warm cycle (below), it means the human runs `steward validate-record
    REQ-NNN` in a second plain shell while you stay up. Either way, you never collect,
    write, or assert the verdict; the engine-run gate + the engine-recorded verdict are
    what stop a session from self-certifying.
 
 **The warm cycle (REQ-081) — two-phase, mid-session (Claude never spawned from within
 Claude):** if a validation arises inside a running session, that session drives it in
-place: run **`steward validate start REQ-NNN`** (it spawns nothing, so it works inside a
+place: run **`steward validate-start REQ-NNN`** (it spawns nothing, so it works inside a
 Claude session), do the guided work and capture into the evidence dir it prints, then the
-**human** records the verdict from a **second plain shell** with **`steward validate
-record REQ-NNN`** — never from this session (it cannot host the prompt, and must never
+**human** records the verdict from a **second plain shell** with **`steward
+validate-record REQ-NNN`** — never from this session (it cannot host the prompt, and must never
 relay the verdict). On a red, the human runs `steward rework`/`steward revalidate` and the
 repair from that same shell while you stay warm and **idle** (one session writes at a
-time, REQ-079); once the step is back to PENDING, re-run `steward validate start REQ-NNN`
+time, REQ-079); once the step is back to PENDING, re-run `steward validate-start REQ-NNN`
 here and repeat — scoped to the red ACs (REQ-075). Do **not** spawn a new `claude`;
 `steward validate`'s bring-up refuses inside a Claude session (`CLAUDECODE`) and points at
 a plain terminal tab or this warm path.

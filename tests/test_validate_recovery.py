@@ -4,7 +4,7 @@ Once a stale save has rewound the cursor behind a committed land, ``state.yaml``
 **open** ``:validate`` decision for a REQ that is already ``done`` — the diverged ledger the
 lost-update guard (D1) now prevents going forward, but which existed in the wild (FlowSteward
 DEC-044). Before REQ-073 there was no verb back: ``steward validate`` on a done REQ routed to
-the non-mutating revalidate, and ``steward decision answer`` refused a ``:validate`` decision
+the non-mutating revalidate, and ``steward decision-answer`` refused a ``:validate`` decision
 and redirected to ``steward validate`` — the two remedies pointed at each other, and the only
 exit was hand-editing state.yaml (forbidden).
 
@@ -105,7 +105,7 @@ def test_validate_on_done_req_closes_stale_validation_decision(tmp_path, monkeyp
 
 
 def test_answer_redirect_target_resolves_diverged_state(tmp_path, monkeypatch):
-    """No mutually-pointing dead end: `steward decision answer` on the :validate decision
+    """No mutually-pointing dead end: `steward decision-answer` on the :validate decision
     still refuses and redirects to `steward validate` (REQ-057 guard intact), and following
     that redirect actually resolves the decision (AC4) — the two remedies terminate."""
     _diverged_ledger(tmp_path)
@@ -113,7 +113,7 @@ def test_answer_redirect_target_resolves_diverged_state(tmp_path, monkeypatch):
 
     # The REQ-057 guard: `decision answer` refuses a :validate hold and redirects — before any
     # mutation, so the decision stays open.
-    refused = CliRunner().invoke(cli_main, ["decision", "answer", "DEC-001", "looks good"])
+    refused = CliRunner().invoke(cli_main, ["decision-answer", "DEC-001", "looks good"])
     assert refused.exit_code != 0
     assert "steward validate REQ-001" in refused.output
     mid = Ledger(tmp_path)

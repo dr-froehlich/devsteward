@@ -100,21 +100,21 @@ def test_same_second_revalidate_carries_without_self_copy(tmp_path, monkeypatch,
     _project(tmp_path, [_ARTIFACT_OK, red_ac])
     monkeypatch.chdir(tmp_path)
 
-    assert _invoke(tmp_path, ["validate", "start", "REQ-001"]).exit_code == 0
+    assert _invoke(tmp_path, ["validate-start", "REQ-001"]).exit_code == 0
     source_evidence = _started_evidence(tmp_path)
     _capture(tmp_path)
-    assert _invoke(tmp_path, ["validate", "record", "REQ-001"]).exit_code == 1  # AC4 red
+    assert _invoke(tmp_path, ["validate-record", "REQ-001"]).exit_code == 1  # AC4 red
 
     assert _invoke(tmp_path, ["revalidate", "REQ-001"]).exit_code == 0
     (tmp_path / "fixed.marker").write_text("external cause fixed\n", encoding="utf-8")
 
     # No sleep — the re-start happens inside the same pinned second as the source validation.
-    res = _invoke(tmp_path, ["validate", "start", "REQ-001"])
+    res = _invoke(tmp_path, ["validate-start", "REQ-001"])
     assert res.exit_code == 0, res.output
     fresh_evidence = _started_evidence(tmp_path)
     assert fresh_evidence != source_evidence, "the re-run aliased the source evidence dir"
 
-    res = _invoke(tmp_path, ["validate", "record", "REQ-001"])
+    res = _invoke(tmp_path, ["validate-record", "REQ-001"])
     assert res.exit_code == 0, res.output
 
     val = [e for e in _events(tmp_path) if e["event"] == "validation"][-1]

@@ -46,8 +46,12 @@ steward checkpoint        # close it: the engine re-runs the tests and lands on 
 
 - **`/advance`** (a skill) does exactly one fused develop checkpoint and stops. In a live
   session it asks you at forks. It leaves the working tree dirty for the engine — it does **not**
-  commit. (One exception: an *empirical* `concept: true` phase may commit mid-phase — see the
-  concept-gate paragraph below.)
+  commit. **The one grant is attended (REQ-089):** an interactive session whose work needs a
+  round-trip through external infrastructure — pushing so CI builds an image, a deploy to a
+  remote host, live data from a running system — may make plain `git` commits and push
+  mid-phase, as often as the iteration needs. A **batch** (`DEVSTEWARD_UNATTENDED=1`) session
+  never commits; the engine is the committer there. `steward checkpoint` is never a mid-phase
+  verb — the one-checkpoint frame bounds the bookkeeping, not the round-trips.
 - **`steward checkpoint [REQ-NNN develop]`** is the interactive close. It re-runs the named
   acceptance tests through the land-grade gate, checks a file in the plans dir names the REQ, and on
   green makes the one authoritative commit (frontmatter + index + code) and advances the ledger —
@@ -92,8 +96,8 @@ If a REQ declares an `artifact` or `manual` acceptance criterion, the green deve
 
 ```sh
 steward validate REQ-NNN           # shape A: the whole step from a plain shell
-steward validate start REQ-NNN     # warm cycle: open the step (works inside a session)
-steward validate record REQ-NNN    # warm cycle: grade + verdict, from a plain shell
+steward validate-start REQ-NNN     # warm cycle: open the step (works inside a session)
+steward validate-record REQ-NNN    # warm cycle: grade + verdict, from a plain shell
 ```
 
 - A fresh System Tester session (it never sees your diff) brings the lab up and captures
@@ -106,9 +110,9 @@ steward validate record REQ-NNN    # warm cycle: grade + verdict, from a plain s
 
 **The warm cycle (REQ-081) — a red does not cost the session.** The two halves of the same
 flow are separate verbs, so a validation can run inside an already-warm session: `steward
-validate start REQ-NNN` opens the step and prints the evidence dir (it spawns nothing, so it
+validate-start REQ-NNN` opens the step and prints the evidence dir (it spawns nothing, so it
 is callable from inside a Claude session); the session does the guided work and captures; then
-the human runs `steward validate record REQ-NNN` from a **second plain shell** — the engine
+the human runs `steward validate-record REQ-NNN` from a **second plain shell** — the engine
 grades the capture and takes the verdict through its own interactive prompt (a Claude session
 can never host or relay it). On a red, run `steward rework`/`steward revalidate` and the repair
 from that same shell while the validation session stays warm and **idle** (one session writes
@@ -191,7 +195,7 @@ Pick the verb by **what is actually stuck**. None of these touch a `done` REQ (s
 | A step is **FAILED** (a develop step errored or the gate stayed red) | The attempt left partial edits in the tree | `steward repeat REQ-NNN` |
 | **D/H** — a develop step ineligible (e.g. no plan artifact, or split/attended need) | **Not a decision.** A mechanical go-fix-and-retry stop | fix the cause, then `steward repeat REQ-NNN` |
 | A parked **decision** on a `develop` step (a genuine fork) | The session hit a choice it couldn't resolve — the autopilot raised the captain | `steward decide DEC-NNN` (guided, from a plain shell) |
-| A **`manual`-AC** validate hold (state F): "awaits its human oracle" | Async QA — a human must sign off | `steward validate REQ-NNN` (**not** `decision answer`) |
+| A **`manual`-AC** validate hold (state F): "awaits its human oracle" | Async QA — a human must sign off | `steward validate REQ-NNN` (**not** `decision-answer`) |
 | A **red validation** (the lab found a defect, or the validation test is wrong) | A human question — no auto-repair loop | `steward rework` or `steward revalidate` (below) |
 | A **`done` REQ still surfacing a parked `:validate` decision** | A diverged ledger — the land already happened; the cursor was rewound behind it | `steward validate REQ-NNN` (reconciles it from the event log; **never** hand-edit `state.yaml`) |
 
@@ -206,7 +210,7 @@ Pick the verb by **what is actually stuck**. None of these touch a `done` REQ (s
   session that briefs you on the fork (question, context, options, the parked session's
   recommendation) and supports live interrogation; after it exits, the **engine** records your
   choice + rationale, unblocks the step, and delivers the decision into the resuming session's
-  prompt. `steward decision answer DEC-NNN "<answer>"` remains as the non-guided plumbing; both
+  prompt. `steward decision-answer DEC-NNN "<answer>"` remains as the non-guided plumbing; both
   refuse on a legacy validation hold and redirect you to the right verb — heed that.
 - **`steward rework REQ-NNN`** — the return edge when a **red validation is a real defect**: it
   sends the validate step back to develop (`develop → recover`, `validate → pending`) so you fix
@@ -214,7 +218,7 @@ Pick the verb by **what is actually stuck**. None of these touch a `done` REQ (s
 - **`steward revalidate REQ-NNN`** — the validate-layer mirror: when the develop work **stands**
   and an external lab/setup issue was fixed, re-run the validation only (`develop` stays `done`).
 
-`steward decision list` shows parked forks with their briefs (question, context, options,
+`steward decision-list` shows parked forks with their briefs (question, context, options,
 recommendation). Validation and attended waits are **holds**, not decisions (REQ-074): they never
 appear in that list — `steward status` shows each hold with the verb that resolves it.
 

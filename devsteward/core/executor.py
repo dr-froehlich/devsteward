@@ -197,9 +197,9 @@ class Executor:
                 f"refusing to bring up a guided validation session from inside a Claude "
                 f"session (CLAUDECODE set) — Claude is never spawned from within Claude. "
                 f"Open a plain terminal tab and run `steward validate {step.req}` there, or "
-                f"drive it warm (REQ-081): `steward validate start {step.req}` in this "
+                f"drive it warm (REQ-081): `steward validate-start {step.req}` in this "
                 f"session, capture the evidence here, then record the verdict from a plain "
-                f"shell with `steward validate record {step.req}`."
+                f"shell with `steward validate-record {step.req}`."
             )
         model, effort = self._claude_for("validate")
         # REQ-075 AC1: ``ac_flag`` names the scoped ACs (``--ac AC1,AC3``) on a red-only

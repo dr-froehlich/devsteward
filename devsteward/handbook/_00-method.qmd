@@ -43,11 +43,19 @@ doctrine rules (REQ-071) govern that split — each one a codified consumer post
 3. **Don't scope a known defect out.** A known defect is fixed in the current REQ or homed
    in a **named follow-on REQ** — never silently deferred; non-goals may be out-of-scope,
    defects may not.
-4. **The concept phase iterates until the deliverable is frozen.** An *empirical* concept
-   phase (frozen live data, a committed prototype) may legitimately commit, push, and
-   deploy repeatedly to gather its own inputs; **`steward checkpoint` is the terminal
-   act**, sanctioned even over an already-clean tree (it records the step over an
+4. **Work that needs the real world iterates — attended (REQ-089).** When a deliverable or
+   a proof requires a **round-trip through external infrastructure** — pushing so CI builds
+   an image, deploying to a remote host, gathering live data from a running system — the
+   session may legitimately commit, push and deploy repeatedly while it iterates, because
+   the push is the precondition for the code existing anywhere it can be run. The grant is
+   keyed on **attended** (`DEVSTEWARD_UNATTENDED` unset), not on a flag: an *empirical*
+   concept phase (frozen live data, a committed prototype) is one instance, deploy-shaped
+   develop work is another. The mechanism is **plain git commits by the session**; a batch
+   session never commits (the engine is the committer). **`steward checkpoint` is the
+   terminal act**, sanctioned even over an already-clean tree (it records the step over an
    effectively no-op commit). One checkpoint bounds the bookkeeping, not the round-trips.
+   A proof that needs a deploy therefore belongs *in the develop session*, fixable in
+   place — never deferred to the fixless System-Test phase, which has no repair loop.
 5. **Phase-model placement.** When `concept: true` is set *because the target ACs depend
    on the concept deliverable*, intake also decides where the post-freeze work lives:
    `develop: split` (a post-freeze develop phase authors the target ACs) or a named

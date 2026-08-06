@@ -87,13 +87,27 @@ The fused **Develop** checkpoint, in order, in one session:
   design-only spike stays throwaway (capture the doc, discard the prototype code) — but an
   **empirical** concept deliverable, a committed frozen prototype (REQ-067) or frozen live
   data the session must gather from the real world, is a different workflow: **iterate
-  until the deliverable is frozen**. Such a phase may legitimately **commit, push, and
-  deploy repeatedly on `dev`** to produce its own inputs (interactive only — batch parks a
-  `concept: true` step); the one-checkpoint frame bounds the *bookkeeping*, not those
-  round-trips. **`steward checkpoint` is the terminal act**, run once the deliverable is
-  frozen — it is sanctioned over an already-clean tree and records the step over an
-  effectively no-op commit. Then write the implementation plan *against* the approved
-  concept. (REQs without the flag skip this.)
+  until it is frozen**, on the general rule below. Then write the implementation plan
+  *against* the approved concept. (REQs without the flag skip this.)
+- **Iterate when the work needs the real world (REQ-089).** Some work cannot be produced or
+  proven inside the session at all: it needs a **round-trip through external infrastructure**
+  — pushing so CI builds an image, deploying to a remote host, gathering live data from a
+  running system. That work legitimately **commits, pushes and deploys repeatedly on `dev`**
+  while you iterate, because a push is the *precondition for the code existing anywhere it
+  can be run*. This is a property of the work, not of a flag: an empirical `concept: true`
+  phase is one instance, deploy-shaped develop work is another, and the next one will not be
+  on any list. The rule is the principle — **the one-checkpoint frame bounds the
+  *bookkeeping*, not the round-trips** — and it is keyed on **attended** (see §4 for who may
+  commit and how). **`steward checkpoint` is the terminal act**, run once when the work is
+  done; it is sanctioned over an already-clean tree and records the step over an effectively
+  no-op commit.
+- **A proof that needs a deploy belongs in *this* session (REQ-089).** If proving the REQ
+  requires the code running on the real target, perform that proof here, attended, and fix
+  what it finds **in place** — iterating as above. Do **not** defer it to the System-Test
+  phase: the System Tester runs in a fresh session that never sees the diff and cannot fix
+  anything (REQ-030), so a deploy proof routed there has **no repair loop** and every red
+  bounces back as rework a whole session later. Keep a synthetic-fixture `regression`
+  alongside to prove the mechanism disconfirmably in the gate.
 - **Plan first.** Turn the REQ into a concrete approach and capture it in the project's
   **plans dir** — `plans_dir` in `.devsteward/config.yaml`, default `docs/plans/` (data
   shapes, interfaces, the files you'll touch, the tests you'll write). The plan artifact is
@@ -110,6 +124,12 @@ The fused **Develop** checkpoint, in order, in one session:
     the one checkpoint commit — do not fake green.
   - *(interactive)* `steward checkpoint` (see Close) re-runs the tests independently and
     refuses to land on red — run them for real first so the close is one clean pass.
+    **`steward gate [REQ-NNN] [PHASE]`** shows you that verdict *without* closing anything
+    (REQ-089): it runs the step's named acceptance tests exactly as the develop gate will and
+    prints each failure, and it is strictly read-only — no commit, no event, no ledger write,
+    no staging. It is the *verify* gate only, so a green `gate` is not a promise that
+    `checkpoint` will land (the land also runs REQ-063's capture check and the artifact
+    gates). Use it to see where you stand mid-development; use `checkpoint` to close.
 
 ## 3. At a fork (a decision you can't resolve from the REQ + repo)
 
@@ -148,9 +168,19 @@ End with the fixed report (below) **after** handling the land per your mode:
   (that verb re-arms a *FAILED* batch step; a red interactive `checkpoint` left no failed step). Do **not** commit
   separately and do **not** hand-edit `state.yaml` — `checkpoint` is the committer (committing
   first would double-commit; editing the ledger by hand is what let it drift out of sync with
-  a committed `done`). The one sanctioned exception: mid-phase commits during an *empirical*
-  `concept: true` phase (§2) — the terminal `checkpoint` still closes the step, no-op commit
-  or not.
+  a committed `done`).
+- **Mid-phase commits — the attended grant (REQ-089).** *(interactive only)* When the work
+  needs a **round-trip through external infrastructure** to be produced or proven — pushing
+  so CI builds an image, a deploy to a remote host, live data from a running system (§2) —
+  you **may commit and push mid-phase**, as often as the iteration needs. The mechanism is
+  **plain `git` commits by the session**; `steward checkpoint` is *never* a mid-phase verb
+  and stays the terminal act that closes the step. This is a **grant keyed on attended**, not
+  an exception on a list: a human is present, owns the consequences, and can repair in place.
+  It is not a licence to skip anything — you still never write `status:`, never edit the
+  `REQUIREMENTS_INDEX.md` row, the engine still owns the flip, and the terminal `checkpoint`
+  still re-runs the acceptance tests through the land-grade gate and refuses to land on red.
+  Outside that trigger there is no reason to commit before the close, and `checkpoint` is the
+  committer. (`steward gate` previews the verdict without committing anything — see §2.)
 - *(batch)* do **not** commit (and never create a branch). Leave the working tree dirty; the
   engine verifies, lands the REQ (flip + index + commit, on `dev`), and advances the ledger.
   Committing here would *double-commit* — the engine commits too.

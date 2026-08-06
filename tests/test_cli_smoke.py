@@ -17,15 +17,18 @@ def test_version_string():
 def test_cli_exposes_documented_commands():
     result = CliRunner().invoke(main, ["--help"])
     assert result.exit_code == 0
-    for cmd in ("new", "advance", "run", "lint", "status", "decision", "activate", "repeat"):
+    for cmd in ("new", "advance", "run", "lint", "status", "decision-list", "activate",
+                "repeat"):
         assert cmd in result.output
 
 
-def test_decision_subcommands():
-    result = CliRunner().invoke(main, ["decision", "--help"])
-    assert result.exit_code == 0
-    assert "list" in result.output
-    assert "answer" in result.output
+def test_decision_commands_are_flat():
+    """REQ-089 Decision 8: the two-word `decision list|answer` group is gone — both verbs are
+    ordinary top-level commands, visible in one `steward --help`."""
+    for cmd in ("decision-list", "decision-answer"):
+        result = CliRunner().invoke(main, [cmd, "--help"])
+        assert result.exit_code == 0, result.output
+    assert CliRunner().invoke(main, ["decision", "--help"]).exit_code != 0
 
 
 class _FakeExecutor:
@@ -192,7 +195,7 @@ def test_status_failed_step_names_repeat(tmp_path, monkeypatch):
     """REQ-056 AC4 — the forward path is named and the decision surface holds only real forks:
     `steward status` annotates a FAILED step with `steward repeat REQ` as its forward verb, and
     after a repair-exhausted / land-refused failure (which parks no decision) the step does not
-    appear in `steward decision list`."""
+    appear in `steward decision-list`."""
     from devsteward.core.ledger import Ledger
     from devsteward.core.model import StepStatus
     from test_transaction_boundary import _init_git, _scaffold
@@ -211,7 +214,7 @@ def test_status_failed_step_names_repeat(tmp_path, monkeypatch):
     assert "REQ-001:develop" in status.output and "failed" in status.output
     assert "steward repeat REQ-001" in status.output  # the forward verb is named
 
-    decisions = CliRunner().invoke(main, ["decision", "list"])
+    decisions = CliRunner().invoke(main, ["decision-list"])
     assert decisions.exit_code == 0, decisions.output
     assert "No parked decisions." in decisions.output  # the failure parked none
 
