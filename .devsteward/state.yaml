@@ -1,7 +1,7 @@
 version: 1
 profile: req
 cursor:
-  step: REQ-089:validate
+  step: REQ-085:validate
 steps:
   REQ-011:design:
     status: done
@@ -279,6 +279,9 @@ steps:
   REQ-089:validate:
     status: done
     updated: '2026-08-06T11:40:55+00:00'
+  REQ-085:validate:
+    status: done
+    updated: '2026-08-06T15:32:38+00:00'
 decisions:
 - id: DEC-001
   step: REQ-031:validate
@@ -372,4 +375,4 @@ decisions:
   req: REQ-058
   raised_at: '2026-06-20T21:10:10+00:00'
   answered_at: '2026-06-20T21:50:00+00:00'
-seq: 57
+seq: 59

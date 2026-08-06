@@ -1,0 +1,40 @@
+commit 1ffdf4662b9744a903fbaced8342b45264f4e4ad
+Author: Peter Froehlich <git@pfroehlich.de>
+Date:   Sun Aug 2 03:55:44 2026 +0200
+
+    Onboard under DevSteward: seed the ledger, stamp the scaffold, reconcile CLAUDE.md
+    
+    Completes the migration under the steward engine (devsteward REQ-085).
+    
+    - .devsteward/ ledger seeded: all 28 REQs are terminal (DONE or SUPERSEDED),
+      so every phase step is marked done and the work queue is empty. The next act
+      is an /intake.
+    - steward sync stamped the engine-owned artifacts: the four consumer skills
+      (advance, bootstrap, intake, system-test), the STEWARD.md manual, and
+      doc/requirements/_templates/req.md — the file /intake writes new REQs from.
+      The operator-only `onboard` skill is deliberately not stamped.
+      .claude/settings.json and settings.local.json were left untouched.
+    - CLAUDE.md: house conventions folded in (same-commit discipline, one source of
+      status, the ledger contract, trunk-based on dev, English-in-code) and the
+      hand-maintained Phase 5 REQ status table replaced by a pointer to the index ↔
+      frontmatter pair. That table had drifted to 10 rows against a 28-REQ corpus,
+      which is exactly the failure a second status source produces. All ESP-IDF
+      build/flash/monitor procedures, hardware-variant notes, architecture and key
+      technical decisions are unchanged.
+    
+    Nothing in doc/ was clobbered: the design documents, PRDs and doc/plans/ are as
+    they were, and the legacy REQ-xxx.md prose template is kept as reference.
+    
+    Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+
+ .claude/skills/advance/SKILL.md     | 169 +++++++++++++++++++++++++
+ .claude/skills/bootstrap/SKILL.md   |  62 ++++++++++
+ .claude/skills/intake/SKILL.md      | 238 ++++++++++++++++++++++++++++++++++++
+ .claude/skills/system-test/SKILL.md | 101 +++++++++++++++
+ .devsteward/events.jsonl            |  29 +++++
+ .devsteward/stamped.lock            |   8 ++
+ .devsteward/state.yaml              |  91 ++++++++++++++
+ CLAUDE.md                           |  80 +++++++-----
+ STEWARD.md                          | 238 ++++++++++++++++++++++++++++++++++++
+ doc/requirements/_templates/req.md  |  47 +++++++
+ 10 files changed, 1033 insertions(+), 30 deletions(-)

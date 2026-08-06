@@ -1,0 +1,17 @@
+# THermo — onboarded under DevSteward 2026-08-02 (devsteward REQ-085).
+profile: req
+
+# Doc paths (REQ-084): THermo's tree is the singular `doc/`, hand-maintained (not generated),
+# and it predates the engine. The engine's conventional `docs/` default would have created a
+# second, competing tree — these seams point it at the one that already exists.
+requirements_dir: doc/requirements
+index_file: doc/requirements/REQUIREMENTS_INDEX.md
+plans_dir: doc/plans
+concepts_dir: doc/concepts
+
+git:
+  production_branch: main
+  integration_branch: dev
+
+claude:
+  permission_mode: dangerously-skip
