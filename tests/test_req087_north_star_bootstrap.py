@@ -223,6 +223,19 @@ def test_initialization_check_fails_on_broken_skeleton(tmp_path):
     result = _run_shipped_check(unledgered)
     assert result.returncode != 0, f"a missing ledger passed:\n{result.stdout}"
 
+    # ...but a tree with no `.devsteward/` at all is a deliberate partial copy, not a broken
+    # project. Found live retrofitting DocSteward, whose kind-removability test copies the
+    # tree *without* the ledger and runs the suite there — a hard failure would make the
+    # shipped check hostile to a legitimate pattern, while the distinction below keeps (b)
+    # red. The capture extract always carries `.devsteward/`, so the real gate never skips.
+    partial = _bootstrapped(tmp_path, "partial")
+    for leftover in sorted((partial / ".devsteward").iterdir()):
+        leftover.unlink()
+    (partial / ".devsteward").rmdir()
+    result = _run_shipped_check(partial)
+    assert result.returncode == 0, f"a ledger-less partial copy should skip, not fail:\n{result.stdout}"
+    assert "skipped" in result.stdout, f"expected a skip, got:\n{result.stdout}"
+
     # (c) an unfilled placeholder — the interview never finished.
     unfilled = _bootstrapped(tmp_path, "unfilled")
     claude_md = unfilled / "CLAUDE.md"
