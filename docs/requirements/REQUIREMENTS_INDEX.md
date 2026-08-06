@@ -92,6 +92,6 @@ commit** as its frontmatter and the code.
 | REQ-086 | Onboarding machinery repairs from the memzy run — commit-before-seed ordering, sync seeds _templates/, and the converter reports dropped keys | DONE | [REQ-086](REQ-086.md) | REQ-010, REQ-022, REQ-024, REQ-066 |
 | REQ-087 | The north star lands at bootstrap — REQ-001 ships an extract-passable initialization check and /bootstrap closes it with steward checkpoint | DONE | [REQ-087](REQ-087.md) | REQ-007, REQ-063, REQ-077, REQ-084 |
 | REQ-088 | Kill the suite's random reds — a collision-free evidence-dir mint and a land that always captures its own flip | DONE | [REQ-088](REQ-088.md) | REQ-075, REQ-077, REQ-079, REQ-081 |
-| REQ-089 | The remote-host deployment seam — attended mid-phase push, a read-only land-gate preview, rework that carries prior sign-offs, and a flat discoverable CLI | OPEN | [REQ-089](REQ-089.md) | REQ-030, REQ-033, REQ-055, REQ-063, REQ-071, REQ-075, REQ-081 |
+| REQ-089 | The remote-host deployment seam — attended mid-phase push, a read-only land-gate preview, rework that carries prior sign-offs, and a flat discoverable CLI | DONE | [REQ-089](REQ-089.md) | REQ-030, REQ-033, REQ-055, REQ-063, REQ-071, REQ-075, REQ-081 |
 
 New requirement template: [`_templates/req.md`](../../devsteward/templates/docs/requirements/_templates/req.md)
