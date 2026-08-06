@@ -1,0 +1,13 @@
+=== steward lint (memzy root) ===
+lint: OK
+
+=== steward status (memzy root) ===
+profile: req
+all active requirements done — activate a waiting draft with `steward activate REQ-NNN`.
+
+stamped artifacts:
+  ⚠ advance        stale  — run `steward sync`
+  ⚠ bootstrap      stale  — run `steward sync`
+  ⚠ intake         stale  — run `steward sync`
+  ⚠ system-test    stale  — run `steward sync`
+  ⚠ STEWARD.md     stale  — run `steward sync`

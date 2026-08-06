@@ -1,0 +1,11 @@
+=== CLAUDE.md domain guidance preserved (GDPR/PII/FSRS) ===
+10:**FSRS** algorithm; the teacher monitors progress.
+13:comes from `py-fsrs`, the official Open Spaced Repetition Python port (BSD-3-Clause), behind
+14:a thin service boundary so the native Rust `fsrs` crate can replace it later.
+29:wrapping py-fsrs behind the D2 boundary (REQ-005), the HTMX student review loop (REQ-006),
+76:| Scheduling | **py-fsrs** (v6), isolated in one `scheduling` service module |
+88:- **Only the `scheduling` module imports py-fsrs.** Everything else schedules through it.
+89:  This is what keeps the eventual swap to the Rust scheduler cheap — do not import the FSRS
+94:## GDPR posture (hard constraint, not a preference)
+100:student PII. Email-based account recovery is explicitly out of scope until a later REQ
+180:classes & students, the vocab pool, assigning words, progress, GDPR. Consult it for
