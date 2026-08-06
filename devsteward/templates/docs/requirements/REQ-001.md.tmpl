@@ -33,8 +33,11 @@ deliberately hard to change — supersede it with a new REQ rather than weakenin
 
 ```yaml acceptance
 - id: AC1
-  text: The project builds and its smoke test passes from a clean checkout.
-  test: "{{TEST_COMMAND}}"
+  text: >-
+    Project initialization is accomplished — the requirements scaffolding is coherent
+    (REQ-001 present, its index row agreeing with its frontmatter), the ledger is
+    initialized, and no unfilled bootstrap placeholder survives.
+  test: "python -m pytest tests/test_project_initialized.py"
   check: regression
   status: pending
 ```
@@ -43,3 +46,16 @@ deliberately hard to change — supersede it with a new REQ rather than weakenin
 
 Fill the `{{…}}` placeholders during `/bootstrap`. Keep this REQ short — it is a compass,
 not a specification.
+
+The acceptance criterion deliberately checks **initialization**, not function: on day one
+there is no behaviour to assert, and the north star only ever claimed the project exists
+and is coherent. `/bootstrap` closes by running `steward checkpoint`, so the engine — not a
+skill — verifies this and lands REQ-001 as `done`. Everything the project actually *does*
+is the subject of REQ-002 onward.
+
+Do not widen this criterion to the full test suite. The engine's capture check re-runs
+every named acceptance test from a bare extract of the committed tree — no virtualenv,
+nothing installed — so a whole-suite criterion here passes in the working tree and then
+fails the gate for reasons that have nothing to do with the north star. The project's real
+build and test commands belong in `.devsteward/config.yaml`, where the develop gate runs
+them as `verify.full_suite` for every REQ.

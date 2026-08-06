@@ -48,6 +48,21 @@ explanation as final text and ask in plain prose, waiting for the reply.
   and implementation alike — lands on `dev`; the engine never branches.
 - Ensure the ledger exists (`steward init` if `.devsteward/state.yaml` is absent).
 - Run `steward lint` — leave it green.
+- **Land REQ-001 with `steward checkpoint`.** This bootstrap session *is* REQ-001's develop
+  session: the north star is declared, the skeleton stands, and the shipped
+  `tests/test_project_initialized.py` is its acceptance criterion. Run `steward checkpoint`
+  as the closing act, after the first commit. The engine verifies that test, capture-checks
+  it, flips REQ-001 + its index row to `done` in one commit, and advances the ledger.
+  - Use **`steward checkpoint`**, never `steward run` — `run` launches Claude, and a Claude
+    session must never spawn Claude. `checkpoint` is the non-spawning verb.
+  - Do **not** hand-write `status: done` and do **not** edit the index row yourself. The
+    engine owns the flip; a status you assert is a status nobody verified.
+  - On red, read what the test reports (an unfilled placeholder, an index row disagreeing
+    with the frontmatter, a missing ledger), fix that, and re-run `steward checkpoint`. A
+    red here means bootstrap genuinely is not finished.
+- Confirm with `steward status` that REQ-001 is `done` and **nothing is eligible** — that
+  empty board is the sign bootstrap succeeded. If REQ-001 still shows as an eligible
+  develop step, the checkpoint did not land.
 - Tell the user the next move: `/intake "<first real idea>"`, then `steward run`.
 
 This skill should not be needed again; day-to-day work is `/intake` + `/advance`.
