@@ -31,6 +31,7 @@ from __future__ import annotations
 import shutil
 import subprocess
 import tempfile
+from collections.abc import Iterable
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
@@ -102,7 +103,8 @@ class Executor:
         integration_branch: str = "dev",
         implementation_phases: tuple[str, ...] = ("develop", "validate"),
         git: GitTopology | None = None,
-        on_verified: Callable[[Step], None] | None = None,
+        # REQ-088: returns the paths it wrote, so the land can stage them content-blind.
+        on_verified: Callable[[Step], set[Path] | None] | None = None,
         land_gate: Callable[[Step], str | None] | None = None,
         step_claude: dict[str, tuple[str | None, str | None]] | None = None,
         repair_budget: int = 0,
@@ -736,9 +738,12 @@ class Executor:
         # REQ-077: the flip (frontmatter + index) is written before the commit so it rides the
         # one code commit (same-commit discipline); the whole-tree stage (REQ-079) picks it up
         # like any other write of this step.
+        # REQ-088 Cause B: keep the paths the flip just wrote and stage them content-blind —
+        # a size-preserving rewrite inside the second git cached is invisible to ``git add -A``.
+        written: set[Path] = set()
         if certify and self.on_verified is not None:
-            self.on_verified(step)
-        sha = self._commit(step)
+            written = self.on_verified(step) or set()
+        sha = self._commit(step, force_paths=written)
         self._assert_committed_clean(step)
         led.set_cursor(step.id)
         led.set_status(step.id, StepStatus.DONE)
@@ -935,7 +940,9 @@ class Executor:
             context="\n".join(context_lines),
         )
 
-    def _commit(self, step: Step) -> str | None:
+    def _commit(
+        self, step: Step, *, force_paths: Iterable[Path | str] = ()
+    ) -> str | None:
         if self.committer is not None:
             return self.committer(step)
         if not self.autocommit:
@@ -947,7 +954,9 @@ class Executor:
         # here is *not* swallowed — it propagates to the transaction boundary, which rolls
         # the half-commit back and surfaces a RecoverableError (no silent None half-state).
         # REQ-079: the commit stages the whole dirty tree — nothing is scoped away.
-        return self.git.commit_code(message)
+        # REQ-088: plus a content-blind re-stage of the paths the caller just wrote, which
+        # git's stat cache can otherwise miss (see ``GitCli._stage_code``).
+        return self.git.commit_code(message, force_paths=force_paths)
 
     def _assert_committed_clean(self, step: Step) -> None:
         """After the code commit, fail loudly if anything did not fully land (REQ-077,

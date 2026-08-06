@@ -128,6 +128,7 @@ class FakeGitTopology:
         self.current = current
         self.commits: list[tuple[str, str]] = []
         self.resets: list[str] = []
+        self.forced_paths: set[str] = set()
 
     def current_branch(self) -> str:
         return self.current
@@ -140,7 +141,10 @@ class FakeGitTopology:
         # clean-tree assertion (REQ-077) is trivially satisfied under the fake.
         return set()
 
-    def commit_code(self, message: str) -> str | None:
+    def commit_code(self, message: str, *, force_paths=()) -> str | None:
+        # ``force_paths`` (REQ-088) is a real-git staging concern — there is no stat cache to
+        # defeat here. Recorded so a test can assert what the executor handed over.
+        self.forced_paths = {str(p) for p in force_paths}
         self.commits.append((self.current, message))
         return f"sha{len(self.commits):04d}"
 

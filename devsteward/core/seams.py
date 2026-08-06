@@ -16,6 +16,8 @@ so profiles and tests can supply plain stand-ins without inheritance.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
+from pathlib import Path
 from typing import Protocol, runtime_checkable
 
 from .ledger import Ledger
@@ -82,10 +84,15 @@ class GitTopology(Protocol):
         """Code paths (``.devsteward/`` excluded) dirty relative to ``HEAD`` — read by the
         post-land clean-tree assertion (REQ-077 guard)."""
 
-    def commit_code(self, message: str) -> str | None:
+    def commit_code(
+        self, message: str, *, force_paths: Iterable[Path | str] = ()
+    ) -> str | None:
         """Stage the whole dirty tree (never ``.devsteward/``) and commit; ``None`` if
         nothing staged. Deliberately unscoped (REQ-079): one engine session per repo at a
-        time is doctrine, so everything dirty is this step's work."""
+        time is doctrine, so everything dirty is this step's work.
+
+        ``force_paths`` names paths the caller *knows* it just wrote, to be staged
+        content-blind rather than on git's stat cache (REQ-088 Cause B)."""
 
     def write_code_tree(self) -> str | None:
         """Stage the code and serialize it to a tree sha — the capture-gate mirror of

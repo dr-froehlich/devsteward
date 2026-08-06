@@ -14,6 +14,7 @@ fake so the loop runs without a real checkout.
 from __future__ import annotations
 
 import subprocess
+from collections.abc import Iterable
 from pathlib import Path
 
 
@@ -74,7 +75,7 @@ class GitCli:
         ).stdout
         return _parse_status_paths(out)
 
-    def _stage_code(self) -> None:
+    def _stage_code(self, force_paths: Iterable[Path | str] = ()) -> None:
         """Stage the **whole dirty tree** (never ``.devsteward/``) for the commit or
         write-tree — modified tracked files and untracked new files alike (REQ-079).
 
@@ -83,10 +84,42 @@ class GitCli:
         writes (FlowSteward REQ-098/099) and the step's own prior failed attempts on the
         ``steward repeat`` path (FlowSteward REQ-103 — 1 of 10 files committed); REQ-079
         subtracted the heuristic. Concurrency is doctrine, not machinery: one engine
-        session per repo at a time."""
-        self._run("add", "-A", "--", ":(exclude).devsteward", check=True)
+        session per repo at a time.
 
-    def commit_code(self, message: str) -> str | None:
+        ``force_paths`` names paths the caller just wrote and must stage **content-blind**
+        (REQ-088 Cause B). ``git add -A`` decides what changed from the stat cache, comparing
+        only *second*-granular mtime and size (git is built without ``USE_NSEC`` by default).
+        The ``done`` flip is size-preserving on both surfaces — ``status: open`` → ``status:
+        done`` and ``| OPEN |`` → ``| DONE |`` are 4 bytes either way — so when it lands in
+        the same wall-clock second as the stat cached by the capture gate's earlier stage,
+        git sees an identical ``(seconds, size)`` pair and stages **nothing**. Git's
+        racy-clean content-check does not rescue it: that only fires for an entry whose
+        cached mtime is at or after the index file's own timestamp, and the capture-gate
+        extract pushes the index write seconds past the flip. ``--renormalize`` re-reads the
+        content and bypasses the stat shortcut entirely.
+
+        Scoped to the caller's own writes on purpose: a repo-wide ``--renormalize`` would
+        re-run clean filters over every tracked file and could stage unrelated line-ending
+        normalization in a consumer repo. Everything else stays covered by REQ-077's
+        post-land clean-tree assertion, which fails loudly rather than silently."""
+        self._run("add", "-A", "--", ":(exclude).devsteward", check=True)
+        rel = [self._relative(p) for p in force_paths if (self.root / p).exists()]
+        if rel:
+            self._run("add", "--renormalize", "--", *rel, check=True)
+
+    def _relative(self, path: Path | str) -> str:
+        """``path`` as a repo-relative POSIX string (absolute paths come from the seams).
+
+        Callers filter to paths that exist first: ``git add --renormalize`` treats an
+        unmatched pathspec as fatal, and a project with no index file would otherwise turn a
+        benign absence into a hard land failure. An untracked path is fine — the whole-tree
+        ``add -A`` has already staged it and ``--renormalize`` is a no-op over it."""
+        p = Path(path)
+        return (p.relative_to(self.root) if p.is_absolute() else p).as_posix()
+
+    def commit_code(
+        self, message: str, *, force_paths: Iterable[Path | str] = ()
+    ) -> str | None:
         """Stage the whole dirty tree (never ``.devsteward/``) and commit. Returns the new
         sha, or ``None`` when there is nothing to commit.
 
@@ -94,7 +127,7 @@ class GitCli:
         same-commit discipline) never carries the ledger — the cursor advances in its own
         trailing commit (:meth:`commit_ledger`), so the code history stays clean and a commit
         can be checked for green self-sufficiency (REQ-050)."""
-        self._stage_code()
+        self._stage_code(force_paths)
         if not self._run("diff", "--cached", "--name-only").stdout.strip():
             return None
         self._run("commit", "-m", message, check=True)

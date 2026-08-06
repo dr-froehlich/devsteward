@@ -95,7 +95,26 @@ class StartContext:
 
 
 def _now_stamp() -> str:
-    return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    """A timestamp fine enough that two validations can never share one (REQ-088 Cause A).
+
+    Second granularity aliased two validations started inside the same wall-clock second onto
+    one evidence dir, at which point :func:`_carry_forward` copied every carried artifact onto
+    itself (``SameFileError``). Microseconds remove the collision at the source. Paths already
+    recorded in ``events.jsonl`` in the old second-granular form keep resolving — they are read
+    back literally, never re-derived from this format."""
+    return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S_%fZ")
+
+
+def _mint_evidence_dir(root: Path, req_id: str) -> Path:
+    """Create and return a **fresh** evidence dir for ``req_id`` (REQ-088 Cause A).
+
+    ``exist_ok=False`` on purpose: aliasing two validations onto one directory is the defect,
+    and ``exist_ok=True`` is what made it silent. With a microsecond stamp a collision is not
+    reachable in practice, and if one ever were it must fail loudly rather than corrupt the
+    carry-forward."""
+    evidence_dir = root / LEDGER_DIRNAME / EVIDENCE_DIRNAME / req_id / _now_stamp()
+    evidence_dir.mkdir(parents=True, exist_ok=False)
+    return evidence_dir
 
 
 def _today() -> str:
@@ -374,8 +393,7 @@ class ReqValidateRoutine:
             return preflight
         # REQ-048: the System-Tester session and evidence both live in the one tree on ``dev``
         # (``ex.root``); the ledger commit captures the evidence in place.
-        evidence_dir = ex.root / LEDGER_DIRNAME / EVIDENCE_DIRNAME / req.id / _now_stamp()
-        evidence_dir.mkdir(parents=True, exist_ok=True)
+        evidence_dir = _mint_evidence_dir(ex.root, req.id)
         evidence_rel = str(evidence_dir.relative_to(ex.root))
         led.set_cursor(step.id)
         led.set_status(step.id, StepStatus.RUNNING)
@@ -451,7 +469,9 @@ class ReqValidateRoutine:
                 evidence_rel = ev["evidence"]
         if evidence_rel is None:
             # Pre-REQ-081 start events carried no evidence path — fall back to the latest
-            # dated dir (names are UTC stamps, so lexical order is chronological).
+            # dated dir (names are UTC stamps, so lexical order is chronological). Still true
+            # across REQ-088's stamp change: both formats share the `YYYYMMDDTHHMMSS` prefix,
+            # and within one second the new `_<micros>Z` suffix sorts after the bare `Z`.
             base = ex.root / LEDGER_DIRNAME / EVIDENCE_DIRNAME / req_id
             dirs = sorted(d for d in base.iterdir() if d.is_dir()) if base.is_dir() else []
             if dirs:
@@ -635,10 +655,7 @@ class ReqValidateRoutine:
         led: Ledger = ex.ledger
         artifact_acs = [c for c in req.acceptance if c.check == "artifact"]
         manual_acs = [c for c in req.acceptance if c.check == "manual"]
-        evidence_dir = (
-            ex.root / LEDGER_DIRNAME / EVIDENCE_DIRNAME / req.id / _now_stamp()
-        )
-        evidence_dir.mkdir(parents=True, exist_ok=True)
+        evidence_dir = _mint_evidence_dir(ex.root, req.id)
         evidence_rel = str(evidence_dir.relative_to(ex.root))
 
         # REQ-075 AC1: a scoped revalidate re-captures only the red ACs and carries the

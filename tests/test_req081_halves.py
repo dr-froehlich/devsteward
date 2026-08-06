@@ -22,7 +22,6 @@ from __future__ import annotations
 import json
 import os
 import subprocess
-import time
 from pathlib import Path
 
 import pytest
@@ -136,7 +135,8 @@ def test_start_half_reentry_mints_fresh_evidence_dir(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     assert _invoke(tmp_path, ["validate", "start", "REQ-001"]).exit_code == 0
     first = _started_evidence(tmp_path)
-    time.sleep(1.1)  # the dated dir name is second-granular
+    # No sleep: the mint is collision-free (REQ-088), so back-to-back starts mint back-to-back
+    # dirs. This assertion is only a real test of "mints fresh" without the pad.
     res = _invoke(tmp_path, ["validate", "start", "REQ-001"])
     assert res.exit_code == 0, res.output
     second = _started_evidence(tmp_path)
@@ -332,7 +332,8 @@ def test_full_cycle_revalidate_scoped_carry(tmp_path, monkeypatch):
     assert _invoke(tmp_path, ["revalidate", "REQ-001"]).exit_code == 0
     (tmp_path / "fixed.marker").write_text("external cause fixed\n", encoding="utf-8")
 
-    time.sleep(1.1)  # the dated dir name is second-granular; carry needs a distinct dir
+    # No sleep: REQ-088 made the evidence-dir mint collision-free, so the carry gets a
+    # distinct dir however fast the re-run follows.
     res = _invoke(tmp_path, ["validate", "start", "REQ-001"])
     assert res.exit_code == 0, res.output
     assert "scoped re-run (REQ-075): AC4" in res.output

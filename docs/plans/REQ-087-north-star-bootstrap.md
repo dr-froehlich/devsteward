@@ -62,8 +62,10 @@ per the `python -m pytest` rule (REQ-040).
 
 ## Risks
 
-- AC2/AC3 drive `steward checkpoint` over a temp repo — the profile of the known
-  intermittent clean-tree flake. Re-run before diagnosing a lone red.
+- ~~AC2/AC3 drive `steward checkpoint` over a temp repo — the profile of the known
+  intermittent clean-tree flake. Re-run before diagnosing a lone red.~~ **Superseded by
+  REQ-088**: that flake was a real engine defect (git's stat cache missing the size-preserving
+  `open` → `done` flip inside one second) and is fixed. Diagnose a lone red, don't re-run it.
 - The stamped test lands in the package tree at `devsteward/templates/tests/`. DevSteward's
   own `testpaths = ["tests"]` keeps it out of this project's collection; verified, not
   assumed.

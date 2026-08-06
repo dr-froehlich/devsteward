@@ -88,9 +88,32 @@ def test_commit_stages_prior_attempt_work(tmp_path):
     touched = _touched(tmp_path, sha)
     assert {"README.md", "impl.py", "session.py"} <= touched
     assert not any(p.startswith(".devsteward") for p in touched)
-    # The scoping surface is gone: message-only commit, parameterless mirror (REQ-079 AC1).
-    assert list(inspect.signature(GitCli.commit_code).parameters) == ["self", "message"]
+    # The scoping surface is gone (REQ-079 AC1). Stated as the invariant rather than an exact
+    # signature: no parameter may *narrow* what the commit stages. REQ-088 added `force_paths`,
+    # which only ever stages more (a content-blind re-stage of paths the caller just wrote,
+    # defeating git's stat cache) — so it is checked behaviourally below, not banned by name.
+    params = set(inspect.signature(GitCli.commit_code).parameters) - {"self", "message"}
+    assert params <= {"force_paths"}, f"a scoping-shaped parameter came back: {params}"
+    assert not {"baseline", "include", "exclude", "only", "scope"} & params
     assert list(inspect.signature(GitCli.write_code_tree).parameters) == ["self"]
+
+
+def test_force_paths_can_only_widen_the_commit(tmp_path):
+    """AC1 (REQ-079 invariant under REQ-088): naming one path in ``force_paths`` does **not**
+    restrict the commit to it — the whole dirty tree still lands. The additive-only property
+    is what keeps REQ-088's stat-cache fix from reintroducing REQ-076's scoping defect."""
+    _scaffold(tmp_path, test="python -m pytest tests/test_dep.py")
+    (tmp_path / "README.md").write_text("scaffold\n", encoding="utf-8")
+    _init_git(tmp_path)
+
+    git = GitCli(tmp_path)
+    _dirty_prior_attempt(tmp_path)
+    (tmp_path / "session.py").write_text("VALUE = 'attempt-3'\n", encoding="utf-8")
+
+    sha = git.commit_code("REQ-001: whole tree", force_paths=[tmp_path / "README.md"])
+
+    assert sha is not None
+    assert {"README.md", "impl.py", "session.py"} <= _touched(tmp_path, sha)
 
 
 # -- AC2: wire-through — the real headless land path ---------------------------
