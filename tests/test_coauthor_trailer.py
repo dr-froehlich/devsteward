@@ -15,23 +15,21 @@ per-step overrides, so a project can no longer override an invisible default it 
 
 A test pinned to ``executor.py``'s constant would pass while a new commit path, the stamped
 template or the handbook reintroduced the same defect somewhere else, so AC1/AC3 scan the
-tracked tree instead. AC2 asserts the observable the bug report actually measured (a real
+whole source tree instead. AC2 asserts the observable the bug report actually measured (a real
 commit body), and AC4 proves the config value reaches the spawned session.
 """
 
 from __future__ import annotations
 
+import os
 import re
-import subprocess
 from pathlib import Path
 
 import pytest
 
 from devsteward.config import Config
 from devsteward.core.executor import RunOutcome
-from devsteward.core.git import GitCli
 
-from conftest import FakeRunner, ok_result
 from test_commit_integrity import _executor, _git, _init_git, _scaffold
 
 REPO = Path(__file__).resolve().parent.parent
@@ -56,23 +54,36 @@ QUOTES_THE_DEFECT = {
 }
 
 
-def _tracked_files() -> list[str]:
-    """Repo-relative paths of every tracked file.
+#: Machinery directories that are never part of what this repository *says* — tool caches,
+#: virtualenvs (whose site-packages legitimately name models), git's own store, build output.
+PRUNE_DIRS = {
+    ".git", ".venv", "venv", "__pycache__", ".pytest_cache", ".ruff_cache",
+    ".mypy_cache", "node_modules", "build", "dist",
+}
 
-    ``git ls-files`` rather than a walk: it excludes ``.git/`` and build detritus for free,
-    and it is exactly the set "what this repository ships".
+
+def _scannable_files() -> list[str]:
+    """Repo-relative paths of every source file, by walking the tree.
+
+    Deliberately **not** ``git ls-files``: REQ-063's capture check re-runs each acceptance
+    test from a bare extract of the recorded commit, which is not a git repository, so a
+    git-dependent scan reds there while passing in the working tree — an environment-bound
+    green of exactly the shape `/intake` §2b screens for. A walk is self-contained and
+    answers the same question.
     """
-    out = subprocess.run(
-        ["git", "ls-files"], cwd=REPO, check=True, capture_output=True, text=True
-    ).stdout
-    return out.split()
+    found = []
+    for dirpath, dirnames, filenames in os.walk(REPO):
+        dirnames[:] = sorted(d for d in dirnames if d not in PRUNE_DIRS)
+        for name in sorted(filenames):
+            found.append(str((Path(dirpath) / name).relative_to(REPO)))
+    return found
 
 
 def _text_lines(rel: str) -> list[str]:
-    """Lines of a tracked path, or none for anything unreadable as text.
+    """Lines of a scanned path, or none for anything unreadable as text.
 
-    ``git ls-files`` also lists symlinks (``.claude/skills`` is one) and binary assets; their
-    targets are tracked in their own right, so skipping them here loses no coverage.
+    The walk also reaches symlinks (``.claude/skills`` is one) and binary assets; a symlink's
+    target is scanned in its own right, so skipping it here loses no coverage.
     """
     path = REPO / rel
     if not path.is_file() or path.is_symlink():
@@ -97,7 +108,7 @@ def test_no_model_or_email_in_any_coauthor_trailer():
     statements about what was stamped at capture time.
     """
     offenders = []
-    for rel in _tracked_files():
+    for rel in _scannable_files():
         if rel.startswith(".devsteward/evidence/") or rel in QUOTES_THE_DEFECT:
             continue
         for lineno, line in enumerate(_text_lines(rel), 1):
@@ -183,7 +194,7 @@ def test_engine_source_names_no_model():
     handbook's "defaults Opus-high" prose were all separate instances of one mistake.
     """
     offenders = []
-    for rel in _tracked_files():
+    for rel in _scannable_files():
         if not rel.startswith("devsteward/") or rel == CONFIG_TEMPLATE:
             continue
         for lineno, line in enumerate(_text_lines(rel), 1):
