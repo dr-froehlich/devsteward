@@ -14,5 +14,13 @@ accounts:
 
 # Headless runs need a permission mode or every edit stalls (see REQ-014). Default
 # `dangerously-skip` = autonomous edits; this is a trusted repo.
+# REQ-090: every model identifier lives here, visible and editable — never in engine Python.
+# `model` is the global default for all step kinds; `steps.<kind>` overrides one kind (repair
+# is a cheap cold restart, validate follows a procedure — neither needs the top model).
 claude:
   permission_mode: dangerously-skip
+  model: claude-opus-5
+  effort: high
+  steps:
+    repair:   {model: claude-sonnet-5}
+    validate: {model: claude-sonnet-5}
