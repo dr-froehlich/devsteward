@@ -289,15 +289,20 @@ def test_repeat_recovers_dirty_fail_with_signal(tmp_path):
 def test_per_step_model_config(tmp_path):
     """Model/effort resolve per step kind with documented defaults; a project override
     changes only the named kind; the executor passes the resolved values to each session."""
-    # (a) defaults
+    # (a) unconfigured — REQ-090: no built-in model tier, so the model is simply absent and
+    # the engine omits --model. (This used to resolve to a model hardcoded in config.py.)
     cfg = Config(root=tmp_path, claude={})
-    assert cfg.step_claude("develop") == ("claude-opus-4-8", "high")
-    assert cfg.step_claude("repair")[0] == "claude-sonnet-4-6"
+    assert cfg.step_claude("develop") == (None, "high")
+    assert cfg.step_claude("repair")[0] is None
 
-    # (b) override only repair
-    cfg2 = Config(root=tmp_path, claude={"steps": {"repair": {"model": "claude-haiku-4-5"}}})
-    assert cfg2.step_claude("develop") == ("claude-opus-4-8", "high")
-    assert cfg2.step_claude("repair")[0] == "claude-haiku-4-5"
+    # (b) the flat config model reaches every kind; a per-step override changes only its kind
+    cfg2 = Config(
+        root=tmp_path,
+        claude={"model": "test-model-flat", "steps": {"repair": {"model": "test-model-repair"}}},
+    )
+    assert cfg2.step_claude("develop") == ("test-model-flat", "high")
+    assert cfg2.step_claude("validate")[0] == "test-model-flat"
+    assert cfg2.step_claude("repair")[0] == "test-model-repair"
 
     # (c) end-to-end: the configured repair model reaches the spawned repair session
     _project_with_req(tmp_path)

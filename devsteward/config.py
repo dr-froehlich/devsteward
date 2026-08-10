@@ -18,17 +18,12 @@ _yaml = YAML()
 
 CONFIG_FILE = "config.yaml"
 
-# REQ-029 Decision 4 — per-step-kind model/effort defaults. ``model``/``effort`` of None on
-# a kind means "inherit the flat ``claude.model``/``claude.effort``". develop inherits
-# (Opus-high); repair drops to Sonnet so a cold repair session is cheap; validate (the
-# System Tester session, REQ-030 Decision 2) pins Sonnet 5 — the System Tester runs a
-# validation procedure, not novel problem-solving, so it doesn't need Opus. Overridable
-# per project via ``claude.steps.<kind>``.
-STEP_CLAUDE_DEFAULTS = {
-    "develop": {"model": None, "effort": None},
-    "repair": {"model": "claude-sonnet-4-6", "effort": None},
-    "validate": {"model": "claude-sonnet-5", "effort": None},
-}
+# REQ-090: the per-step-kind model/effort policy (REQ-029 Decision 4 — a cold repair restart
+# and the System Tester's procedure-following, REQ-030 Decision 2, don't need the top model)
+# lives in the **stamped config**, not here. No model identifier belongs in a Python module:
+# it would couple DevSteward's releases to Anthropic's, and it made the *global* default
+# invisible while the per-step overrides were configurable — backwards. A project sets both
+# levels in `.devsteward/config.yaml`; unset means claude's own default.
 
 
 class ProjectNotFound(Exception):
@@ -58,7 +53,6 @@ class Config:
     claude: dict = field(
         default_factory=lambda: {
             "permission_mode": "dangerously-skip",
-            "model": "claude-opus-4-8",
             "effort": "high",
         }
     )
@@ -89,22 +83,30 @@ class Config:
         return (self.accounts or {}).get("threshold", 70)
 
     @property
-    def model(self) -> str:
-        return (self.claude or {}).get("model", "claude-opus-4-8")
+    def model(self) -> str | None:
+        """The configured model, or ``None`` when the project sets none (REQ-090).
+
+        ``None`` is not a placeholder for a hidden default — it *is* the behaviour: the
+        engine omits ``--model`` and the spawned session uses claude's own default. The
+        stamped config ships this key filled in and visible, so a project normally answers
+        here rather than inheriting anything.
+        """
+        return (self.claude or {}).get("model") or None
 
     @property
     def effort(self) -> str:
         return (self.claude or {}).get("effort", "high")
 
-    def step_claude(self, kind: str) -> tuple[str, str]:
+    def step_claude(self, kind: str) -> tuple[str | None, str | None]:
         """The ``(model, effort)`` for a session of ``kind`` (REQ-029 Decision 4).
 
-        Precedence: a project's ``claude.steps.<kind>`` override → the built-in
-        :data:`STEP_CLAUDE_DEFAULTS` for the kind → the flat ``claude.model``/``effort``.
-        So ``develop`` resolves to the flat defaults (Opus-high) and ``repair`` to Sonnet
-        unless the project overrides either.
+        Precedence (REQ-090): a project's ``claude.steps.<kind>`` override → the flat
+        ``claude.model``/``claude.effort``. There is no built-in third tier — both levels
+        are config, so what a step spawns with is readable in one file. A kind the config
+        doesn't name inherits the flat values; a model absent from both yields ``None``,
+        and the engine omits ``--model``.
         """
-        merged = dict(STEP_CLAUDE_DEFAULTS.get(kind, {}))
+        merged: dict = {}
         steps = (self.claude or {}).get("steps", {})
         if isinstance(steps, dict) and isinstance(steps.get(kind), dict):
             for key, value in steps[kind].items():

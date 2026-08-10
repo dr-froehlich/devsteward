@@ -60,10 +60,12 @@ class Result:
 # reference runner (`run_batch.py`); a cautious consumer can soften it via config.
 DEFAULT_PERMISSION_MODE = "dangerously-skip"
 
-# Headless runs default to Opus at high effort (REQ-025 D8); a consumer overrides via
-# `claude.model`/`claude.effort` config or the `--model`/`--effort` CLI flags. A falsy value
-# (``None``/``""``) omits the flag, so attended callers and tests keep claude's own default.
-DEFAULT_MODEL = "claude-opus-4-8"
+# REQ-090: there is **no** default model here — a model identifier in engine source couples
+# DevSteward's releases to Anthropic's. The model comes from `claude.model` (and the
+# `claude.steps.<kind>` overrides) in the project's `.devsteward/config.yaml`, where it is
+# visible and consumer-owned, or from the `--model` CLI flag. A falsy value omits the flag,
+# so an unconfigured project simply gets claude's own default. Effort is not a model
+# identifier and does not age, so it keeps a default.
 DEFAULT_EFFORT = "high"
 
 
@@ -204,7 +206,7 @@ def run_claude(
     timeout: float = 5400.0,
     unattended: bool = True,
     permission_mode: str | None = DEFAULT_PERMISSION_MODE,
-    model: str | None = DEFAULT_MODEL,
+    model: str | None = None,
     effort: str | None = DEFAULT_EFFORT,
     on_event: Callable[[dict], None] | None = None,
     on_spawn: Callable[["subprocess.Popen"], None] | None = None,
@@ -221,8 +223,10 @@ def run_claude(
     ``on_event`` is called with each parsed stream-json event as it arrives, so an
     attended caller can render live progress instead of staring at a silent terminal.
 
-    ``model``/``effort`` append ``--model``/``--effort`` flags (defaults Opus / high); a
-    falsy value omits the flag. ``on_spawn`` is called with the live ``Popen`` right after
+    ``model``/``effort`` append ``--model``/``--effort`` flags; a falsy value omits the flag.
+    ``model`` has no default (REQ-090) — it comes from ``claude.model`` in the project config
+    — so an unconfigured caller spawns with claude's own default model. ``on_spawn`` is
+    called with the live ``Popen`` right after
     launch so a driver can register the child with its :class:`~devsteward.core.stop.
     StopController` for two-level graceful stop — ``start_new_session=True`` puts ``claude``
     in its own process group so the engine's SIGINT is not forwarded to the child (REQ-025).

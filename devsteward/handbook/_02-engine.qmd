@@ -62,7 +62,7 @@ false-done path is closed.)
 
 On a **green** develop gate the engine performs the **mechanical land** itself — status
 flip, index `DONE`-sync, the single commit on `dev`, ledger advance — invoking
-**no Claude** (paying Opus to watch pytest run bought nothing; the verifier is the
+**no Claude** (paying a frontier model to watch pytest run bought nothing; the verifier is the
 authority). The same mechanical-land routine is what interactive `steward checkpoint` runs,
 so a REQ lands identically however it was driven. The land also refuses when **no file in the
 plans dir names the REQ id** (plan-first, enforced at the one moment it is cheap and
@@ -83,9 +83,12 @@ there is no separate concept step.
 
 On a **red** gate the engine spawns at most **two** bounded repair sessions — each a *fresh*
 session (no `--resume`) fed the failure brief (failed test ids + verifier detail), on the
-configured repair model (default **Sonnet**, so the cold restart is cheap) — then parks the
-step for a human. Model/effort are configurable **per step kind** (`claude.steps.<kind>`;
-develop defaults Opus-high, repair Sonnet). A REQ that declared `develop: split` or
+configured repair model (the stamped config points it at a cheaper model, so the cold
+restart is cheap) — then parks the step for a human. Model/effort are configurable **per
+step kind** (`claude.steps.<kind>`, falling back to the flat `claude.model`/`claude.effort`).
+Every model identifier lives in `.devsteward/config.yaml` and none in the engine's code
+(REQ-090), so what a step spawns with is readable in one file — and an unset `claude.model`
+means no `--model` flag at all, i.e. claude's own default. A REQ that declared `develop: split` or
 `concept: true` is **batch-ineligible**: `steward run` parks it naming the attended need
 rather than simulating the human's presence.
 

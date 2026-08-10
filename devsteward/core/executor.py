@@ -55,7 +55,12 @@ from .verify import (
 
 PARK_SENTINEL = "[[DEVSTEWARD_PARK]]"
 
-_TRAILER = "Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
+# REQ-090: no model identifier, no address. The engine cannot know what model drives an
+# attended session — a `steward checkpoint` subprocess sees CLAUDECODE/CLAUDE_CODE_SESSION_ID
+# but no model variable — so it names none rather than guessing (which is how one hardcoded
+# model name outlived the model itself by two generations). A session commits under its own trailer,
+# which is accurate by construction because it knows its own model.
+_TRAILER = "Co-Authored-By: Claude"
 
 
 class RunOutcome(str, Enum):

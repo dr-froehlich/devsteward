@@ -38,8 +38,11 @@ engine runs them and only marks a step done when they pass.
   **must** be written at the flat path `docs/concepts/REQ-NNN.md` (not a subdirectory like
   `docs/concepts/REQ-NNN/concept.md`). The develop land gate enforces this; a file at any
   other path is not found and the land refuses.
-- **Co-author trailer** on commits:
-  `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`
+- **Co-author trailer** on commits names the model actually driving the session —
+  `Co-Authored-By: <modelname>` — never a hardcoded model string, and no email address.
+  Engine-made commits (`steward checkpoint`) carry a plain `Co-Authored-By: Claude`,
+  because a `steward` subprocess cannot know which model is driving the session; you can,
+  so you name it.
 
 ## Working the requirements
 

@@ -33,18 +33,26 @@ accounts:
 #   bypassPermissions / acceptEdits / plan / default — claude --permission-mode values.
 #   ask               — no flag (attended/interactive; a headless run can't edit).
 #
-# Per-step-kind model/effort (REQ-029/030). Each REQ is one `develop` Claude session; a
-# red gate spawns up to two `repair` sessions, then parks; a REQ with artifact/manual
-# acceptance criteria adds one `validate` System Tester session. `claude.model`/
-# `claude.effort` are the flat defaults (Opus / high); `claude.steps.<kind>` overrides a
-# kind. Built-in defaults: develop and validate inherit the flat values; repair drops to
-# Sonnet (cheap cold restart).
-#   steps:
-#     develop:  {model: claude-opus-4-8, effort: high}
-#     repair:   {model: claude-sonnet-4-6}
-#     validate: {model: claude-opus-4-8, effort: high}
+# Which model drives each session (REQ-029/030, REQ-090). Every model identifier the engine
+# uses lives HERE and nowhere in its Python — a model id in engine source would tie
+# DevSteward's releases to Anthropic's, and it hid the global default while leaving the
+# per-step overrides configurable. Both levels are visible below; edit them freely, they are
+# yours. Delete `model:` entirely and the engine passes no --model at all, so the session
+# uses whatever your installed `claude` defaults to.
+#
+# Each REQ is one `develop` Claude session; a red gate spawns up to two `repair` sessions,
+# then parks; a REQ with artifact/manual acceptance criteria adds one `validate` System
+# Tester session. `claude.steps.<kind>` overrides the flat default for one kind — the
+# shipped overrides spend less where the top model buys nothing: a `repair` is a cheap cold
+# restart, and the System Tester follows a validation procedure rather than solving novel
+# problems (REQ-030 D2).
 claude:
   permission_mode: dangerously-skip
+  model: claude-opus-5
+  effort: high
+  steps:
+    repair:   {model: claude-sonnet-5}
+    validate: {model: claude-sonnet-5}
 
 # Branching model — trunk-based. `main` is production (release tags are cut here); the
 # integration branch is the default working branch. All work — declaration *and*

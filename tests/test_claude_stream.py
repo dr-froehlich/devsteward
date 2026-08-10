@@ -58,7 +58,11 @@ def test_stream_printer_renders_text_and_tools(capsys):
 
 def test_new_session_and_model_effort(monkeypatch):
     """REQ-025 AC8: run_claude spawns claude in its own session (so a parent SIGINT is not
-    forwarded to the child) and passes --model/--effort defaulting to opus / high."""
+    forwarded to the child) and passes --effort.
+
+    REQ-090: there is no default **model** — it comes from `claude.model` in the project
+    config, so an unconfigured call omits --model entirely and claude uses its own default.
+    Effort is not a model identifier and does not age, so it keeps its default."""
     import json as _json
 
     from devsteward.core import claude as claude_mod
@@ -94,7 +98,7 @@ def test_new_session_and_model_effort(monkeypatch):
     assert res.outcome is Outcome.OK
     assert captured["kwargs"].get("start_new_session") is True
     argv = captured["argv"]
-    assert argv[argv.index("--model") + 1] == "claude-opus-4-8"
+    assert "--model" not in argv, "no model may be hardcoded as run_claude's default"
     assert argv[argv.index("--effort") + 1] == "high"
     assert len(spawned) == 1  # the driver got the live child to register for graceful stop
 

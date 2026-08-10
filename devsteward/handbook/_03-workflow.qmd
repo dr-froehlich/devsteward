@@ -22,8 +22,8 @@ flip, index sync, the single commit on `dev`, ledger advance — with **no
 Claude** (and it refuses unless a file in the plans dir names the REQ; for a `concept: true`
 REQ it also refuses unless a concept deliverable — `<concepts_dir>/REQ-NNN.md` **or** a non-empty
 `<concepts_dir>/REQ-NNN/` bundle directory (REQ-067) — exists and `concept_refs:` names it).
-On a **red** gate it spawns up to **two** fresh repair sessions (failure brief, default
-Sonnet), then parks. A REQ that declared `develop: split` or `concept: true` is parked in
+On a **red** gate it spawns up to **two** fresh repair sessions (failure brief, on the model
+configured for the `repair` kind), then parks. A REQ that declared `develop: split` or `concept: true` is parked in
 batch, naming the attended need, rather than driven headless — and for `concept: true` the
 attended develop session *is* the concept phase. (See @sec-engine for the gate's teeth.)
 
@@ -64,7 +64,7 @@ status flip yet), and the land fires when validation is green — `done` keeps m
 *verified and validated*, and dependents wait on the dep's final step.
 
 The phase decouples the oracle. It runs as a **fresh System Tester session**
-(`/system-test`, model per `claude.steps.validate`, default Opus-high) that never sees
+(`/system-test`, model per `claude.steps.validate`) that never sees
 the builder's diff: it orients from the REQ, brings the lab up, drives the validation
 procedure, and captures artifacts into `.devsteward/evidence/REQ-NNN/<timestamp>/`. Then
 the **engine** runs each `artifact` criterion's named `test:` command itself — the same

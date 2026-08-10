@@ -47,8 +47,11 @@ When you design or change anything here, hold to these:
   working branch. Never commit to `main`; the **only** branch operation is the human-gated
   `dev → main` release PR. Beta tags (`vX.Y.Z-beta.N`, PEP 440 pre-release) may be cut on
   `dev`; stable tags on `main`. If `main` is ever hotfixed directly, merge it back into `dev`.
-- **Co-author trailer** on commits:
-  `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`
+- **Co-author trailer** on commits names the model actually driving the session —
+  `Co-Authored-By: <modelname>` — never a hardcoded model string, and no email address.
+  Engine-made commits (`steward checkpoint`) carry a plain `Co-Authored-By: Claude`,
+  because a `steward` subprocess cannot know which model is driving the session; you can,
+  so you name it.
 - **Sanitized public repo:** no real local paths (`/mnt/c/Users/...`), no emails, no
   account creds in committed files. Templates use placeholders.
 
