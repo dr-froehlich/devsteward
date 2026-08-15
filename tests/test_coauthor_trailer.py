@@ -49,6 +49,7 @@ CONFIG_TEMPLATE = "devsteward/templates/.devsteward/config.yaml.tmpl"
 #: the bug.
 QUOTES_THE_DEFECT = {
     "docs/requirements/REQ-090.md",
+    "docs/requirements/REQ-091.md",
     "docs/plans/REQ-090-model-ids-out-of-code.md",
     "tests/test_coauthor_trailer.py",
 }
