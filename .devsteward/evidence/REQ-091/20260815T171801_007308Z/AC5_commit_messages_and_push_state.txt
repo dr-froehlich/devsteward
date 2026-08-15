@@ -1,0 +1,157 @@
+===== DriveSteward (a69c4ff) =====
+REQ-091: restore the per-step model policy REQ-090's refactor deleted
+
+devsteward REQ-090 moved every model identifier out of engine Python into the
+stamped config, deleting the built-in per-step tier this project had inherited
+without ever naming it. Since 2026-08-10 every develop, repair and validate
+session here has spawned on claude's own default rather than the intended
+opus/sonnet split. This restores the template block; edit it freely, the file is
+yours.
+
+Assisted-by: Claude:claude-opus-5
+
+-- ahead of origin? --
+no upstream tracking configured
+
+===== ai-service (7eca76f) =====
+REQ-091: restore the per-step model policy REQ-090's refactor deleted
+
+devsteward REQ-090 moved every model identifier out of engine Python into the
+stamped config, deleting the built-in per-step tier this project had inherited
+without ever naming it. Since 2026-08-10 every develop, repair and validate
+session here has spawned on claude's own default rather than the intended
+opus/sonnet split. This restores the template block; edit it freely, the file is
+yours.
+
+Assisted-by: Claude:claude-opus-5
+
+-- ahead of origin? --
+no upstream tracking configured
+
+===== clauder (42431dd) =====
+REQ-091: restore the per-step model policy REQ-090's refactor deleted
+
+devsteward REQ-090 moved every model identifier out of engine Python into the
+stamped config, deleting the built-in per-step tier this project had inherited
+without ever naming it. Since 2026-08-10 every develop, repair and validate
+session here has spawned on claude's own default rather than the intended
+opus/sonnet split. This restores the template block; edit it freely, the file is
+yours.
+
+Assisted-by: Claude:claude-opus-5
+
+-- ahead of origin? --
+no upstream tracking configured
+
+===== Wandthermostat (f0ea9ab) =====
+REQ-091: restore the per-step model policy REQ-090's refactor deleted
+
+devsteward REQ-090 moved every model identifier out of engine Python into the
+stamped config, deleting the built-in per-step tier this project had inherited
+without ever naming it. Since 2026-08-10 every develop, repair and validate
+session here has spawned on claude's own default rather than the intended
+opus/sonnet split. This restores the template block; edit it freely, the file is
+yours.
+
+Assisted-by: Claude:claude-opus-5
+
+-- ahead of origin? --
+no upstream tracking configured
+
+===== hausverwaltung (acabc75) =====
+REQ-091: restore the per-step model policy REQ-090's refactor deleted
+
+devsteward REQ-090 moved every model identifier out of engine Python into the
+stamped config, deleting the built-in per-step tier this project had inherited
+without ever naming it. Since 2026-08-10 every develop, repair and validate
+session here has spawned on claude's own default rather than the intended
+opus/sonnet split. This restores the template block; edit it freely, the file is
+yours.
+
+Assisted-by: Claude:claude-opus-5
+
+-- ahead of origin? --
+no upstream tracking configured
+
+===== memzy (52c3a52) =====
+REQ-091: restore the per-step model policy REQ-090's refactor deleted
+
+devsteward REQ-090 moved every model identifier out of engine Python into the
+stamped config, deleting the built-in per-step tier this project had inherited
+without ever naming it. Since 2026-08-10 every develop, repair and validate
+session here has spawned on claude's own default rather than the intended
+opus/sonnet split. This restores the template block; edit it freely, the file is
+yours.
+
+Assisted-by: Claude:claude-opus-5
+
+-- ahead of origin? --
+52c3a52 REQ-091: restore the per-step model policy REQ-090's refactor deleted
+a00444e Onboard memzy under the DevSteward steward engine
+
+===== devsteward-test-lab (e1bc16e) =====
+REQ-091: restore the per-step model policy REQ-090's refactor deleted
+
+devsteward REQ-090 moved every model identifier out of engine Python into the
+stamped config, deleting the built-in per-step tier this project had inherited
+without ever naming it. Since 2026-08-10 every develop, repair and validate
+session here has spawned on claude's own default rather than the intended
+opus/sonnet split. This restores the template block; edit it freely, the file is
+yours.
+
+Assisted-by: Claude:claude-opus-5
+
+-- ahead of origin? --
+no upstream tracking configured
+
+===== docsteward (b28d1ae) =====
+REQ-091: restore the per-step model policy REQ-090's refactor deleted
+
+devsteward REQ-090 moved every model identifier out of engine Python into the
+stamped config, deleting the built-in per-step tier this project had inherited
+without ever naming it. Since 2026-08-10 every develop, repair and validate
+session here has spawned on claude's own default rather than the intended
+opus/sonnet split. This restores the template block; edit it freely, the file is
+yours.
+
+Assisted-by: Claude:claude-opus-5
+
+-- ahead of origin? --
+b28d1ae REQ-091: restore the per-step model policy REQ-090's refactor deleted
+87e31a6 REQ-007: ledger checkpoint
+692f378 REQ-007:validate: Gottesdienst and postage reach the console — the kind–core contract grows a UI facet — validate
+
+===== THermo (d8a0a9f) =====
+REQ-091: restore the per-step model policy REQ-090's refactor deleted
+
+devsteward REQ-090 moved every model identifier out of engine Python into the
+stamped config, deleting the built-in per-step tier this project had inherited
+without ever naming it. Since 2026-08-10 every develop, repair and validate
+session here has spawned on claude's own default rather than the intended
+opus/sonnet split. This restores the template block; edit it freely, the file is
+yours.
+
+Assisted-by: Claude:claude-opus-5
+
+-- ahead of origin? --
+d8a0a9f REQ-091: restore the per-step model policy REQ-090's refactor deleted
+1ffdf46 Onboard under DevSteward: seed the ledger, stamp the scaffold, reconcile CLAUDE.md
+58f4947 Onboard under DevSteward: convert the REQ corpus to the hybrid schema
+
+===== flowsteward (936a1c0) =====
+REQ-091: pin the flat model and give repair its cheap tier back
+
+devsteward REQ-090 moved every model identifier out of engine Python into the
+stamped config, deleting the built-in per-step tier this project had inherited
+without ever naming it. This project's own `steps:` overrides for develop and
+validate are untouched — only the two gaps are filled: the flat default (which
+REQ-091 now requires, since an unattended spawn with no model refuses rather
+than silently taking claude's own default) and a `repair` override, which had
+been riding the deleted built-in Sonnet tier since 2026-08-10.
+
+Assisted-by: Claude:claude-opus-5
+
+-- ahead of origin? --
+728b521 REQ-156: intake — the declaration is edited where it is read
+936a1c0 REQ-091: pin the flat model and give repair its cheap tier back
+

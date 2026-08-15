@@ -1,0 +1,873 @@
+===== DriveSteward =====
+--- git show HEAD:.devsteward/config.yaml ---
+# DevSteward per-project configuration (lives in the consumer repo).
+# The engine is shared and pinned by tag; this file is yours to edit.
+
+profile: req
+
+# Where the engine's documents live, relative to the repo root. All four are yours to
+# place: a project whose `docs/` is owned by a docs generator (mkdocs, Sphinx, Docusaurus
+# — everything under it gets built and deployed) keeps the engine's artifacts out of that
+# tree by pointing these elsewhere, e.g. `requirements/`, `requirements/plans/`.
+#   requirements_dir — the REQ corpus (`steward lint`/`status` read it)
+#   index_file       — REQUIREMENTS_INDEX.md; status source of truth with the frontmatter
+#   plans_dir        — plan artifacts; the land refuses a REQ no file here names (REQ-029)
+#   concepts_dir     — concept deliverables for a REQ with `process.concept` (REQ-039)
+requirements_dir: docs/requirements
+index_file: docs/requirements/REQUIREMENTS_INDEX.md
+plans_dir: docs/plans
+concepts_dir: docs/concepts
+
+# Account / quota provider for headless runs.
+#   clauder — delegate the per-step budget gate to the external `clauder` CLI (REQ-058):
+#             `clauder gate` decides proceed/switch/wait against the combined budget across
+#             accounts and tells cswap when to switch. The engine never touches cswap
+#             directly and never runs `clauder monitor` (operator-started, out-of-band).
+#             Degrades to "proceed, no quota check" when `clauder` is absent from PATH.
+#   single  — plain `claude`, no quota machinery.
+accounts:
+  provider: clauder
+
+# How a headless `claude -p` run is allowed to act on the repo. Headless sessions have
+# no interactive approver, so without this every edit stalls and the run does nothing.
+#   dangerously-skip  — bypass all permission checks (autonomous edits; the default,
+#                       matches the proven batch runner). Use in a trusted repo.
+#   bypassPermissions / acceptEdits / plan / default — claude --permission-mode values.
+#   ask               — no flag (attended/interactive; a headless run can't edit).
+#
+# Per-step-kind model/effort (REQ-029/030). Each REQ is one `develop` Claude session; a
+# red gate spawns up to two `repair` sessions, then parks; a REQ with artifact/manual
+# acceptance criteria adds one `validate` System Tester session. `claude.model`/
+# `claude.effort` are the flat defaults (Opus / high); `claude.steps.<kind>` overrides a
+# kind. Built-in defaults: develop and validate inherit the flat values; repair drops to
+# Sonnet (cheap cold restart).
+#   steps:
+#     develop:  {model: claude-opus-4-8, effort: high}
+#     repair:   {model: claude-sonnet-4-6}
+#     validate: {model: claude-opus-4-8, effort: high}
+claude:
+  permission_mode: dangerously-skip
+  model: claude-opus-5
+  effort: high
+  steps:
+    repair:   {model: claude-sonnet-5}
+    validate: {model: claude-sonnet-5}
+
+# Branching model — trunk-based. `main` is production (release tags are cut here); the
+# integration branch is the default working branch. All work — declaration *and*
+# implementation — lands on the integration branch; there are no feature branches, no
+# worktrees, and the engine never switches branches. The engine refuses to autocommit on
+# `production_branch` — switch to the integration branch to run. The only branch operation
+# is the human-gated integration → production release PR.
+git:
+  production_branch: main
+  integration_branch: dev
+
+# How the land gate verifies (REQ-028). A `land` step is DONE only when its named
+# acceptance behaviour *observably ran and passed*: a skipped or zero-collection named
+# test fails the gate (skip ≠ green), and the whole suite must be clean.
+#   full_suite — the command for the project's full test suite, run at land in addition
+#                to each named acceptance test (default `python -m pytest`; set to `null`
+#                to disable). Skips in the full suite stay legal; failures/errors fail land.
+#   python     — optional explicit interpreter the gate runs tests under (e.g.
+#                `.venv/bin/python`). A configured-but-unusable interpreter is a hard,
+#                surfaced error. Unset: discover the project venv, then the engine's own.
+#   env_file   — the declared env-file the land's commit-integrity self-check carries into
+#                its ephemeral tree extract (REQ-072), so the check runs in the same
+#                declared environment the gate used (default `.env`; set to `null` to
+#                disable). Honor-when-present: an absent file is a no-op. The file is
+#                copied only into the throwaway extract dir — its contents never reach a
+#                message, event, or artifact.
+verify:
+  full_suite: bash -lc 'cargo test && python -m pytest'
+  # No project virtualenv: pytest is installed system-wide, and the engine's own pipx venv
+  # cannot import it. Point the gate at the system interpreter explicitly.
+  python: /usr/bin/python3
+#   env_file: .env
+--- git status --porcelain ---
+--- current branch ---
+dev
+--- last commit touching config.yaml ---
+a69c4ffafa2f0f5ec36d61cb2792bdcc499a8b3d REQ-091: restore the per-step model policy REQ-090's refactor deleted
+
+===== MobileSteward =====
+NOT A GIT REPO (no .git) -- expected skip
+
+===== THermo =====
+--- git show HEAD:.devsteward/config.yaml ---
+# THermo — onboarded under DevSteward 2026-08-02 (devsteward REQ-085).
+profile: req
+
+# Doc paths (REQ-084): THermo's tree is the singular `doc/`, hand-maintained (not generated),
+# and it predates the engine. The engine's conventional `docs/` default would have created a
+# second, competing tree — these seams point it at the one that already exists.
+requirements_dir: doc/requirements
+index_file: doc/requirements/REQUIREMENTS_INDEX.md
+plans_dir: doc/plans
+concepts_dir: doc/concepts
+
+git:
+  production_branch: main
+  integration_branch: dev
+
+claude:
+  permission_mode: dangerously-skip
+  model: claude-opus-5
+  effort: high
+  steps:
+    repair:   {model: claude-sonnet-5}
+    validate: {model: claude-sonnet-5}
+--- git status --porcelain ---
+--- current branch ---
+dev
+--- last commit touching config.yaml ---
+d8a0a9f1970b91c6f19c12277a2de31d19cffbcf REQ-091: restore the per-step model policy REQ-090's refactor deleted
+
+===== Wandthermostat =====
+--- git show HEAD:.devsteward/config.yaml ---
+# DevSteward per-project configuration (lives in the consumer repo).
+# The engine is shared and pinned by tag; this file is yours to edit.
+
+profile: req
+
+# Where the engine's documents live, relative to the repo root. Wandthermostat already
+# owned a hand-written `doc/` tree (singular) with `doc/plans/` in it before onboarding,
+# so the engine's artifacts join that tree rather than opening a second `docs/` one. The
+# two pre-existing plans (refactoring-plan.md, reconnect-staleness-fix.md) are therefore
+# already visible to the plan land-gate.
+#   requirements_dir — the REQ corpus (`steward lint`/`status` read it)
+#   index_file       — REQUIREMENTS_INDEX.md; status source of truth with the frontmatter
+#   plans_dir        — plan artifacts; the land refuses a REQ no file here names (REQ-029)
+#   concepts_dir     — concept deliverables for a REQ with `process.concept` (REQ-039)
+requirements_dir: doc/requirements
+index_file: doc/requirements/REQUIREMENTS_INDEX.md
+plans_dir: doc/plans
+concepts_dir: doc/concepts
+
+# Account / quota provider for headless runs.
+#   clauder — delegate the per-step budget gate to the external `clauder` CLI (REQ-058):
+#             `clauder gate` decides proceed/switch/wait against the combined budget across
+#             accounts and tells cswap when to switch. The engine never touches cswap
+#             directly and never runs `clauder monitor` (operator-started, out-of-band).
+#             Degrades to "proceed, no quota check" when `clauder` is absent from PATH.
+#   single  — plain `claude`, no quota machinery.
+accounts:
+  provider: clauder
+
+# How a headless `claude -p` run is allowed to act on the repo. Headless sessions have
+# no interactive approver, so without this every edit stalls and the run does nothing.
+#   dangerously-skip  — bypass all permission checks (autonomous edits; the default,
+#                       matches the proven batch runner). Use in a trusted repo.
+#   bypassPermissions / acceptEdits / plan / default — claude --permission-mode values.
+#   ask               — no flag (attended/interactive; a headless run can't edit).
+#
+# Per-step-kind model/effort (REQ-029/030). Each REQ is one `develop` Claude session; a
+# red gate spawns up to two `repair` sessions, then parks; a REQ with artifact/manual
+# acceptance criteria adds one `validate` System Tester session. `claude.model`/
+# `claude.effort` are the flat defaults (Opus / high); `claude.steps.<kind>` overrides a
+# kind. Built-in defaults: develop and validate inherit the flat values; repair drops to
+# Sonnet (cheap cold restart).
+claude:
+  permission_mode: dangerously-skip
+  model: claude-opus-5
+  effort: high
+  steps:
+    repair:   {model: claude-sonnet-5}
+    validate: {model: claude-sonnet-5}
+
+# Branching model — trunk-based. `main` is production (release tags are cut here); `dev` is
+# the integration branch and the default working branch, created at onboarding from the
+# SHT40 branch's HEAD. All work — declaration *and* implementation — lands on `dev`; there
+# are no feature branches, no worktrees, and the engine never switches branches. The engine
+# refuses to autocommit on `main`. The only branch operation is the human-gated dev → main
+# release PR.
+git:
+  production_branch: main
+  integration_branch: dev
+
+# How the land gate verifies (REQ-028). A `land` step is DONE only when its named
+# acceptance behaviour *observably ran and passed*: a skipped or zero-collection named
+# test fails the gate (skip ≠ green), and the whole suite must be clean.
+#
+# This is a single-target PlatformIO firmware project with no unit-test framework wired up
+# (`test/` holds only PlatformIO's placeholder README). `pio run` — a full firmware compile
+# — is the standing full-suite oracle: fast, always runnable, and it fails hard on anything
+# that breaks the build. If a Unity test environment is added later, widen this to a
+# command that runs both.
+#   full_suite — the command run at land in addition to each named acceptance test.
+#   python     — optional explicit interpreter for named pytest acceptance tests. Unset:
+#                discover the project venv, then the engine's own.
+#   env_file   — the declared env-file the land's commit-integrity self-check carries into
+#                its ephemeral tree extract (REQ-072; default `.env`, honor-when-present —
+#                this project has none, so it is a no-op).
+verify:
+  full_suite: pio run
+--- git status --porcelain ---
+--- current branch ---
+dev
+--- last commit touching config.yaml ---
+f0ea9ab2ea7044ec7d47de87d3b553be972c51e4 REQ-091: restore the per-step model policy REQ-090's refactor deleted
+
+===== ai-service =====
+--- git show HEAD:.devsteward/config.yaml ---
+# DevSteward per-project configuration (lives in the consumer repo).
+# The engine is shared and pinned by tag; this file is yours to edit.
+
+profile: req
+
+# Where the requirements live, relative to the repo root.
+requirements_dir: docs/requirements
+index_file: docs/requirements/REQUIREMENTS_INDEX.md
+roadmap_file: docs/requirements/ROADMAP.md
+
+# Account / quota provider for headless runs.
+#   clauder — delegate the per-step budget gate to the external `clauder` CLI (REQ-058):
+#             `clauder gate` decides proceed/switch/wait against the combined budget across
+#             accounts and tells cswap when to switch. The engine never touches cswap
+#             directly and never runs `clauder monitor` (operator-started, out-of-band).
+#             Degrades to "proceed, no quota check" when `clauder` is absent from PATH.
+#   single  — plain `claude`, no quota machinery.
+accounts:
+  provider: clauder
+
+# How a headless `claude -p` run is allowed to act on the repo. Headless sessions have
+# no interactive approver, so without this every edit stalls and the run does nothing.
+#   dangerously-skip  — bypass all permission checks (autonomous edits; the default,
+#                       matches the proven batch runner). Use in a trusted repo.
+#   bypassPermissions / acceptEdits / plan / default — claude --permission-mode values.
+#   ask               — no flag (attended/interactive; a headless run can't edit).
+#
+# Per-step-kind model/effort (REQ-029/030). Each REQ is one `develop` Claude session; a
+# red gate spawns up to two `repair` sessions, then parks; a REQ with artifact/manual
+# acceptance criteria adds one `validate` System Tester session. `claude.model`/
+# `claude.effort` are the flat defaults (Opus / high); `claude.steps.<kind>` overrides a
+# kind. Built-in defaults: develop and validate inherit the flat values; repair drops to
+# Sonnet (cheap cold restart).
+#   steps:
+#     develop:  {model: claude-opus-4-8, effort: high}
+#     repair:   {model: claude-sonnet-4-6}
+#     validate: {model: claude-opus-4-8, effort: high}
+claude:
+  permission_mode: dangerously-skip
+  model: claude-opus-5
+  effort: high
+  steps:
+    repair:   {model: claude-sonnet-5}
+    validate: {model: claude-sonnet-5}
+
+# Branching model — trunk-based. `main` is production (release tags are cut here); the
+# integration branch is the default working branch. All work — declaration *and*
+# implementation — lands on the integration branch; there are no feature branches, no
+# worktrees, and the engine never switches branches. The engine refuses to autocommit on
+# `production_branch` — switch to the integration branch to run. The only branch operation
+# is the human-gated integration → production release PR.
+git:
+  production_branch: main
+  integration_branch: dev
+
+# How the land gate verifies (REQ-028). A `land` step is DONE only when its named
+# acceptance behaviour *observably ran and passed*: a skipped or zero-collection named
+# test fails the gate (skip ≠ green), and the whole suite must be clean.
+#   full_suite — the command for the project's full test suite, run at land in addition
+#                to each named acceptance test (default `python -m pytest`; set to `null`
+#                to disable). Skips in the full suite stay legal; failures/errors fail land.
+#   python     — optional explicit interpreter the gate runs tests under (e.g.
+#                `.venv/bin/python`). A configured-but-unusable interpreter is a hard,
+#                surfaced error. Unset: discover the project venv, then the engine's own.
+#   env_file   — the declared env-file the land's commit-integrity self-check carries into
+#                its ephemeral tree extract (REQ-072), so the check runs in the same
+#                declared environment the gate used (default `.env`; set to `null` to
+#                disable). Honor-when-present: an absent file is a no-op. The file is
+#                copied only into the throwaway extract dir — its contents never reach a
+#                message, event, or artifact.
+# verify:
+#   full_suite: python -m pytest
+#   python: .venv/bin/python
+#   env_file: .env
+--- git status --porcelain ---
+--- current branch ---
+dev
+--- last commit touching config.yaml ---
+7eca76fbe0018de1cab45eb858ea6745b11bfd1d REQ-091: restore the per-step model policy REQ-090's refactor deleted
+
+===== clauder =====
+--- git show HEAD:.devsteward/config.yaml ---
+# DevSteward per-project configuration (lives in the consumer repo).
+# The engine is shared and pinned by tag; this file is yours to edit.
+
+profile: req
+
+# Where the requirements live, relative to the repo root.
+requirements_dir: docs/requirements
+index_file: docs/requirements/REQUIREMENTS_INDEX.md
+roadmap_file: docs/requirements/ROADMAP.md
+
+# Account / quota provider for headless runs.
+#   cswap  — route claude through claude-swap (two-account, --use N pinning, adaptive
+#            gate); degrades to single-account when cswap is absent.
+#   single — plain `claude`, no quota machinery.
+accounts:
+  provider: cswap
+
+# How a headless `claude -p` run is allowed to act on the repo. Headless sessions have
+# no interactive approver, so without this every edit stalls and the run does nothing.
+#   dangerously-skip  — bypass all permission checks (autonomous edits; the default,
+#                       matches the proven batch runner). Use in a trusted repo.
+#   bypassPermissions / acceptEdits / plan / default — claude --permission-mode values.
+#   ask               — no flag (attended/interactive; a headless run can't edit).
+#
+# Per-step-kind model/effort (REQ-029/030). Each REQ is one `develop` Claude session; a
+# red gate spawns up to two `repair` sessions, then parks; a REQ with artifact/manual
+# acceptance criteria adds one `validate` System Tester session. `claude.model`/
+# `claude.effort` are the flat defaults (Opus / high); `claude.steps.<kind>` overrides a
+# kind. Built-in defaults: develop and validate inherit the flat values; repair drops to
+# Sonnet (cheap cold restart).
+#   steps:
+#     develop:  {model: claude-opus-4-8, effort: high}
+#     repair:   {model: claude-sonnet-4-6}
+#     validate: {model: claude-opus-4-8, effort: high}
+claude:
+  permission_mode: dangerously-skip
+  model: claude-opus-5
+  effort: high
+  steps:
+    repair:   {model: claude-sonnet-5}
+    validate: {model: claude-sonnet-5}
+
+# Branching model. `main` is production (release tags are cut here); the integration
+# branch is the default working and merge target, with REQ-sized work on feature branches
+# merged into it by a plain local merge. The engine refuses to autocommit on
+# `production_branch` — switch to the integration branch or a feature branch to run.
+# For an implementation step (`build`/`land`) on the integration branch the engine now
+# *manages* the feature branch end-to-end: it creates+switches to `feature_branch` (a
+# template over `{num}` = the REQ id sans `REQ-`, and `{slug}`), then merges it back
+# `--no-ff` after a green land. Declaration (`design`/intake) stays on the integration
+# branch and is never branched.
+git:
+  production_branch: main
+  integration_branch: dev
+  feature_branch: req-{num}-{slug}
+
+# How the land gate verifies (REQ-028). A `land` step is DONE only when its named
+# acceptance behaviour *observably ran and passed*: a skipped or zero-collection named
+# test fails the gate (skip ≠ green), and the whole suite must be clean.
+#   full_suite — the command for the project's full test suite, run at land in addition
+#                to each named acceptance test (default `python -m pytest`; set to `null`
+#                to disable). Skips in the full suite stay legal; failures/errors fail land.
+#   python     — optional explicit interpreter the gate runs tests under (e.g.
+#                `.venv/bin/python`). A configured-but-unusable interpreter is a hard,
+#                surfaced error. Unset: discover the project venv, then the engine's own.
+verify:
+  full_suite: python -m pytest
+  python: .venv/bin/python
+--- git status --porcelain ---
+--- current branch ---
+dev
+--- last commit touching config.yaml ---
+42431ddb191f41a84dd39317180b6a95b33a5171 REQ-091: restore the per-step model policy REQ-090's refactor deleted
+
+===== devsteward-test-lab =====
+--- git show HEAD:.devsteward/config.yaml ---
+# DevSteward per-project configuration (lives in the consumer repo).
+# The engine is shared and pinned by tag; this file is yours to edit.
+
+profile: req
+
+# Where the requirements live, relative to the repo root.
+requirements_dir: docs/requirements
+index_file: docs/requirements/REQUIREMENTS_INDEX.md
+roadmap_file: docs/requirements/ROADMAP.md
+
+# Account / quota provider for headless runs.
+#   clauder — delegate the per-step budget gate to the external `clauder` CLI (REQ-058):
+#             `clauder gate` decides proceed/switch/wait against the combined budget across
+#             accounts and tells cswap when to switch. The engine never touches cswap
+#             directly and never runs `clauder monitor` (operator-started, out-of-band).
+#             Degrades to "proceed, no quota check" when `clauder` is absent from PATH.
+#   single  — plain `claude`, no quota machinery.
+accounts:
+  provider: clauder
+
+# How a headless `claude -p` run is allowed to act on the repo. Headless sessions have
+# no interactive approver, so without this every edit stalls and the run does nothing.
+#   dangerously-skip  — bypass all permission checks (autonomous edits; the default,
+#                       matches the proven batch runner). Use in a trusted repo.
+#   bypassPermissions / acceptEdits / plan / default — claude --permission-mode values.
+#   ask               — no flag (attended/interactive; a headless run can't edit).
+#
+# Per-step-kind model/effort (REQ-029/030). Each REQ is one `develop` Claude session; a
+# red gate spawns up to two `repair` sessions, then parks; a REQ with artifact/manual
+# acceptance criteria adds one `validate` System Tester session. `claude.model`/
+# `claude.effort` are the flat defaults (Opus / high); `claude.steps.<kind>` overrides a
+# kind. Built-in defaults: develop and validate inherit the flat values; repair drops to
+# Sonnet (cheap cold restart).
+#   steps:
+#     develop:  {model: claude-opus-4-8, effort: high}
+#     repair:   {model: claude-sonnet-4-6}
+#     validate: {model: claude-opus-4-8, effort: high}
+claude:
+  permission_mode: dangerously-skip
+  model: claude-opus-5
+  effort: high
+  steps:
+    repair:   {model: claude-sonnet-5}
+    validate: {model: claude-sonnet-5}
+
+# Branching model — trunk-based. `main` is production (release tags are cut here); the
+# integration branch is the default working branch. All work — declaration *and*
+# implementation — lands on the integration branch; there are no feature branches, no
+# worktrees, and the engine never switches branches. The engine refuses to autocommit on
+# `production_branch` — switch to the integration branch to run. The only branch operation
+# is the human-gated integration → production release PR.
+git:
+  production_branch: main
+  integration_branch: dev
+
+# How the land gate verifies (REQ-028). A `land` step is DONE only when its named
+# acceptance behaviour *observably ran and passed*: a skipped or zero-collection named
+# test fails the gate (skip ≠ green), and the whole suite must be clean.
+#   full_suite — the command for the project's full test suite, run at land in addition
+#                to each named acceptance test (default `python -m pytest`; set to `null`
+#                to disable). Skips in the full suite stay legal; failures/errors fail land.
+#   python     — optional explicit interpreter the gate runs tests under (e.g.
+#                `.venv/bin/python`). A configured-but-unusable interpreter is a hard,
+#                surfaced error. Unset: discover the project venv, then the engine's own.
+# verify:
+#   full_suite: python -m pytest
+#   python: .venv/bin/python
+--- git status --porcelain ---
+--- current branch ---
+dev
+--- last commit touching config.yaml ---
+e1bc16e886af93baff2780b3d520b85f8254bc32 REQ-091: restore the per-step model policy REQ-090's refactor deleted
+
+===== docsteward =====
+--- git show HEAD:.devsteward/config.yaml ---
+# DevSteward per-project configuration (lives in the consumer repo).
+# The engine is shared and pinned by tag; this file is yours to edit.
+
+profile: req
+
+# Where the engine's documents live, relative to the repo root. All four are yours to
+# place: a project whose `docs/` is owned by a docs generator (mkdocs, Sphinx, Docusaurus
+# — everything under it gets built and deployed) keeps the engine's artifacts out of that
+# tree by pointing these elsewhere, e.g. `requirements/`, `requirements/plans/`.
+#   requirements_dir — the REQ corpus (`steward lint`/`status` read it)
+#   index_file       — REQUIREMENTS_INDEX.md; status source of truth with the frontmatter
+#   plans_dir        — plan artifacts; the land refuses a REQ no file here names (REQ-029)
+#   concepts_dir     — concept deliverables for a REQ with `process.concept` (REQ-039)
+requirements_dir: docs/requirements
+index_file: docs/requirements/REQUIREMENTS_INDEX.md
+plans_dir: docs/plans
+concepts_dir: docs/concepts
+
+# Account / quota provider for headless runs.
+#   clauder — delegate the per-step budget gate to the external `clauder` CLI (REQ-058):
+#             `clauder gate` decides proceed/switch/wait against the combined budget across
+#             accounts and tells cswap when to switch. The engine never touches cswap
+#             directly and never runs `clauder monitor` (operator-started, out-of-band).
+#             Degrades to "proceed, no quota check" when `clauder` is absent from PATH.
+#   single  — plain `claude`, no quota machinery.
+accounts:
+  provider: clauder
+
+# How a headless `claude -p` run is allowed to act on the repo. Headless sessions have
+# no interactive approver, so without this every edit stalls and the run does nothing.
+#   dangerously-skip  — bypass all permission checks (autonomous edits; the default,
+#                       matches the proven batch runner). Use in a trusted repo.
+#   bypassPermissions / acceptEdits / plan / default — claude --permission-mode values.
+#   ask               — no flag (attended/interactive; a headless run can't edit).
+#
+# Per-step-kind model/effort (REQ-029/030). Each REQ is one `develop` Claude session; a
+# red gate spawns up to two `repair` sessions, then parks; a REQ with artifact/manual
+# acceptance criteria adds one `validate` System Tester session. `claude.model`/
+# `claude.effort` are the flat defaults (Opus / high); `claude.steps.<kind>` overrides a
+# kind. Built-in defaults: develop and validate inherit the flat values; repair drops to
+# Sonnet (cheap cold restart).
+#   steps:
+#     develop:  {model: claude-opus-4-8, effort: high}
+#     repair:   {model: claude-sonnet-4-6}
+#     validate: {model: claude-opus-4-8, effort: high}
+claude:
+  permission_mode: dangerously-skip
+  model: claude-opus-5
+  effort: high
+  steps:
+    repair:   {model: claude-sonnet-5}
+    validate: {model: claude-sonnet-5}
+
+# Branching model — trunk-based. `main` is production (release tags are cut here); the
+# integration branch is the default working branch. All work — declaration *and*
+# implementation — lands on the integration branch; there are no feature branches, no
+# worktrees, and the engine never switches branches. The engine refuses to autocommit on
+# `production_branch` — switch to the integration branch to run. The only branch operation
+# is the human-gated integration → production release PR.
+git:
+  production_branch: main
+  integration_branch: dev
+
+# How the land gate verifies (REQ-028). A `land` step is DONE only when its named
+# acceptance behaviour *observably ran and passed*: a skipped or zero-collection named
+# test fails the gate (skip ≠ green), and the whole suite must be clean.
+#   full_suite — the command for the project's full test suite, run at land in addition
+#                to each named acceptance test (default `python -m pytest`; set to `null`
+#                to disable). Skips in the full suite stay legal; failures/errors fail land.
+#   python     — optional explicit interpreter the gate runs tests under (e.g.
+#                `.venv/bin/python`). A configured-but-unusable interpreter is a hard,
+#                surfaced error. Unset: discover the project venv, then the engine's own.
+#   env_file   — the declared env-file the land's commit-integrity self-check carries into
+#                its ephemeral tree extract (REQ-072), so the check runs in the same
+#                declared environment the gate used (default `.env`; set to `null` to
+#                disable). Honor-when-present: an absent file is a no-op. The file is
+#                copied only into the throwaway extract dir — its contents never reach a
+#                message, event, or artifact.
+# verify:
+#   full_suite: python -m pytest
+#   python: .venv/bin/python
+#   env_file: .env
+--- git status --porcelain ---
+--- current branch ---
+dev
+--- last commit touching config.yaml ---
+b28d1aeca78e173adee2dc17a164d7b6d46e72ba REQ-091: restore the per-step model policy REQ-090's refactor deleted
+
+===== flowsteward =====
+--- git show HEAD:.devsteward/config.yaml ---
+# DevSteward per-project configuration (lives in the consumer repo).
+# The engine is shared and pinned by tag; this file is yours to edit.
+
+profile: req
+
+# Where the requirements live, relative to the repo root.
+requirements_dir: docs/requirements
+index_file: docs/requirements/REQUIREMENTS_INDEX.md
+
+# Account / quota provider for headless runs.
+#   cswap  — route claude through claude-swap (two-account, --use N pinning, adaptive
+#            gate); degrades to single-account when cswap is absent.
+#   single — plain `claude`, no quota machinery.
+accounts:
+  provider: cswap
+
+# How a headless `claude -p` run is allowed to act on the repo. Headless sessions have
+# no interactive approver, so without this every edit stalls and the run does nothing.
+#   dangerously-skip  — bypass all permission checks (autonomous edits; the default,
+#                       matches the proven batch runner). Use in a trusted repo.
+#   bypassPermissions / acceptEdits / plan / default — claude --permission-mode values.
+#   ask               — no flag (attended/interactive; a headless run can't edit).
+claude:
+  permission_mode: dangerously-skip
+
+  # ── Model & effort: which Claude runs a headless step, and how hard it thinks ──
+  #
+  # Two layers:
+  #   1. A FLAT default directly under `claude:` — applies to every headless step
+  #      unless a per-step override says otherwise. Unset = the claude CLI's own
+  #      default (whatever `claude` resolves to on the box).
+  #   2. Per-step-kind overrides under `claude.steps.<kind>:` — <kind> is the step
+  #      the engine is driving: `develop` (the design+build session) or `validate`
+  #      (the fresh-context System-Test session). An override wins over the flat
+  #      default for that kind only.
+  #
+  # Keys (same at either layer):
+  #   model:  passed through to `claude --model`. Aliases the CLI resolves
+  #           (`fable`, `opus`, `sonnet`, `haiku`) or full ids
+  #           (`claude-fable-5`, `claude-opus-4-8`, ...).
+  #   effort: reasoning effort — `low` | `medium` | `high`. More effort = more
+  #           thinking tokens = better on cross-cutting/invariant-heavy work,
+  #           more budget burned on routine work.
+  #
+  # House heuristic (2026-07-12): pattern-following REQs with golden-pinned ACs
+  # (e.g. REQ-106/109, the planner lineage) → opus + high is enough; architecturally
+  # dense REQs touching many subsystems/invariants (e.g. REQ-107) → fable + medium
+  # earns its cost. Set the override BEFORE `steward run`/`advance`, revert after —
+  # this file is committed, so a per-REQ choice left behind silently becomes the
+  # default for the next REQ.
+  #
+  # Flat default — pinned (REQ-091). It must stay set: a kind with no override below
+  # resolves to this, and since devsteward REQ-091 an unattended spawn with no model at
+  # all refuses rather than silently taking claude's own default.
+  model: claude-opus-5
+  effort: high
+  steps:
+    # repair — a cold restart of a red gate, deliberately the cheap tier (devsteward
+    # REQ-029 D4). It had no override, so REQ-090's refactor left it on the flat default.
+    repair:
+      model: claude-sonnet-5
+
+    # develop — the headless build session. Uncomment to override per-REQ, e.g. for
+    # an invariant-heavy REQ:
+    develop:
+       model: opus
+       effort: medium
+
+    # validate — the System-Test session starts fresh-context, so high effort buys
+    # little there; medium cuts budget.
+    validate:
+      model: sonnet
+      effort: medium
+
+# Branching model. `main` is production (release tags are cut here); the integration
+# branch is the default working and merge target, with REQ-sized work on feature branches
+# merged into it by a plain local merge. The engine refuses to autocommit on
+# `production_branch` — switch to the integration branch or a feature branch to run.
+# For an implementation step (`build`/`land`) on the integration branch the engine now
+# *manages* the feature branch end-to-end: it creates+switches to `feature_branch` (a
+# template over `{num}` = the REQ id sans `REQ-`, and `{slug}`), then merges it back
+# `--no-ff` after a green land. Declaration (`design`/intake) stays on the integration
+# branch and is never branched.
+git:
+  production_branch: main
+  integration_branch: dev
+  feature_branch: req-{num}-{slug}
+
+# How the land gate runs the full project suite (REQ-028 AC3). One flavor (REQ-068 Decision 4):
+# the plain `python -m pytest`. The engine — not a hand-edited `-m` marker — owns lane
+# membership: it routes by each AC's `check:` (regression | live | artifact | manual), deselects
+# one-time artifact/manual node-ids by id, and runs the `live` mail-lab choreographies as a
+# standing regression lane. A `check: live` AC that skips because its declared resource (the
+# mail lab) is absent is a hard red at develop (REQ-068), not a silently tolerated gap.
+verify:
+  full_suite: python -m pytest
+--- git status --porcelain ---
+ M docs/requirements/REQ-156.md
+ M docs/requirements/REQUIREMENTS_INDEX.md
+--- current branch ---
+dev
+--- last commit touching config.yaml ---
+936a1c09978d0d49066b6d274e27db4badb83a4a REQ-091: pin the flat model and give repair its cheap tier back
+
+===== hausverwaltung =====
+--- git show HEAD:.devsteward/config.yaml ---
+# DevSteward per-project configuration (lives in the consumer repo).
+# The engine is shared and pinned by tag; this file is yours to edit.
+
+profile: req
+
+# Where the requirements live, relative to the repo root.
+requirements_dir: docs/requirements
+index_file: docs/requirements/REQUIREMENTS_INDEX.md
+roadmap_file: docs/requirements/ROADMAP.md
+
+# Account / quota provider for headless runs.
+#   clauder — delegate the per-step budget gate to the external `clauder` CLI (REQ-058):
+#             `clauder gate` decides proceed/switch/wait against the combined budget across
+#             accounts and tells cswap when to switch. The engine never touches cswap
+#             directly and never runs `clauder monitor` (operator-started, out-of-band).
+#             Degrades to "proceed, no quota check" when `clauder` is absent from PATH.
+#   single  — plain `claude`, no quota machinery.
+accounts:
+  provider: clauder
+
+# How a headless `claude -p` run is allowed to act on the repo. Headless sessions have
+# no interactive approver, so without this every edit stalls and the run does nothing.
+#   dangerously-skip  — bypass all permission checks (autonomous edits; the default,
+#                       matches the proven batch runner). Use in a trusted repo.
+#   bypassPermissions / acceptEdits / plan / default — claude --permission-mode values.
+#   ask               — no flag (attended/interactive; a headless run can't edit).
+#
+# Per-step-kind model/effort (REQ-029/030). Each REQ is one `develop` Claude session; a
+# red gate spawns up to two `repair` sessions, then parks; a REQ with artifact/manual
+# acceptance criteria adds one `validate` System Tester session. `claude.model`/
+# `claude.effort` are the flat defaults (Opus / high); `claude.steps.<kind>` overrides a
+# kind. Built-in defaults: develop and validate inherit the flat values; repair drops to
+# Sonnet (cheap cold restart).
+#   steps:
+#     develop:  {model: claude-opus-4-8, effort: high}
+#     repair:   {model: claude-sonnet-4-6}
+#     validate: {model: claude-opus-4-8, effort: high}
+claude:
+  permission_mode: dangerously-skip
+  model: claude-opus-5
+  effort: high
+  steps:
+    repair:   {model: claude-sonnet-5}
+    validate: {model: claude-sonnet-5}
+
+# Branching model — trunk-based. `main` is production (release tags are cut here); the
+# integration branch is the default working branch. All work — declaration *and*
+# implementation — lands on the integration branch; there are no feature branches, no
+# worktrees, and the engine never switches branches. The engine refuses to autocommit on
+# `production_branch` — switch to the integration branch to run. The only branch operation
+# is the human-gated integration → production release PR.
+git:
+  production_branch: main
+  integration_branch: dev
+
+# How the land gate verifies (REQ-028). A `land` step is DONE only when its named
+# acceptance behaviour *observably ran and passed*: a skipped or zero-collection named
+# test fails the gate (skip ≠ green), and the whole suite must be clean.
+#   full_suite — the command for the project's full test suite, run at land in addition
+#                to each named acceptance test (default `python -m pytest`; set to `null`
+#                to disable). Skips in the full suite stay legal; failures/errors fail land.
+#   python     — optional explicit interpreter the gate runs tests under (e.g.
+#                `.venv/bin/python`). A configured-but-unusable interpreter is a hard,
+#                surfaced error. Unset: discover the project venv, then the engine's own.
+#   env_file   — the declared env-file the land's commit-integrity self-check carries into
+#                its ephemeral tree extract (REQ-072), so the check runs in the same
+#                declared environment the gate used (default `.env`; set to `null` to
+#                disable). Honor-when-present: an absent file is a no-op. The file is
+#                copied only into the throwaway extract dir — its contents never reach a
+#                message, event, or artifact.
+# verify:
+#   full_suite: python -m pytest
+#   python: .venv/bin/python
+#   env_file: .env
+--- git status --porcelain ---
+--- current branch ---
+dev
+--- last commit touching config.yaml ---
+acabc756e2ff210506edc5038ee17fdaddff5e56 REQ-091: restore the per-step model policy REQ-090's refactor deleted
+
+===== memzy =====
+--- git show HEAD:.devsteward/config.yaml ---
+# DevSteward per-project configuration (lives in the consumer repo).
+# The engine is shared and pinned by tag; this file is yours to edit.
+#
+# Written during the memzy onboarding (DevSteward REQ-062, the first live retrofit).
+
+profile: req
+
+# Where the engine's documents live, relative to the repo root (REQ-084). memzy's `docs/`
+# is a plain in-repo tree (no mkdocs/Sphinx/Docusaurus build), and memzy already keeps its
+# corpus in `docs/requirements/` and its plans in `docs/plans/` — so the conventional
+# layout *is* memzy's own layout and these keep the artifacts exactly where they are.
+requirements_dir: docs/requirements
+index_file: docs/requirements/REQUIREMENTS_INDEX.md
+plans_dir: docs/plans
+concepts_dir: docs/concepts
+
+# Account / quota provider for headless runs. `clauder` delegates the per-step budget gate
+# to the external `clauder` CLI (REQ-058); degrades to "proceed, no quota check" when
+# `clauder` is absent from PATH.
+accounts:
+  provider: clauder
+
+# How a headless `claude -p` run is allowed to act on the repo. Headless sessions have no
+# interactive approver, so without this every edit stalls and the run does nothing.
+claude:
+  permission_mode: dangerously-skip
+  model: claude-opus-5
+  effort: high
+  steps:
+    repair:   {model: claude-sonnet-5}
+    validate: {model: claude-sonnet-5}
+
+# Branching model — trunk-based. memzy's real branch names: `main` is production, `dev` is
+# the integration branch and default working branch.
+git:
+  production_branch: main
+  integration_branch: dev
+
+# How the land gate verifies (REQ-028). memzy is a Django project: its suite needs
+# DJANGO_SETTINGS_MODULE (set in pytest.ini) and runs under the project venv, and its
+# runtime settings are read from `.env` (carried into the land's commit-integrity extract,
+# REQ-072).
+verify:
+  full_suite: python -m pytest
+  python: .venv/bin/python
+  env_file: .env
+--- git status --porcelain ---
+--- current branch ---
+dev
+--- last commit touching config.yaml ---
+52c3a528442bc1053a6455567346ded53d66159f REQ-091: restore the per-step model policy REQ-090's refactor deleted
+
+===== recipes =====
+--- git show HEAD:.devsteward/config.yaml ---
+# DevSteward per-project configuration (lives in the consumer repo).
+# The engine is shared and pinned by tag; this file is yours to edit.
+
+profile: req
+
+# Where the engine's documents live, relative to the repo root. All four are top-level,
+# deliberately OUTSIDE mkdocs' docs_dir (`docs/`) so they are not built and gh-deploy'd by
+# .github/workflows/docs.yml. plans_dir/concepts_dir became configurable in REQ-084 — before
+# that the engine hardcoded docs/plans and docs/concepts, which is why this repo used to keep
+# its plans inside docs/ behind an `exclude_docs` rule in mkdocs.yml.
+requirements_dir: requirements
+index_file: requirements/REQUIREMENTS_INDEX.md
+plans_dir: requirements/plans
+concepts_dir: requirements/concepts
+
+# Account / quota provider for headless runs.
+#   clauder — delegate the per-step budget gate to the external `clauder` CLI (REQ-058):
+#             `clauder gate` decides proceed/switch/wait against the combined budget across
+#             accounts and tells cswap when to switch. The engine never touches cswap
+#             directly and never runs `clauder monitor` (operator-started, out-of-band).
+#             Degrades to "proceed, no quota check" when `clauder` is absent from PATH.
+#   single  — plain `claude`, no quota machinery.
+accounts:
+  provider: clauder
+
+# How a headless `claude -p` run is allowed to act on the repo. Headless sessions have
+# no interactive approver, so without this every edit stalls and the run does nothing.
+#   dangerously-skip  — bypass all permission checks (autonomous edits; the default,
+#                       matches the proven batch runner). Use in a trusted repo.
+#   bypassPermissions / acceptEdits / plan / default — claude --permission-mode values.
+#   ask               — no flag (attended/interactive; a headless run can't edit).
+#
+# Per-step-kind model/effort (REQ-029/030). Each REQ is one `develop` Claude session; a
+# red gate spawns up to two `repair` sessions, then parks; a REQ with artifact/manual
+# acceptance criteria adds one `validate` System Tester session. `claude.model`/
+# `claude.effort` are the flat defaults; `claude.steps.<kind>` overrides a kind. Since
+# REQ-090 there is no built-in third tier in the engine: a model this file does not name
+# is simply not passed to claude, and the session spawns on claude's own default. So both
+# levels live here — a cold `repair` restart and the System Tester's procedure-following
+# (REQ-030 Decision 2) don't need the top model.
+claude:
+  permission_mode: dangerously-skip
+  model: claude-opus-5
+  effort: high
+  steps:
+    repair:   {model: claude-sonnet-5}
+    validate: {model: claude-sonnet-5}
+
+# Branching model — trunk-based. `main` is production (release tags are cut here); the
+# integration branch is the default working branch. All work — declaration *and*
+# implementation — lands on the integration branch; there are no feature branches, no
+# worktrees, and the engine never switches branches. The engine refuses to autocommit on
+# `production_branch` — switch to the integration branch to run. The only branch operation
+# is the human-gated integration → production release PR.
+git:
+  production_branch: master
+  integration_branch: develop
+
+# How the land gate verifies (REQ-028). A `land` step is DONE only when its named
+# acceptance behaviour *observably ran and passed*: a skipped or zero-collection named
+# test fails the gate (skip ≠ green), and the whole suite must be clean.
+#   full_suite — the command for the project's full test suite, run at land in addition
+#                to each named acceptance test (default `python -m pytest`; set to `null`
+#                to disable). Skips in the full suite stay legal; failures/errors fail land.
+#   python     — optional explicit interpreter the gate runs tests under (e.g.
+#                `.venv/bin/python`). A configured-but-unusable interpreter is a hard,
+#                surfaced error. Unset: discover the project venv, then the engine's own.
+#   env_file   — the declared env-file the land's commit-integrity self-check carries into
+#                its ephemeral tree extract (REQ-072), so the check runs in the same
+#                declared environment the gate used (default `.env`; set to `null` to
+#                disable). Honor-when-present: an absent file is a no-op. The file is
+#                copied only into the throwaway extract dir — its contents never reach a
+#                message, event, or artifact.
+verify:
+  # Tandoor's pytest.ini hardcodes `-n auto` + coverage into addopts; coverage fights xdist
+  # (see CLAUDE.md § Tests), so the gate appends `--no-cov` (a CLI flag beats addopts).
+  # `python` MUST stay the leading token — the engine only rebinds a *leading* interpreter
+  # to verify.python, so an env-var prefix (PYTEST_ADDOPTS=...) would silently bypass the venv.
+  full_suite: python -m pytest --no-cov
+  # The venv is not active in agent or headless `steward run` shells, and this box has no
+  # ambient `python` — so name the interpreter explicitly.
+  python: .venv/bin/python
+
+# verify:
+#   full_suite: python -m pytest
+#   python: .venv/bin/python
+#   env_file: .env
+--- git status --porcelain ---
+ M .devsteward/events.jsonl
+ M .devsteward/state.yaml
+?? .devsteward/evidence/REQ-007/20260815T164724_143818Z/
+--- current branch ---
+develop
+--- last commit touching config.yaml ---
+b5cbf2811a8788e9e0d273ccb49c965b4e313807 REQ-004: ledger checkpoint
+
