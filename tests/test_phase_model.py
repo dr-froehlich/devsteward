@@ -61,6 +61,8 @@ def _events(root):
 def _executor(root, *, runner=None, verifier=None, git=None, repair_budget=0, step_claude=None):
     req_dir = root / "docs" / "requirements"
     return Executor(
+        # REQ-091: a spawn names its model; an unconfigured headless spawn refuses.
+        model="test-spawn-model",
         root=root,
         source=ReqStepSource(req_dir),
         verifier=verifier or ReqVerifier(cwd=str(root), full_suite=None),

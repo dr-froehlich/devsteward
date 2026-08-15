@@ -64,7 +64,7 @@ could not infer, an id the schema rejects, a missing row — **stop**: fix the c
 
 ## 2. Commit the converted corpus — **before** seeding the ledger
 
-Commit the conversion in the target's git (on its integration branch, with the co-author
+Commit the conversion in the target's git (on its integration branch, with the attribution
 trailer) so the working tree is clean before `seed-ledger` runs.
 
 **This ordering is required, not tidiness.** REQ-077's symmetric lint rule compares each
@@ -150,7 +150,7 @@ guidance*:
 - **same-commit discipline** (REQ frontmatter + index row + code in one commit),
 - the **ledger contract** (state lives in `.devsteward/`, never in REQ files),
 - the **branching model** (trunk-based, work lands on `dev`),
-- the **co-author trailer**.
+- the **attribution trailer**.
 
 This is an edit/merge against the project's own §-structure (e.g. memzy's Django/py-fsrs
 guidance, its no-PII invariant) — preserve that voice; add the contracts it now inherits.

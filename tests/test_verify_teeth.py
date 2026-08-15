@@ -48,6 +48,8 @@ def test_executor_refuses_develop_without_tests(project):
     step = Step(id="REQ-X:develop", command="/advance", verify=(), phase="develop")
     committer = RecordingCommitter()
     ex = Executor(
+        # REQ-091: a spawn names its model; an unconfigured headless spawn refuses.
+        model="test-spawn-model",
         root=project,
         source=ListStepSource([step]),
         verifier=ReqVerifier(cwd=str(project)),

@@ -231,7 +231,7 @@ and no lab is needed):
 - If scenarios help, add `SCN-NNN` files and reference them in `scenario_refs`.
 - Run `steward lint` and fix anything it reports. Leave it green.
 
-Do all of this in **one commit** (frontmatter + index together), co-author trailer, on
+Do all of this in **one commit** (frontmatter + index together), attribution trailer, on
 `dev`. A requirement is a *registry declaration*, not implementation; committing it
 serializes id allocation and keeps the index consistent.
 

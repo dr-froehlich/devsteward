@@ -37,11 +37,12 @@ from enum import Enum
 from pathlib import Path
 from typing import Callable
 
+from . import attribution
 from . import claude as claude_mod
 from .accounts import BudgetVerdict
 from .git import GitCli
 from .invariants import check_invariants
-from .ledger import Ledger
+from .ledger import LEDGER_DIRNAME, Ledger
 from .model import Decision, DecisionStatus, Step, StepStatus
 from .seams import AccountProvider, GitTopology, StepSource, Verifier
 from .transaction import transaction
@@ -55,12 +56,25 @@ from .verify import (
 
 PARK_SENTINEL = "[[DEVSTEWARD_PARK]]"
 
-# REQ-090: no model identifier, no address. The engine cannot know what model drives an
-# attended session — a `steward checkpoint` subprocess sees CLAUDECODE/CLAUDE_CODE_SESSION_ID
-# but no model variable — so it names none rather than guessing (which is how one hardcoded
-# model name outlived the model itself by two generations). A session commits under its own trailer,
-# which is accurate by construction because it knows its own model.
-_TRAILER = "Co-Authored-By: Claude"
+# REQ-091: where a spawn's model must be answered. Named as **keys and a filename, never a
+# value** — REQ-090's rule (no model identifier in engine Python) holds in the diagnostic and
+# error paths too, which is exactly where a "helpful" example string would creep back in.
+MODEL_CONFIG_KEY = "claude.model"
+MODEL_CONFIG_FILE = f"{LEDGER_DIRNAME}/config.yaml"
+
+
+def unconfigured_model_notice(kind: str) -> str:
+    """Why a ``{kind}`` session has no model, and where to answer it (REQ-091).
+
+    REQ-090 made "unset means claude's own default" a legitimate behaviour; it became a trap
+    only because it was *silent* — twelve stamped projects spawned every develop, repair and
+    validate session on a model nobody chose, and the operator could see *that* it happened
+    but not *why*. This is the sentence that closes that asymmetry.
+    """
+    return (
+        f"no model is configured for the {kind} session — set `{MODEL_CONFIG_KEY}` "
+        f"(or `claude.steps.{kind}.model` for this kind alone) in {MODEL_CONFIG_FILE}"
+    )
 
 
 class RunOutcome(str, Enum):
@@ -116,6 +130,8 @@ class Executor:
         validate_runner: Callable[..., "StepResult"] | None = None,
         interactive_runner: Callable[..., int] = claude_mod.run_claude_interactive,
         verify_env_file: str | None = ".env",
+        announce: Callable[[str], None] | None = None,
+        attribution_trailer: bool = True,
     ):
         self.root = Path(root)
         self.source = source
@@ -163,6 +179,19 @@ class Executor:
         # a row on `_limit_streak_step` with no intervening gate wait and no step completion.
         self._limit_streak = 0
         self._limit_streak_step: str | None = None
+        # REQ-091: the operator-visible sink for engine-side facts (the same stderr channel
+        # the account provider already announces quota waits on — one visibility channel, not
+        # a second one). None in tests and in a caller that renders nothing.
+        self.announce = announce
+        # REQ-091 Decision 12: whether engine commits carry the attribution trailer at all.
+        # A repo whose contributor policy bans AI trailers turns it off in its own config;
+        # there is deliberately no seam for the trailer's *key or format*.
+        self.attribution_trailer = attribution_trailer
+        # REQ-091 Decision 10: the model the engine last resolved for a session it spawned.
+        # The commit trailer reads this — for a spawned step the engine is not guessing, it
+        # chose the model itself. Stays None through an interactive `steward checkpoint`
+        # (nothing was spawned), which is exactly when the env-var / unknown path applies.
+        self._spawn_model: str | None = None
 
     #: REQ-080 Decision 5: limit deaths in a row on one step — with clauder saying "proceed"
     #: throughout and no step completing — before the run stops instead of relaunching again.
@@ -206,7 +235,9 @@ class Executor:
                 f"session, capture the evidence here, then record the verdict from a plain "
                 f"shell with `steward validate-record {step.req}`."
             )
-        model, effort = self._claude_for("validate")
+        # The guided bring-up is interactive by construction (a foreground session with the
+        # operator at the TTY), so an unconfigured model warns rather than refuses.
+        model, effort, _ = self._resolve_spawn("validate", step=step, unattended=False)
         # REQ-075 AC1: ``ac_flag`` names the scoped ACs (``--ac AC1,AC3``) on a red-only
         # re-run; empty for a full validation.
         command = f"/system-test {step.req} --evidence {evidence_rel}{ac_flag} --guided"
@@ -227,6 +258,70 @@ class Executor:
         """The (model, effort) for a session of ``kind`` (``develop``/``repair``), falling
         back to the flat default when the kind is unconfigured (REQ-029 Decision 4)."""
         return self.step_claude.get(kind, (self.model, self.effort))
+
+    def _announce(self, msg: str) -> None:
+        """Say something to the operator, if anyone is listening (REQ-091)."""
+        if self.announce is not None:
+            self.announce(msg)
+
+    def _resolve_spawn(
+        self, kind: str, *, step: Step | None = None, unattended: bool = True
+    ) -> tuple[str | None, str | None, str | None]:
+        """Resolve **and surface** the ``(model, effort)`` for a ``kind`` session (REQ-091).
+
+        Returns ``(model, effort, refusal)``. A non-None ``refusal`` means *nothing was
+        spawned* and the caller must return it as the step's surface — the engine does not
+        start an unattended session on a model nobody chose.
+
+        Three things happen here that did not before:
+
+        * the resolved model is **announced** and recorded as a ``spawn_model`` ledger event,
+          so what a session costs is visible at the moment it is spent rather than inferable
+          only by reading engine source — which consumers are explicitly forbidden to do;
+        * an unset model in an **unattended** run refuses (Decision 2): the expensive failure
+          is ``steward run`` marching a queue of REQs on an unintended model for hours with
+          nobody watching;
+        * an unset model in an **attended** run warns and proceeds, preserving REQ-090's
+          "unset means claude's own default" contract for the interactive case. The operator
+          sees the warning and can decide in the moment; blocking them would be paternalism.
+
+        A CLI ``--model`` override needs no special case: ``build_executor`` folds it into
+        ``step_claude['develop']``, so it arrives here already *configured*.
+        """
+        model, effort = self._claude_for(kind)
+        step_id = step.id if step is not None else None
+        if model:
+            self._announce(f"{kind} session: model {model}, effort {effort or 'default'}")
+            self.ledger.append_event(
+                "spawn_model", step=step_id, kind=kind, model=model, effort=effort
+            )
+            self._spawn_model = model
+            return model, effort, None
+
+        notice = unconfigured_model_notice(kind)
+        self.ledger.append_event(
+            "spawn_model", step=step_id, kind=kind, model=None, effort=effort,
+            unattended=unattended,
+        )
+        if unattended:
+            self._announce(f"refusing to spawn: {notice}")
+            return None, None, notice
+        self._announce(f"warning: {notice} — spawning on claude's own default")
+        # Nothing was chosen, so nothing is claimed: the trailer must not inherit a model
+        # from some earlier spawn in this process.
+        self._spawn_model = None
+        return None, effort, None
+
+    def _sign(self, message: str) -> str:
+        """Append the attribution trailer to a commit message (REQ-091).
+
+        Naming the model the engine actually spawned with — or an explicit ``unknown`` — is
+        the commit-boundary reading of the same rule ``_resolve_spawn`` enforces at the spawn
+        boundary: the engine states what it knows and marks what it does not, instead of
+        writing a claim that ages into a falsehood."""
+        return attribution.sign(
+            message, spawn_model=self._spawn_model, enabled=self.attribution_trailer
+        )
 
     #: Step statuses that make a step a candidate for running. ``RECOVER`` joins
     #: ``PENDING`` so a re-armed failed step (REQ-026) is picked up by the next run.
@@ -505,7 +600,16 @@ class Executor:
             led.append_event("quota_block", step=step.id, reason=reason)
             return StepResult(step, RunOutcome.LIMIT, reason, resumable=False)
 
-        model, effort = self._claude_for("develop")
+        model, effort, refusal = self._resolve_spawn(
+            "develop", step=step, unattended=unattended
+        )
+        if refusal is not None:
+            # REQ-091 Decision 2: never spawn an unattended session on a model nobody chose.
+            # The step stays runnable — this is a config answer away, not a failure.
+            led.set_status(step.id, requeue)
+            led.save()
+            led.append_event("spawn_refused", step=step.id, reason=refusal)
+            return StepResult(step, RunOutcome.REFUSED, refusal, resumable=False)
         result = self.runner(
             command,
             argv_prefix=self.accounts.claude_argv(),
@@ -822,7 +926,17 @@ class Executor:
         still red, or a ``LIMIT``/``FAILED`` raised by a repair session.
         """
         led = self.ledger
-        model, effort = self._claude_for("repair")
+        model, effort, refusal = self._resolve_spawn(
+            "repair", step=step, unattended=unattended
+        )
+        if refusal is not None:
+            # A repair session is the *cheap* cold restart by design (REQ-029 D4), so an
+            # unconfigured one is the costliest silent upgrade of the three kinds — refuse it
+            # like any other unattended spawn rather than quietly running the top model.
+            led.set_status(step.id, StepStatus.PENDING)
+            led.save()
+            led.append_event("spawn_refused", step=step.id, reason=refusal)
+            return StepResult(step, RunOutcome.REFUSED, refusal, resumable=False)
         for attempt in range(1, self.repair_budget + 1):
             ok, reason = self.accounts.precheck()
             if not ok:
@@ -953,7 +1067,7 @@ class Executor:
         if not self.autocommit:
             return None
         title = step.title or step.id
-        message = f"{step.id}: {title}\n\n{_TRAILER}"
+        message = self._sign(f"{step.id}: {title}")
         # REQ-048: the code commit (code + REQ flip + index) never carries the ledger — the
         # cursor advances in its own trailing .devsteward/ commit. REQ-049: a git failure
         # here is *not* swallowed — it propagates to the transaction boundary, which rolls
@@ -998,7 +1112,7 @@ class Executor:
         fake never raises, so a non-git test harness still runs clean).
         """
         ref = (step.req or step.id) if step is not None else "ledger"
-        return self.git.commit_ledger(f"{ref}: {subject}\n\n{_TRAILER}")
+        return self.git.commit_ledger(self._sign(f"{ref}: {subject}"))
 
     # -- commit integrity (REQ-050, made non-destructive by REQ-063) -----------
 

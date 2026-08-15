@@ -166,4 +166,8 @@ def build_executor(
         repair_budget=repair_budget,
         validate_runner=build_validate_runner(cfg),
         verify_env_file=cfg.verify_env_file,
+        # REQ-091: the executor announces the model it spawns with on the same operator
+        # channel the account provider already uses for quota waits.
+        announce=announce,
+        attribution_trailer=cfg.attribution_trailer,
     )

@@ -75,6 +75,8 @@ class FakeInteractiveRunner:
 def _executor(root, *, runner=None, interactive_runner=None, git=None):
     req_dir = root / "docs" / "requirements"
     return Executor(
+        # REQ-091: a spawn names its model; an unconfigured headless spawn refuses.
+        model="test-spawn-model",
         root=root,
         source=ReqStepSource(req_dir),
         verifier=ReqVerifier(cwd=str(root), full_suite=None),

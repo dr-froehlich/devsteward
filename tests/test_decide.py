@@ -134,6 +134,8 @@ def test_answered_fork_is_delivered_into_resumed_command(project):
 
     runner = FakeRunner(default=ok_result())
     ex = Executor(
+        # REQ-091: a spawn names its model; an unconfigured headless spawn refuses.
+        model="test-spawn-model",
         root=project,
         source=ListStepSource([step]),
         verifier=CommandVerifier(cwd=str(project)),
@@ -154,6 +156,8 @@ def test_answered_fork_is_delivered_into_resumed_command(project):
     # A foreign/undecided step's command is untouched.
     other = Step(id="REQ-B:develop", command="/advance REQ-B develop", req="REQ-B")
     ex2 = Executor(
+        # REQ-091: a spawn names its model; an unconfigured headless spawn refuses.
+        model="test-spawn-model",
         root=project,
         source=ListStepSource([other]),
         verifier=CommandVerifier(cwd=str(project)),

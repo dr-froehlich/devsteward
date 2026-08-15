@@ -135,10 +135,19 @@ def _log_shas(root: Path) -> list[str]:
 
 
 def _executor(
-    root: Path, *, env_file: str | None = ".env", writes: dict[str, str] | None = None
+    root: Path,
+    *,
+    env_file: str | None = ".env",
+    writes: dict[str, str] | None = None,
+    **overrides,
 ) -> Executor:
+    """The shared real-git executor. ``**overrides`` forwards straight to :class:`Executor`
+    so a caller can vary one seam (REQ-091's ``announce`` / ``attribution_trailer``) without
+    another copy of this construction drifting away from it."""
     req_dir = root / "docs" / "requirements"
     return Executor(
+        # REQ-091: a spawn names its model; an unconfigured headless spawn refuses.
+        model="test-spawn-model",
         root=root,
         source=ReqStepSource(req_dir),
         verifier=ReqVerifier(cwd=str(root), full_suite=None),
@@ -152,6 +161,7 @@ def _executor(
         integration_branch="dev",
         git=GitCli(root),
         verify_env_file=env_file,
+        **overrides,
     )
 
 

@@ -47,11 +47,17 @@ When you design or change anything here, hold to these:
   working branch. Never commit to `main`; the **only** branch operation is the human-gated
   `dev → main` release PR. Beta tags (`vX.Y.Z-beta.N`, PEP 440 pre-release) may be cut on
   `dev`; stable tags on `main`. If `main` is ever hotfixed directly, merge it back into `dev`.
-- **Co-author trailer** on commits names the model actually driving the session —
-  `Co-Authored-By: <modelname>` — never a hardcoded model string, and no email address.
-  Engine-made commits (`steward checkpoint`) carry a plain `Co-Authored-By: Claude`,
-  because a `steward` subprocess cannot know which model is driving the session; you can,
-  so you name it.
+- **Attribution trailer** on commits is a *disclosure*, not an authorship claim:
+  `Assisted-by: Claude:<model-id>` naming the model actually driving the session — never a
+  hardcoded model string, and **no email address**. A model holds no copyright, signs no CLA
+  and cannot certify a DCO, so an *authorship* trailer would be false whatever name it
+  carried; disclosure is the claim that is true. The human stays the sole `Author:`.
+  Engine-made commits (`steward checkpoint`) name the model
+  the engine resolved for that spawn, or `Claude:unknown` when the identity genuinely did not
+  reach it — an absent version is stated, never blanked into a bare agent name. An attended
+  session exports `DEVSTEWARD_ASSISTED_BY` so a `steward` subprocess can name its driver.
+  Neither the engine nor a session adds `Signed-off-by:` — the DCO is a certification only a
+  human can make.
 - **Sanitized public repo:** no real local paths (`/mnt/c/Users/...`), no emails, no
   account creds in committed files. Templates use placeholders.
 

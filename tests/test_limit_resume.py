@@ -98,6 +98,8 @@ def _executor(project, accounts_provider, runner, *, steps=None, stop=None):
     steps = steps or [Step(id="REQ-080:develop", command="/advance REQ-080 develop",
                            req="REQ-080", verify=("true",))]
     return Executor(
+        # REQ-091: a spawn names its model; an unconfigured headless spawn refuses.
+        model="test-spawn-model",
         root=project,
         source=ListStepSource(steps),
         verifier=SimpleNamespace(verify=lambda step: (True, "green")),

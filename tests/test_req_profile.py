@@ -73,6 +73,8 @@ def test_eligibility_respects_cross_req_dependency(tmp_path, monkeypatch):
     write_req(tmp_path, "REQ-002", status="open", depends_on=["REQ-001"])
     Ledger.init(tmp_path)
     ex = Executor(
+        # REQ-091: a spawn names its model; an unconfigured headless spawn refuses.
+        model="test-spawn-model",
         root=tmp_path, source=ReqStepSource(tmp_path),
         verifier=CommandVerifier(cwd=str(tmp_path)),
         accounts=SingleAccountProvider(),

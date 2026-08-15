@@ -132,6 +132,8 @@ def _current_branch(root: Path) -> str:
 def _executor(root: Path, *, runner=None, with_validate=False) -> Executor:
     req_dir = root / "docs" / "requirements"
     return Executor(
+        # REQ-091: a spawn names its model; an unconfigured headless spawn refuses.
+        model="test-spawn-model",
         root=root,
         source=ReqStepSource(req_dir),
         verifier=ReqVerifier(cwd=str(root), full_suite=None),

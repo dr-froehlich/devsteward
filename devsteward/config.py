@@ -137,6 +137,19 @@ class Config:
         return (self.verify or {}).get("env_file", ".env")
 
     @property
+    def attribution_trailer(self) -> bool:
+        """Whether engine commits carry the ``Assisted-by:`` trailer (REQ-091 Decision 12).
+
+        Default on. A repo whose contributor policy bans AI trailers sets
+        ``attribution_trailer: false`` (or ``null``, the same disabling convention
+        ``verify.full_suite`` uses) and gets commits with no attribution trailer of any kind —
+        not an empty one, not an ``unknown`` one. There is deliberately **no** seam for the
+        trailer's key or format: one boolean answers the real need (comply without patching
+        the engine), while a configurable format would only make history non-uniform across
+        consumers for no gain."""
+        return bool(self.raw.get("attribution_trailer", True))
+
+    @property
     def plans_path(self) -> Path:
         """Where plan artifacts live (REQ-029 Decision 6 — the mechanical land refuses to
         land a REQ no plan here names), resolved under the repo root.

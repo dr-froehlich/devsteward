@@ -23,6 +23,8 @@ from conftest import (
 
 def _executor(root, steps, runner, committer=None, on_verified=None):
     return Executor(
+        # REQ-091: a spawn names its model; an unconfigured headless spawn refuses.
+        model="test-spawn-model",
         root=root,
         source=ListStepSource(steps),
         verifier=CommandVerifier(cwd=str(root)),
@@ -260,6 +262,8 @@ def test_graceful_stop_after_current_step(project, monkeypatch):
     a = Step(id="REQ-A:design", command="/advance REQ-A design", verify=())
     b = Step(id="REQ-B:design", command="/advance REQ-B design", verify=())
     ex = Executor(
+        # REQ-091: a spawn names its model; an unconfigured headless spawn refuses.
+        model="test-spawn-model",
         root=project,
         source=ListStepSource([a, b]),
         verifier=CommandVerifier(cwd=str(project)),

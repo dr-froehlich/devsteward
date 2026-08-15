@@ -54,6 +54,17 @@ claude:
     repair:   {model: claude-sonnet-5}
     validate: {model: claude-sonnet-5}
 
+# Attribution on the commits the engine makes (REQ-091). A commit the engine stamps carries
+# a *disclosure* trailer — `Assisted-by: Claude:<model-id>`, naming the model it actually
+# spawned that session with, or `Claude:unknown` when the identity did not reach it. It takes
+# no email, and the human stays the sole `Author:`; a model holds no copyright, signs no CLA
+# and cannot certify a DCO, so a co-authorship trailer would be a false claim whatever name
+# it carried. An attended session exports `DEVSTEWARD_ASSISTED_BY` so a `steward checkpoint`
+# subprocess can name its driver. Set this to false if your project's contributor policy bans
+# AI trailers — the commits then carry no attribution trailer at all. The key and format are
+# fixed on purpose; only on/off is yours.
+attribution_trailer: true
+
 # Branching model — trunk-based. `main` is production (release tags are cut here); the
 # integration branch is the default working branch. All work — declaration *and*
 # implementation — lands on the integration branch; there are no feature branches, no

@@ -40,6 +40,8 @@ from test_system_test_phase import (
 
 def _core_executor(root, steps, runner):
     return Executor(
+        # REQ-091: a spawn names its model; an unconfigured headless spawn refuses.
+        model="test-spawn-model",
         root=root,
         source=ListStepSource(steps),
         verifier=CommandVerifier(cwd=str(root)),

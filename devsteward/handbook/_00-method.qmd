@@ -79,7 +79,13 @@ These are not style preferences; the linter and the engine enforce them.
   switching. The engine enforces this: it refuses to autocommit on the production branch
   (config-driven via `git.production_branch`, default `main`). Never commit directly to
   `main`; the one branch operation is the human-gated `dev → main` release PR.
-- **Co-author trailer** on every commit.
+- **Attribution trailer** on every commit — a *disclosure*, not an authorship claim:
+  `Assisted-by: Claude:<model-id>`, no email, the human the sole `Author:` (REQ-091). Engine
+  commits name the model the engine resolved for that spawn, or `Claude:unknown`; an attended
+  session exports `DEVSTEWARD_ASSISTED_BY`. Neither adds `Signed-off-by:` — only a human can
+  certify the DCO. `attribution_trailer: false` turns it off for a project that bans AI
+  trailers. (This replaces the retired co-authorship form, which asserted an authorship a
+  model cannot hold and needed an email for an account that does not exist — see REQ-091.)
 - **Sanitized public artifacts.** No real local paths, emails, or credentials in shared
   files; templates use placeholders.
 

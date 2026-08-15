@@ -44,7 +44,7 @@ explanation as final text and ask in plain prose, waiting for the reply.
 
 - `git init` if needed. `main` is production and `dev` is the integration branch (the
   default working branch) — create `dev` and make the **first commit** there (not on `main`,
-  which the engine refuses to autocommit onto), co-author trailer. All work — declaration
+  which the engine refuses to autocommit onto), attribution trailer. All work — declaration
   and implementation alike — lands on `dev`; the engine never branches.
 - Ensure the ledger exists (`steward init` if `.devsteward/state.yaml` is absent).
 - Run `steward lint` — leave it green.

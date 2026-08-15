@@ -76,6 +76,8 @@ def test_executor_no_false_limit_on_marker_content(project):
     step = Step(id="REQ-016:land", command="/advance REQ-016 land", verify=("true",))
     committer = RecordingCommitter()
     ex = Executor(
+        # REQ-091: a spawn names its model; an unconfigured headless spawn refuses.
+        model="test-spawn-model",
         root=project,
         source=ListStepSource([step]),
         verifier=CommandVerifier(cwd=str(project)),

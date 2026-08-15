@@ -36,6 +36,8 @@ _PKG = Path(__file__).resolve().parents[1] / "devsteward"
 
 def _executor(root, steps, *, branch, runner=None, committer=None, git=None):
     return Executor(
+        # REQ-091: a spawn names its model; an unconfigured headless spawn refuses.
+        model="test-spawn-model",
         root=root,
         source=ListStepSource(steps),
         verifier=CommandVerifier(cwd=str(root)),

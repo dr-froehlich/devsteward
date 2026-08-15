@@ -162,7 +162,7 @@ End with the fixed report (below) **after** handling the land per your mode:
   the current cursor step) — all on `dev`. It is the
   engine's bookkeeping as one transaction: it re-runs the acceptance tests, checks the plan
   artifact exists, flips the REQ + index to `done`, makes the one authoritative code commit
-  (frontmatter + index + code together, co-author trailer), advances the ledger, and commits
+  (frontmatter + index + code together, attribution trailer), advances the ledger, and commits
   the trailing ledger write as a follow-up on `dev` (the checkpoint event records `driver:
   interactive`). On red nothing lands — fix and re-run `steward checkpoint`; no `repeat` needed
   (that verb re-arms a *FAILED* batch step; a red interactive `checkpoint` left no failed step). Do **not** commit

@@ -830,7 +830,18 @@ class ReqValidateRoutine:
                 led.save()
             led.append_event("quota_block", step=step.id, reason=reason)
             return StepResult(step, RunOutcome.LIMIT, reason)
-        model, effort = ex._claude_for("validate")
+        # REQ-091: surface the resolved model, and refuse an unattended System-Tester spawn
+        # on a model nobody chose — the `steward validate` that surfaced the defect spawned
+        # the System Tester on the top model in a repo whose config never asked for it.
+        model, effort, refusal = ex._resolve_spawn(
+            "validate", step=step, unattended=unattended
+        )
+        if refusal is not None:
+            if in_flight:
+                led.set_status(step.id, StepStatus.PENDING)
+                led.save()
+            led.append_event("spawn_refused", step=step.id, reason=refusal)
+            return StepResult(step, RunOutcome.REFUSED, refusal)
         command = f"{step.command} --evidence {evidence_rel}{ac_flag}"
         result = ex.runner(
             command,

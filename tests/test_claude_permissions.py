@@ -65,6 +65,8 @@ def test_executor_threads_permission_mode_to_runner(project):
     step = Step(id="REQ-X:build", command="/advance REQ-X build", verify=())
     runner = FakeRunner(default=ok_result())
     ex = Executor(
+        # REQ-091: a spawn names its model; an unconfigured headless spawn refuses.
+        model="test-spawn-model",
         root=project,
         source=ListStepSource([step]),
         verifier=CommandVerifier(cwd=str(project)),
