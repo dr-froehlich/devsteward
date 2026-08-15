@@ -1,7 +1,7 @@
 version: 1
 profile: req
 cursor:
-  step: REQ-090:develop
+  step: REQ-091:develop
 steps:
   REQ-011:design:
     status: done
@@ -288,6 +288,9 @@ steps:
   REQ-090:develop:
     status: done
     updated: '2026-08-10T05:51:58+00:00'
+  REQ-091:develop:
+    status: done
+    updated: '2026-08-15T17:03:50+00:00'
 decisions:
 - id: DEC-001
   step: REQ-031:validate
@@ -381,4 +384,4 @@ decisions:
   req: REQ-058
   raised_at: '2026-06-20T21:10:10+00:00'
   answered_at: '2026-06-20T21:50:00+00:00'
-seq: 64
+seq: 65
