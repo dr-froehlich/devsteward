@@ -176,7 +176,7 @@ def project(tmp_path: Path) -> Path:
 
 def write_req(req_dir: Path, rid: str, *, status="open", depends_on=(), acceptance=True,
               title=None, kind="feature", check="regression", process=None, concept_refs=(),
-              test=None):
+              test=None, supersedes=None, tags=()):
     """Write a minimal, schema-valid REQ file into ``req_dir``.
 
     ``check`` classifies the single acceptance criterion (REQ-027/REQ-068); ``None`` omits
@@ -184,7 +184,9 @@ def write_req(req_dir: Path, rid: str, *, status="open", depends_on=(), acceptan
     (default ``"true"``) — used to give an ``artifact``/``manual`` AC a real node-id.
     ``process`` is an optional dict rendered as the ``process:`` frontmatter block.
     ``concept_refs`` populates the ``concept_refs:`` list (REQ-039 — the develop land gate
-    for a concept REQ checks it references the doc).
+    for a concept REQ checks it references the doc). ``supersedes`` takes a single id or a
+    list of ids and ``tags`` a list of labels (REQ-092 — the ``north-star`` tag marks the
+    REQ holding the compass).
     """
     req_dir.mkdir(parents=True, exist_ok=True)
     title = title or f"{rid} title"
@@ -214,6 +216,13 @@ def write_req(req_dir: Path, rid: str, *, status="open", depends_on=(), acceptan
                 lines.append(f"  {key}: {value}")
         proc = "\n".join(lines) + "\n"
     refs = "[" + ", ".join(concept_refs) + "]"
+    if supersedes is None:
+        sup = "null"
+    elif isinstance(supersedes, str):
+        sup = supersedes
+    else:
+        sup = "[" + ", ".join(supersedes) + "]"
+    tag_list = "[" + ", ".join(tags) + "]"
     text = (
         f"---\n"
         f"id: {rid}\n"
@@ -226,8 +235,8 @@ def write_req(req_dir: Path, rid: str, *, status="open", depends_on=(), acceptan
         f"depends_on: {deps}\n"
         f"concept_refs: {refs}\n"
         f"scenario_refs: []\n"
-        f"supersedes: null\n"
-        f"tags: []\n"
+        f"supersedes: {sup}\n"
+        f"tags: {tag_list}\n"
         f"{proc}"
         f"---\n\n"
         f"## Context\n\n{rid} context.\n\n"

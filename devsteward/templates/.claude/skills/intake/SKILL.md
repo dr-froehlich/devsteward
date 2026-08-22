@@ -17,8 +17,17 @@ seed here is what every later step inherits.
   `concepts_dir`; defaults `docs/requirements/`, `docs/plans/`, `docs/concepts/`). Read it
   first and use *those* paths throughout — a project whose `docs/` belongs to a docs
   generator keeps them elsewhere.
-- Read `CLAUDE.md`, `REQ-001.md` (the north star) and `REQUIREMENTS_INDEX.md` in the
-  requirements dir. The new REQ must advance REQ-001 or be explicitly scoped against it.
+- Read `CLAUDE.md`, the north star and `REQUIREMENTS_INDEX.md` in the requirements dir.
+  The new REQ must advance the north star or be explicitly scoped against it.
+- **The north star is a role, not an id (REQ-092).** It starts at `REQ-001.md`, but a
+  project whose direction has changed hands it on: if `REQ-001`'s status is `superseded`
+  (or `dropped`), follow its `supersedes` chain outward — the REQ declaring
+  `supersedes: REQ-001`, then whatever supersedes *that* — to the **live compass**: the
+  first heir that is not itself dropped/superseded and carries `north-star` in its `tags:`.
+  Read *that* REQ as the north star; the retired one is history. When this intake is
+  itself the direction change, the new REQ must declare `supersedes:` the current compass
+  **and** carry the `north-star` tag — `steward lint` refuses to let the old compass retire
+  into nothing.
 - Find the next free id: highest `REQ-NNN` in the index + 1, zero-padded. Ids may carry a
   trailing letter (`REQ-028p`, an umbrella split into sub-parts) — **strip any trailing
   letter before taking the max**, so `REQ-028p` counts as `028`, never `028` + 1 skipped.

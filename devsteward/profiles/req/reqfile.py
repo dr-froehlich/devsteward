@@ -75,6 +75,24 @@ class ReqFile:
         return list(self.frontmatter.get("concept_refs") or [])
 
     @property
+    def supersedes(self) -> list[str]:
+        """The ``supersedes:`` frontmatter field, normalized to a list.
+
+        The schema allows a single id, a list of ids or ``null`` (REQ-048); every reader
+        wants the list, so the union is resolved once, here.
+        """
+        raw = self.frontmatter.get("supersedes")
+        if isinstance(raw, str):
+            return [raw]
+        return list(raw or [])
+
+    @property
+    def tags(self) -> list[str]:
+        """The ``tags:`` frontmatter list — free-form labels; ``north-star`` is the one
+        the engine reads (REQ-092: it marks the REQ that claims the compass)."""
+        return list(self.frontmatter.get("tags") or [])
+
+    @property
     def title(self) -> str:
         return str(self.frontmatter.get("title", ""))
 

@@ -10,7 +10,10 @@ Checks, per the plan:
 5. every acceptance criterion has a non-empty **test id** and (REQ-027) a valid
    ``check:`` classification (``regression | artifact | manual``) — presence and enum
    only, never test quality (that is intake's job, not a static linter's);
-6. the frozen north star ``REQ-001`` is not silently mutated away from its declared kind;
+6. the project is never left **without a compass** (REQ-092) — ``REQ-001`` may be
+   ``dropped``/``superseded`` only when the ``supersedes`` chain leading out of it reaches a
+   REQ that is still live (not itself dropped/superseded) *and* carries the ``north-star``
+   tag. The compass is handed on, never pinned to one id;
 7. **marker ↔ ledger** (both directions) — the ledger is the cursor of record and the
    committed marker must agree with it. (a) *marker-ahead* (REQ-028 AC5): a ledger-tracked
    REQ marked ``done`` in frontmatter has a green delivering step in the ledger — a
@@ -49,6 +52,15 @@ from .profiles.req.reqfile import ReqFile, load_reqs
 CHECK_VALUES = ("regression", "live", "artifact", "manual")
 
 
+# REQ-092: the compass is a *role*, not an id. ``REQ-001`` starts out holding it; a project
+# whose direction changes hands it on by superseding REQ-001 with a REQ that claims the role
+# via this tag. The engine's invariant is that the role is always held by someone live.
+NORTH_STAR_ID = "REQ-001"
+NORTH_STAR_TAG = "north-star"
+# A REQ in one of these statuses can no longer be anybody's compass.
+_RETIRED = ("dropped", "superseded")
+
+
 def _schema() -> dict:
     text = (files("devsteward") / "schema" / "req.schema.json").read_text(encoding="utf-8")
     return json.loads(text)
@@ -76,6 +88,32 @@ def _detect_cycle(reqs: list[ReqFile]) -> list[str]:
         if color[n] == WHITE:
             visit(n, [])
     return problems
+
+
+def _live_compass(reqs: list[ReqFile]) -> ReqFile | None:
+    """The REQ that currently holds the north-star role, or ``None`` (REQ-092).
+
+    Walks the ``supersedes`` graph outward from ``REQ-001``: a REQ is an *heir* when its
+    ``supersedes`` names REQ-001 or names another heir, so a project that changes direction
+    twice (001 -> 016 -> 042) still resolves. Returns the first heir that is **live** (not
+    dropped/superseded) **and** carries the ``north-star`` tag — the two claims together,
+    because a supersede alone says only *which* REQ retired the old one, not that the
+    replacement is the project's direction. Each id is visited once, so a ``supersedes``
+    cycle terminates rather than hanging the linter.
+    """
+    seen = {NORTH_STAR_ID}
+    frontier = [NORTH_STAR_ID]
+    while frontier:
+        retired = set(frontier)
+        frontier = []
+        for r in reqs:
+            if r.id in seen or not (set(r.supersedes) & retired):
+                continue
+            seen.add(r.id)
+            frontier.append(r.id)
+            if r.status not in _RETIRED and NORTH_STAR_TAG in r.tags:
+                return r
+    return None
 
 
 def lint(cfg: Config) -> list[str]:
@@ -106,9 +144,7 @@ def lint(cfg: Config) -> list[str]:
         for dep in r.depends_on:
             if dep not in ids:
                 problems.append(f"{r.id}: depends_on '{dep}' does not resolve to a REQ")
-        sup = r.frontmatter.get("supersedes")
-        sups = [sup] if isinstance(sup, str) else (sup or [])
-        for s in sups:
+        for s in r.supersedes:
             if s not in ids:
                 problems.append(f"{r.id}: supersedes '{s}' does not resolve to a REQ")
         proc = r.frontmatter.get("process")
@@ -163,10 +199,20 @@ def lint(cfg: Config) -> list[str]:
                     f"regression | live | artifact | manual"
                 )
 
-    # 6. north star
-    north = next((r for r in reqs if r.id == "REQ-001"), None)
-    if north is not None and north.status in ("dropped", "superseded"):
-        problems.append("REQ-001 (north star) must not be dropped or superseded")
+    # 6. north star — the project always has a live compass (REQ-092). The old rule pinned
+    #    the compass to the literal id REQ-001 and so refused the very move the method
+    #    prescribes ("direction changes by superseding REQ-001"), blocking any project whose
+    #    direction actually changed. Keep the intent, drop the id: REQ-001 may retire once an
+    #    heir holds the role.
+    north = next((r for r in reqs if r.id == NORTH_STAR_ID), None)
+    if north is not None and north.status in _RETIRED and _live_compass(reqs) is None:
+        problems.append(
+            f"{NORTH_STAR_ID} is '{north.status}' but no REQ has taken over as the north "
+            f"star — the project would be left with no compass. The successor must both "
+            f"declare `supersedes: {NORTH_STAR_ID}` (directly or through the chain) and "
+            f"carry `{NORTH_STAR_TAG}` in its `tags:`, and must not itself be "
+            f"dropped/superseded."
+        )
 
     # 7. marker ↔ ledger reconciliation (REQ-028 AC5). A REQ is *ledger-tracked* if any of
     #    its steps appears in state.yaml; for such a REQ marked `done`, its delivering step

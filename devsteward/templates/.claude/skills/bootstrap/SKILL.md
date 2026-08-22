@@ -38,6 +38,12 @@ explanation as final text and ask in plain prose, waiting for the reply.
   `concepts_dir`). If this project's `docs/` belongs to a docs generator, point them
   somewhere else **now** and move the stamped scaffolding to match.
 - Co-author **REQ-001** properly: a tight, frozen north star — a compass, not a spec.
+  Give it `north-star` in its `tags:` — the compass is a **role** the engine reads from
+  that tag (REQ-092), so that when this project's direction changes years from now, the
+  successor can inherit it: the heir declares `supersedes:` the current compass and
+  carries the same tag, and `steward lint` refuses only when retiring the old compass
+  would leave no **live compass** behind. Frozen means never weakened in place — not
+  that REQ-001 holds the role forever.
 - Update `REQUIREMENTS_INDEX.md` to match.
 
 ## 3. Bring it to life
