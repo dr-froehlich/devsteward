@@ -95,5 +95,6 @@ commit** as its frontmatter and the code.
 | REQ-089 | The remote-host deployment seam — attended mid-phase push, a read-only land-gate preview, rework that carries prior sign-offs, and a flat discoverable CLI | DONE | [REQ-089](REQ-089.md) | REQ-030, REQ-033, REQ-055, REQ-063, REQ-071, REQ-075, REQ-081 |
 | REQ-090 | No model identifiers in engine code — a generic co-author trailer, and the spawn model moved to config | DONE | [REQ-090](REQ-090.md) | REQ-029, REQ-036, REQ-048, REQ-079 |
 | REQ-091 | A spawn never hides its model and a commit never misattributes it — surface the unset model, refuse it headless, retire the co-author trailer for `Assisted-by:`, and migrate the stamped consumers REQ-090 left behind | DONE | [REQ-091](REQ-091.md) | REQ-029, REQ-030, REQ-036, REQ-080, REQ-090 |
+| REQ-092 | The compass may be handed on — a superseded REQ-001 passes lint when a live north-star heir exists | DRAFT | [REQ-092](REQ-092.md) | REQ-027, REQ-087 |
 
 New requirement template: [`_templates/req.md`](../../devsteward/templates/docs/requirements/_templates/req.md)
