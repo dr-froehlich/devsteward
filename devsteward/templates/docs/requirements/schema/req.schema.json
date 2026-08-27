@@ -42,6 +42,12 @@
       "items": { "type": "string", "pattern": "^REQ-[0-9]{3}[a-z]?$" },
       "uniqueItems": true
     },
+    "backlog_refs": {
+      "type": "array",
+      "items": { "type": "string", "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$" },
+      "uniqueItems": true,
+      "description": "Backlog item handles this REQ takes up (REQ-093). The only stored record of take-up; the backlog file carries no taken-up column."
+    },
     "concept_refs": {
       "type": "array",
       "items": { "type": "string" },

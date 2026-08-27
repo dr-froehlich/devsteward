@@ -49,6 +49,7 @@ class Config:
     index_file: str = "docs/requirements/REQUIREMENTS_INDEX.md"
     plans_dir: str = "docs/plans"
     concepts_dir: str = "docs/concepts"
+    backlog_file: str = "docs/BACKLOG.md"
     accounts: dict = field(default_factory=lambda: {"provider": "clauder", "threshold": 70})
     claude: dict = field(
         default_factory=lambda: {
@@ -169,6 +170,15 @@ class Config:
         return self.root / self.concepts_dir
 
     @property
+    def backlog_path(self) -> Path:
+        """Where the backlog of user needs lives (REQ-093), resolved under the repo root.
+
+        Configurable like every other doc path (REQ-084). **Honor-when-present**: an absent
+        file is an empty backlog, never an error — a project with no user-need queue is not
+        required to keep the artifact, and devsteward itself is such a project."""
+        return self.root / self.backlog_file
+
+    @property
     def index_path(self) -> Path:
         return self.root / self.index_file
 
@@ -187,6 +197,7 @@ def load_config(root: Path | None = None) -> Config:
         index_file=data.get("index_file", "docs/requirements/REQUIREMENTS_INDEX.md"),
         plans_dir=data.get("plans_dir", "docs/plans"),
         concepts_dir=data.get("concepts_dir", "docs/concepts"),
+        backlog_file=data.get("backlog_file", "docs/BACKLOG.md"),
         accounts=data.get("accounts", {"provider": "clauder"}),
         claude=data.get("claude", {"permission_mode": "dangerously-skip"}),
         git=data.get("git", {}),

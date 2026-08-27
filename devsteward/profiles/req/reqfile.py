@@ -75,6 +75,17 @@ class ReqFile:
         return list(self.frontmatter.get("concept_refs") or [])
 
     @property
+    def backlog_refs(self) -> list[str]:
+        """The ``backlog_refs:`` frontmatter list (REQ-093) — the backlog item handles this
+        REQ takes up, translating each user need into this system requirement.
+
+        This is the **only** stored record of take-up, and intake is its only writer, in the
+        same commit as the REQ and its index row. The backlog file deliberately carries no
+        "taken up by" column: a second copy would need a second writer at land and would
+        drift the moment one was forgotten."""
+        return list(self.frontmatter.get("backlog_refs") or [])
+
+    @property
     def supersedes(self) -> list[str]:
         """The ``supersedes:`` frontmatter field, normalized to a list.
 

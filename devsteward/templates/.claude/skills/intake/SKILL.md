@@ -13,10 +13,14 @@ seed here is what every later step inherits.
 ## 1. Orient
 
 - **Where the documents live:** `.devsteward/config.yaml` names the requirements dir, the
-  index, the plans dir and the concepts dir (`requirements_dir`, `index_file`, `plans_dir`,
-  `concepts_dir`; defaults `docs/requirements/`, `docs/plans/`, `docs/concepts/`). Read it
-  first and use *those* paths throughout — a project whose `docs/` belongs to a docs
+  index, the plans dir, the concepts dir and the backlog file (`requirements_dir`,
+  `index_file`, `plans_dir`, `concepts_dir`, `backlog_file`).
+  The defaults are `docs/requirements/`, `docs/plans/`, `docs/concepts/`, `docs/BACKLOG.md`.
+  Read it first and use *those* paths throughout — a project whose `docs/` belongs to a docs
   generator keeps them elsewhere.
+- **Run `steward backlog-list` (REQ-093).** If the project keeps a backlog, this intake
+  probably starts from it — see §2d. A project with no backlog file simply reports so; that
+  is a valid state, not a missing artifact.
 - Read `CLAUDE.md`, the north star and `REQUIREMENTS_INDEX.md` in the requirements dir.
   The new REQ must advance the north star or be explicitly scoped against it.
 - **The north star is a role, not an id (REQ-092).** It starts at `REQ-001.md`, but a
@@ -229,11 +233,49 @@ and no lab is needed):
   attended design review before build — reserved for genuinely risky REQs. If split,
   extract *why* and record the reason in the REQ's Decisions table.
 
+### 2d. Taking up backlog items (REQ-093)
+
+A backlog item is a **user need in the user's words** — the stakeholder-level requirement a
+REQ is *translated from*. When this intake serves one or more items, do this in **exactly
+this order**:
+
+1. **Choose the items with the operator.** Show `steward backlog-list` and let them pick.
+   Several items may feed one REQ; one item may need several REQs over time.
+2. **Author each item's acceptance criteria first — in the user's language, before you
+   design anything.** They go in the backlog file's `## Acceptance criteria` section, one
+   `###` heading per handle, as a bullet list of what would make the owner say *"yes, that
+   solves it"*. Ask for them in their words; do not write them from what you already intend
+   to build. **This ordering is the whole point**: criteria written after the solution is
+   known get quietly bent to fit it, which is the exact failure this layer exists to
+   prevent, one level up. Skip only when the item already has them.
+3. **Then translate.** Now write the requirement in solution language, and only now write
+   the REQ's own acceptance criteria — which are *verification* criteria (did we build what
+   was specified), a different question from the item's acceptance criteria (was what we
+   specified worth building).
+4. **Record the take-up** in the REQ's frontmatter `backlog_refs: [handle, ...]`. That list
+   is the **only** stored record of take-up — never add a "taken up by" column to the
+   backlog file, and never a status column anywhere. `steward backlog-list` derives an
+   item's state from `backlog_refs` plus the append-only verdict log.
+
+**The item's acceptance is never this REQ's gate.** It is the owner's separate verdict,
+recorded whenever they are ready with `steward backlog-accept` / `backlog-deny --reason`
+(REQ-093 Decision 4). A denial does **not** fail the REQ — the REQ closes on its
+verification result — it leaves the item open with an attempt record. So do **not** turn an
+item's acceptance criterion into a `manual` AC on the REQ: that would make the owner's
+opinion block a build that met its specification, and it would force a validation session on
+every backlog-linked REQ.
+
+**A need that names a mechanism is not a need.** If the operator's item says *how* rather
+than *what*, say so and ask what it is for — an item that names a mechanism has already made
+a decision nobody asked it to make. Record anything you propose yourself with
+`--origin proposed`, and only when the operator chose it from alternatives.
+
 ## 3. Emit
 
 - Write `REQ-NNN.md` into the requirements dir from `_templates/req.md` with `status: draft`,
   filled frontmatter (including the `process:` block when it deviates from defaults or
-  declares a lab), a real Context/Decisions/Requirement, and a `yaml acceptance` block
+  declares a lab, and `backlog_refs:` when this REQ takes up backlog items), a real
+  Context/Decisions/Requirement, and a `yaml acceptance` block
   where **every** criterion has an `id`, a `test:`, and a `check:`.
 - Add its row to `REQUIREMENTS_INDEX.md` (status `DRAFT`). The index ↔ frontmatter pair is the
   **single source of truth** for status (`steward lint` keeps them in lockstep).

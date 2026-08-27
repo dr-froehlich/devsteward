@@ -1,9 +1,14 @@
 # Outlook — a product backlog above the V-model {#sec-outlook}
 
-**Nothing in this chapter is implemented.** It is a design study, written 2026-08-27, for a
-layer DevSteward does not have: a place to record what a *user* wants, in the user's own
-words, above the engineering machinery described in the preceding chapters. It is recorded
-here so the reasoning survives whether or not the layer is ever built.
+This chapter is the design study, written 2026-08-27, behind a layer that records what a
+*user* wants in the user's own words, above the engineering machinery of the preceding
+chapters.
+
+**Stage one shipped** (REQ-093): the backlog artifact, the capture verb, the take-up link at
+intake and the acceptance verdict are built, and @sec-backlog is their reference. Everything
+here is the reasoning that produced them — kept because the argument matters more than the
+feature, and because two further stages are still outlook: the **retrospective** and the
+**status server**.
 
 ## The question
 
@@ -200,11 +205,10 @@ would build three, deliberately rejects one, and three are vocabulary only.
 | — | verification | `check: regression`, `check: live` | have |
 | — | bidirectional traceability | — | **build** |
 
-## What would be built
+## What was built, and what is still outlook
 
-Four things, in two stages.
-
-**Stage one — the backlog and its link to intake.**
+**Stage one — the backlog and its link to intake — shipped as REQ-093.** The reference is
+@sec-backlog; what follows is why each piece has the shape it has.
 
 - **The artifact.** A per-project backlog of items, each a need in the user's words with a
   stable handle rather than a REQ id, so that listing an item commits to nothing. Config
@@ -229,13 +233,13 @@ Four things, in two stages.
   It also means a REQ that takes up an item does not thereby acquire a mandatory extra
   validation session.
 
-**Stage two — the retrospective.** What went wrong, what to improve, triggered at REQ land
+**Stage two — the retrospective (outlook).** What went wrong, what to improve, triggered at REQ land
 rather than on a cadence, feeding a project's own accumulated doctrine. Every project run
 under DevSteward develops local specialties; today they live in the operator's head and in
 the REQ prose. This is the least-defined part of the study and is deliberately left for a
 separate design.
 
-**Stage three — a status surface.** A small server rendering an overview across projects:
+**Stage three — a status surface (outlook).** A small server rendering an overview across projects:
 each project's state, its open backlog items, and a way to record an acceptance verdict
 directly. This is a separate objective and a separate design, but it exerts one constraint
 on stage one that is worth naming now: if a verdict is something a web page can record,

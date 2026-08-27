@@ -1334,5 +1334,213 @@ def seed_ledger_cmd() -> None:
         click.echo("Nothing to seed (no un-seeded terminal REQs).")
 
 
+# -- backlog (the stakeholder-requirement layer, REQ-093) ---------------------
+
+
+def _backlog_bits(cfg: Config):
+    """The parsed backlog, its verdict log and the REQ corpus — the three derivation inputs."""
+    from .profiles.req import backlog as bl
+    from .profiles.req.reqfile import load_reqs
+
+    items = bl.load(cfg.backlog_path)
+    reqs = load_reqs(cfg.req_dir) if cfg.req_dir.exists() else []
+    criteria = (
+        bl.parse_criteria(cfg.backlog_path.read_text(encoding="utf-8"))
+        if cfg.backlog_path.exists()
+        else {}
+    )
+    return bl, items, reqs, bl.read_events(cfg.root), criteria
+
+
+def _require_item(bl, items, handle: str, cfg: Config):
+    """Resolve ``handle`` or fail with the list of what does exist."""
+    for i in items:
+        if i.handle == handle:
+            return i
+    if not items:
+        raise click.ClickException(
+            f"no backlog at {cfg.backlog_file} — record a need with "
+            f'`steward backlog-add "…"` first'
+        )
+    known = ", ".join(i.handle for i in items)
+    raise click.ClickException(f"no backlog item '{handle}' in {cfg.backlog_file}\n  known: {known}")
+
+
+def _record_verdict(handle: str, verdict: str, reason: str | None, note: str | None) -> None:
+    cfg = _load_or_die()
+    bl, items, reqs, _, criteria = _backlog_bits(cfg)
+    item = _require_item(bl, items, handle, cfg)
+    # Show the owner what they are judging against. The criteria are the item's own, in the
+    # user's language — not the REQ's verification criteria, which the engine already ran.
+    for line in criteria.get(handle, []):
+        click.echo(f"  · {line}")
+    # Name the REQ that most recently attempted this need, so the attempt record reads as
+    # "REQ-019 tried and the owner said no, because …" without the operator retyping it.
+    attempted = [r.id for r in reqs if handle in r.backlog_refs]
+    try:
+        event = bl.append_event(
+            cfg.root,
+            bl.Event(
+                handle=handle,
+                event=verdict,
+                req=attempted[-1] if attempted else None,
+                reason=reason,
+                note=note,
+            ),
+        )
+    except bl.BacklogError as exc:
+        raise click.ClickException(str(exc)) from exc
+    colour = {"accepted": "green", "denied": "yellow",
+              "retired": "blue", "held": "magenta"}[verdict]
+    click.echo(click.style(f"  {handle}: {verdict}", fg=colour) + f" — {item.need[:70]}")
+    if event.req:
+        click.echo(f"  attempted by {event.req}")
+    if reason:
+        click.echo(f"  reason: {reason}")
+    if verdict == "denied":
+        click.echo(
+            "  the item stays open — the REQ that attempted it is unaffected, and another "
+            "REQ may take it up."
+        )
+    if verdict == "held":
+        click.echo("  the need stands and is not being worked; taking it up lifts the hold.")
+
+
+@main.command("backlog-add")
+@click.argument("need")
+@click.option("--handle", default=None, help="Use this handle instead of minting one.")
+@click.option(
+    "--origin",
+    type=click.Choice(["operator", "proposed"]),
+    default="operator",
+    show_default=True,
+    help="operator = the owner's own words; proposed = a session proposed it and the owner chose it.",
+)
+def backlog_add(need: str, handle: str | None, origin: str) -> None:
+    """Record a user need, in the user's words (REQ-093).
+
+    The cheap way in: no interview, no schema, no id. A need is not a solution — an item that
+    names a mechanism has already made a decision nobody asked it to make. The file is created
+    from the bundled template when the project has none, so wanting to record a need is the
+    moment a project acquires a backlog.
+    """
+    from .profiles.req import backlog as bl
+
+    cfg = _load_or_die()
+    path = cfg.backlog_path
+    if not path.exists():
+        template = _package_templates() / "docs" / "BACKLOG.md"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(template.read_text(encoding="utf-8"), encoding="utf-8")
+        click.echo(f"Created {cfg.backlog_file}")
+    text = path.read_text(encoding="utf-8")
+    try:
+        existing = bl.parse(text)
+        taken = {i.handle for i in existing}
+        if handle is None:
+            handle = bl.mint_handle(need, taken)
+        elif handle in taken:
+            raise click.ClickException(f"handle '{handle}' is already used")
+        path.write_text(
+            bl.append_item(text, bl.Item(handle=handle, need=need, origin=origin)),
+            encoding="utf-8",
+        )
+    except bl.BacklogError as exc:
+        raise click.ClickException(str(exc)) from exc
+    click.echo(click.style(f"  + {handle}", fg="green") + f" — {need}")
+
+
+@main.command("backlog-list")
+def backlog_list() -> None:
+    """Show every backlog item with its **derived** state and attempt record (REQ-093).
+
+    Nothing here is stored: take-up comes from each REQ's ``backlog_refs``, the verdict from
+    the append-only log. There is no status column to fall out of step with either.
+    """
+    cfg = _load_or_die()
+    if not cfg.backlog_path.exists():
+        click.echo(f"no backlog at {cfg.backlog_file} (this project keeps none).")
+        return
+    from .profiles.req import backlog as bl
+
+    try:
+        _, items, reqs, events, criteria = _backlog_bits(cfg)
+        rows = bl.standings(items, reqs, events, criteria)
+    except bl.BacklogError as exc:
+        raise click.ClickException(str(exc)) from exc
+    if not rows:
+        click.echo(f"{cfg.backlog_file} has no items yet.")
+        return
+    colours = {"open": "yellow", "in-progress": "cyan", "attempted": "magenta",
+               "accepted": "green", "retired": "blue", "held": "magenta"}
+    for st in rows:
+        label = bl.describe(st)
+        click.echo(
+            click.style(f"  {st.item.handle:<28}", bold=True)
+            + click.style(f"{label:<18}", fg=colours.get(st.state, "white"))
+            + st.item.need[:60]
+        )
+        for line in st.criteria:
+            click.echo(f"      · {line}")
+        if st.taken_up_by:
+            click.echo(f"      taken up by {', '.join(st.taken_up_by)}")
+        for v in st.verdicts:
+            detail = f" — {v.reason}" if v.reason else ""
+            by = f" ({v.req})" if v.req else ""
+            click.echo(f"      {v.ts[:10]} {v.event}{by}{detail}")
+
+
+@main.command("backlog-accept")
+@click.argument("handle")
+@click.option("--note", default=None, help="Optional note recorded with the acceptance.")
+def backlog_accept(handle: str, note: str | None) -> None:
+    """Record that a delivered result satisfies this need (REQ-093).
+
+    The owner's verdict, not the tester's, and available at any time after the REQ lands —
+    the honest answer to something like "is it easy to use" often arrives only after living
+    with the result.
+    """
+    _record_verdict(handle, "accepted", None, note)
+
+
+@main.command("backlog-deny")
+@click.argument("handle")
+@click.option("--reason", required=True, help="Why the delivered result does not satisfy the need.")
+def backlog_deny(handle: str, reason: str) -> None:
+    """Record that a delivered result does **not** satisfy this need (REQ-093).
+
+    Advisory to the REQ and blocking to the item: the REQ that attempted it stays closed on
+    its verification result, and the item stays open for another REQ to take up. The reason is
+    mandatory — without it a denied item is just an item that failed twice, and the next REQ
+    repeats the attempt.
+    """
+    _record_verdict(handle, "denied", reason, None)
+
+
+@main.command("backlog-hold")
+@click.argument("handle")
+@click.option("--reason", required=True, help="Why this need is not being worked right now.")
+def backlog_hold(handle: str, reason: str) -> None:
+    """Record that this need stands but is deliberately **not being worked** (REQ-093).
+
+    Neither open nor retired: the need is not withdrawn, and it is not waiting on a session —
+    it is waiting on something the owner has named. Taking the item up in a REQ lifts the hold.
+    """
+    _record_verdict(handle, "held", reason, None)
+
+
+@main.command("backlog-retire")
+@click.argument("handle")
+@click.option("--reason", required=True, help="Why this need is no longer wanted.")
+def backlog_retire(handle: str, reason: str) -> None:
+    """Record that this need is no longer wanted (REQ-093).
+
+    The owner's discretion, and the only way an item leaves the backlog without being
+    satisfied. Nothing is deleted: the item and its reason stay readable, so the next person
+    to have the same idea can read why it was dropped.
+    """
+    _record_verdict(handle, "retired", reason, None)
+
+
 if __name__ == "__main__":
     main()

@@ -23,6 +23,13 @@ Checks, per the plan:
    worktree but never committed (the FlowSteward REQ-098/099 drift). Read committed HEAD, not
    the working tree, or a written-but-uncommitted flip masks it.
 
+8. **backlog referential integrity** (REQ-093) — every handle a REQ's ``backlog_refs``
+   names resolves to an item in the backlog file, handles are unique within that file, and
+   every recorded verdict names a known handle. Nothing more: the backlog commits to no
+   order and no schedule, so the linter never demands that an item be taken up, prioritized
+   or ever accepted. Honor-when-present — a project with no backlog file and no
+   ``backlog_refs`` anywhere is green and untouched.
+
 References in the optional ``process:`` block's ``lab:`` list (REQ-027) resolve like
 ``depends_on`` (check 2).
 
@@ -40,6 +47,7 @@ import jsonschema
 from .config import Config
 from .core.ledger import Ledger
 from .core.model import StepStatus
+from .profiles.req import backlog as backlog_mod
 from .profiles.req.index import read_statuses
 from .profiles.req.reqfile import ReqFile, load_reqs
 
@@ -252,7 +260,63 @@ def lint(cfg: Config) -> list[str]:
         #     be assessed (no git, no committed file) is never false-flagged.
         problems.extend(_committed_marker_lags_ledger(cfg, reqs, statuses))
 
+    # 8. backlog referential integrity (REQ-093). Scoped to what is actually claimed: a
+    #    project with no backlog file and no `backlog_refs` is untouched, because absence is
+    #    a valid state for this layer rather than a missing artifact. A REQ that *does* claim
+    #    a handle is asserting a translation from a real user need, and a dangling claim is
+    #    the one thing that would make the back-check lie.
+    problems.extend(_backlog_problems(cfg, reqs))
+
     return problems
+
+
+def _backlog_problems(cfg: Config, reqs: list[ReqFile]) -> list[str]:
+    """REQ-093 check 8 — the handles a REQ claims, the file's own uniqueness, and the log.
+
+    Deliberately *not* checked: whether an item is taken up, ordered, prioritized or ever
+    accepted. The backlog commits to nothing, and a linter that demanded otherwise would turn
+    a list of wishes into a schedule — the exact thing handles-instead-of-ids exists to stop.
+    """
+    claimed = {(r.id, h) for r in reqs for h in r.backlog_refs}
+    path = cfg.backlog_path
+    if not path.exists():
+        return [
+            f"{rid}: backlog_refs '{h}' does not resolve — no backlog file at "
+            f"{cfg.backlog_file}"
+            for rid, h in sorted(claimed)
+        ]
+    try:
+        items = backlog_mod.parse(path.read_text(encoding="utf-8"))
+    except backlog_mod.BacklogError as exc:
+        return [f"{cfg.backlog_file}: {exc}"]
+
+    handles = {i.handle for i in items}
+    out = [
+        f"{rid}: backlog_refs '{h}' does not resolve to an item in {cfg.backlog_file}"
+        for rid, h in sorted(claimed)
+        if h not in handles
+    ]
+    try:
+        events = backlog_mod.read_events(cfg.root)
+    except backlog_mod.BacklogError as exc:
+        return out + [str(exc)]
+    for e in events:
+        if e.handle not in handles:
+            out.append(
+                f"backlog verdict '{e.event}' names handle '{e.handle}', which is not an "
+                f"item in {cfg.backlog_file}"
+            )
+    # An acceptance-criteria section for an item that does not exist is the same dangling
+    # claim one level down: the owner would be asked to judge against criteria attached to
+    # nothing. Scoped to the acceptance section, so ordinary prose headings are never read
+    # as handles.
+    for handle in sorted(backlog_mod.parse_criteria(path.read_text(encoding="utf-8"))):
+        if handle not in handles:
+            out.append(
+                f"{cfg.backlog_file}: acceptance criteria are written for '{handle}', "
+                f"which is not an item in the table"
+            )
+    return out
 
 
 def _committed_marker_lags_ledger(

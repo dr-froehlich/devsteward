@@ -176,7 +176,7 @@ def project(tmp_path: Path) -> Path:
 
 def write_req(req_dir: Path, rid: str, *, status="open", depends_on=(), acceptance=True,
               title=None, kind="feature", check="regression", process=None, concept_refs=(),
-              test=None, supersedes=None, tags=()):
+              test=None, supersedes=None, tags=(), backlog_refs=()):
     """Write a minimal, schema-valid REQ file into ``req_dir``.
 
     ``check`` classifies the single acceptance criterion (REQ-027/REQ-068); ``None`` omits
@@ -186,7 +186,8 @@ def write_req(req_dir: Path, rid: str, *, status="open", depends_on=(), acceptan
     ``concept_refs`` populates the ``concept_refs:`` list (REQ-039 — the develop land gate
     for a concept REQ checks it references the doc). ``supersedes`` takes a single id or a
     list of ids and ``tags`` a list of labels (REQ-092 — the ``north-star`` tag marks the
-    REQ holding the compass).
+    REQ holding the compass). ``backlog_refs`` populates the ``backlog_refs:`` list
+    (REQ-093 — the backlog item handles the REQ takes up).
     """
     req_dir.mkdir(parents=True, exist_ok=True)
     title = title or f"{rid} title"
@@ -223,6 +224,7 @@ def write_req(req_dir: Path, rid: str, *, status="open", depends_on=(), acceptan
     else:
         sup = "[" + ", ".join(supersedes) + "]"
     tag_list = "[" + ", ".join(tags) + "]"
+    backlog_list = "[" + ", ".join(backlog_refs) + "]"
     text = (
         f"---\n"
         f"id: {rid}\n"
@@ -237,6 +239,7 @@ def write_req(req_dir: Path, rid: str, *, status="open", depends_on=(), acceptan
         f"scenario_refs: []\n"
         f"supersedes: {sup}\n"
         f"tags: {tag_list}\n"
+        f"backlog_refs: {backlog_list}\n"
         f"{proc}"
         f"---\n\n"
         f"## Context\n\n{rid} context.\n\n"

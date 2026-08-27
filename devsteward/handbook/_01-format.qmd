@@ -13,6 +13,7 @@ added: 2026-05-26
 completed: null
 verified_by: null
 depends_on: [REQ-005, REQ-006]
+backlog_refs: [group-scope]   # backlog items this REQ takes up (REQ-093)
 concept_refs: []
 scenario_refs: [SCN-002]
 supersedes: null
@@ -125,6 +126,67 @@ scope.
 Strict schema + parseable blocks give tools exactly what they need; rich prose stays
 rich. The schema and linter make the format a **contract, not a convention** — you can't
 half-follow it and stay green.
+
+## The backlog — the level above the REQ {#sec-backlog}
+
+A REQ is a **system** requirement: solution-shaped, with criteria naming runnable tests. A
+project may also keep the level above it — the need in the *user's* words, which a REQ is
+translated from at intake. In ISO/IEC/IEEE 29148 terms the backlog is the stakeholder
+requirements and a REQ is the system requirements; `/intake` performs the transformation.
+
+The artifact lives at `backlog_file` (default `docs/BACKLOG.md`) and is **honor-when-present**
+— a project with no user-need queue keeps none, lints green, and is never nagged about it.
+It holds a table and, optionally, the owner's acceptance criteria per item:
+
+```markdown
+| Handle | Need | Origin |
+|---|---|---|
+| rapid-verdict | In a few minutes I can see whether this drive is worth repairing. | operator |
+
+## Acceptance criteria
+
+### rapid-verdict
+- In under five minutes I can see whether this drive is worth repairing.
+```
+
+A **handle**, not a REQ id: an id in a table reads as a commitment to build that thing, in
+that order, and this list commits to nothing. **Origin** is `operator` (their own words) or
+`proposed` (a session proposed it, the owner chose it) — the guard against the system writing
+its own requirements and then satisfying them.
+
+| Command | What it does |
+|---|---|
+| `steward backlog-add "<need>"` | Record a need. No interview, no schema, no id — the cheap way in. Creates the file if the project has none. |
+| `steward backlog-list` | Every item with its **derived** state and attempt record. |
+| `steward backlog-accept <handle>` | The owner's verdict: this satisfies the need. |
+| `steward backlog-deny <handle> --reason "…"` | It does not. The reason is mandatory. |
+| `steward backlog-hold <handle> --reason "…"` | The need stands but is deliberately not being worked. Taking it up lifts the hold. |
+| `steward backlog-retire <handle> --reason "…"` | No longer wanted. Nothing is deleted. |
+
+### Two verdicts, and why one of them cannot fail a REQ
+
+A REQ's acceptance criteria are **verification** criteria: did we build what was specified?
+They are absolute — a red one fails the REQ. An item's acceptance criteria are the owner's:
+was what we specified worth building? That verdict is **advisory to the REQ and blocking to
+the item.**
+
+So a REQ can close on green verification while its item is denied — *"exactly as specified"*
+and *"still not easy to use"* are both true at once. The REQ stays closed; the item stays
+**open**, carrying an attempt record naming the REQ that tried and the reason it did not
+land, and any later REQ may take it up. This is Scrum's rule that an unaccepted backlog item
+returns to the product backlog rather than reopening the sprint, and it is why acceptance is
+a standalone command rather than a step inside the System-Test session: the honest verdict on
+something like "easy to use" often arrives only after living with the result.
+
+### Nothing stores status
+
+There is no status column and no "taken up by" column, on purpose. Take-up is recorded once,
+in the taking-up REQ's `backlog_refs:`, written by intake in the same commit as the REQ and
+its index row. The verdict is recorded once, in the append-only `.devsteward/backlog.jsonl`,
+whose *sequence* is the attempt record. Everything an operator reads is derived from those
+two at display time — so there is no second copy to fall out of step, and no writer to
+forget. `steward lint` checks only that the claims resolve: it never demands that an item be
+taken up, ordered, prioritized or ever accepted.
 
 ## What is *not* in the REQ
 
