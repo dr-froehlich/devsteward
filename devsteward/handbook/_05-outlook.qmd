@@ -1,0 +1,326 @@
+# Outlook — a product backlog above the V-model {#sec-outlook}
+
+**Nothing in this chapter is implemented.** It is a design study, written 2026-08-27, for a
+layer DevSteward does not have: a place to record what a *user* wants, in the user's own
+words, above the engineering machinery described in the preceding chapters. It is recorded
+here so the reasoning survives whether or not the layer is ever built.
+
+## The question
+
+DevSteward's unit of work is the requirement, and a requirement is already solution-shaped:
+by the time `/intake` is finished, the idea has been interrogated into scope boundaries,
+dependencies, and acceptance criteria that name runnable tests. That is the point — it is
+what makes the engine able to certify anything at all.
+
+But it leaves three gaps.
+
+- **There is no cheap way in.** The only door into the method is a full `/intake`
+  interview. A half-formed observation — *"the return button should be green and larger"*,
+  *"I want a printout for this panel"* — has nowhere to live. It stays in a chat log and
+  dies there.
+- **There is no user-language layer.** Every artifact in the system is written in solution
+  language. Nothing records the need in the words of the person who has it.
+- **Nothing checks the built thing against the need that motivated it.** A REQ closes when
+  its acceptance criteria are green. Those criteria were written by the same session that
+  designed the solution, against a specification that session also wrote. The loop closes
+  on itself. A system built this way can pass every check it set for itself while drifting
+  away from what anyone actually asked for — and it will do so invisibly, because there is
+  no artifact left that says what was asked for.
+
+The third gap is the serious one. It is the failure mode that motivates the whole study:
+*a set of self-sustaining rules and constraints that no longer reflect the actual user
+requirements.*
+
+One consumer project has already improvised a fix. DriveSteward keeps a `docs/BACKLOG.md`
+of user needs in the operator's words, with a rule that an item naming a mechanism *"has
+already made a decision nobody asked it to make"*, and a handle rather than a REQ id so
+that listing an item commits to nothing. That file is the seed of everything below.
+
+## The shape: two levels, not two systems
+
+The tempting move is to put Scrum on top — a backlog, sprints, a board — and let the
+V-model live inside it. That is the wrong frame, because it treats the two as separate
+systems that must be joined.
+
+They are not. The correct frame is older than both and comes from requirements
+engineering: **there are two levels of requirement, and a transformation between them.**
+ISO/IEC/IEEE 29148:2018 defines the System Requirements Definition process as one that
+transforms *"the stakeholder, user-oriented view of desired capabilities into a technical
+view of a solution that meets the operational needs of the user"*, producing two
+documents — a Stakeholder Requirements Specification (StRS) and a System Requirements
+Specification (SyRS).
+
+That transformation is exactly the missing step. In German engineering vocabulary it is
+the move from *Lastenheft* to *Pflichtenheft*, which is a useful handle because the same
+tradition states the two checks crisply: *Verifikation* asks whether the technical
+requirements of the Pflichtenheft are met; *Validierung* asks whether the requirements
+definition is fit for the stakeholders' goals.
+
+| | Stakeholder level | System level |
+|---|---|---|
+| Artifact | backlog item | `REQ-NNN.md` |
+| Language | the user's | the solution's |
+| Owner | the person with the need | the engineering session |
+| Written | when the need appears | at intake, by translation |
+| Answers | *what do I want, and why* | *what must be true, and how is it proven* |
+| Checked by | acceptance — a human verdict | verification — runnable tests |
+| Standard | StRS (29148) | SyRS (29148) |
+
+Two levels, one system. The backlog is not a second state machine bolted on top; it is the
+level of requirement DevSteward never wrote down.
+
+## Where the sprint analogy holds, and where it breaks
+
+It is natural to call one REQ and its Design → Build → System-Test cycle a *sprint*. The
+analogy is useful for anyone who arrives from agile practice, and it is nearly right. But
+it breaks at one specific joint, and the break is instructive.
+
+**A Scrum sprint fixes time and varies scope.** The time-box closes on schedule; whatever
+is unfinished returns to the product backlog. A sprint therefore cannot fail — it is simply
+over. **A REQ fixes scope and varies time.** It stays open until its criteria are met.
+
+So "REQ = sprint" is an analogy about *containment*, not about *closure*. The REQ is the
+unit of scope, and DevSteward has no concept of time at all.
+
+This is not a deficiency to be corrected. It is a considered position, and it is one that
+others working on agent-driven development have reached independently: the *agentic-scrum*
+project rules that a sprint is one backlog item of any duration, not time-boxed, with no
+velocity estimation, on the grounds that time-boxing and story points assume human
+constraints that agents do not have. Two designs arriving separately at the same ruling is
+worth something.
+
+But the time-box is load-bearing in Scrum, and dropping it drops three things. Each needs a
+conscious replacement:
+
+| What the time-box buys | Replacement in DevSteward |
+|---|---|
+| A forced re-prioritization cadence | **Free, and better.** With no time-box, *every* intake is a planning event — the backlog can be reordered at any moment, not on a fortnightly rhythm. |
+| A bounded blast radius for a bad plan | **Already present.** Lettered ids (`REQ-028p`) and the rule that a known defect is never scoped out silently — it is fixed here or homed in a named follow-on REQ — are the splitting mechanism. |
+| A regular inspect-and-adapt point | **Genuinely missing.** This is the one real loss, and it is what a retrospective would restore. With no time-box, the natural trigger is the REQ land: a retrospective per REQ, not per sprint. |
+
+Note that Scrum has *two* end-of-sprint ceremonies, and DevSteward already has one of them.
+The **Sprint Review** — where the product owner inspects the increment — is the System-Test
+phase with its `manual` checks. Only the **Retrospective** is absent.
+
+## Two verdicts, not one
+
+This is the heart of the design, and the place where the two levels earn their separation.
+
+Today a REQ has exactly one verdict: its acceptance criteria are green or they are not. The
+proposed model has **two independent verdicts, given at the same moment and recorded
+separately**:
+
+1. **REQ verification** — does the built system meet what the REQ specified? This is the
+   existing gate, unchanged and still **blocking**. A red here is a defect against the
+   spec: the REQ does not close, and it goes to rework. The engineering cycle must not be
+   allowed to fail from the system-requirement level downward.
+
+2. **Item acceptance** — does the delivered result satisfy the *need*, as the item's own
+   acceptance criteria state it? This verdict belongs to the person with the need. It is
+   **advisory to the REQ and blocking to the item.**
+
+The second verdict is what makes the model worth building, because it can differ from the
+first. A user can say *"the UI is exactly as specified"* — verification green — and in the
+same breath *"but it is still not easy to use"* — acceptance denied. Both statements are
+true, and today the system has no way to hold them at once.
+
+When acceptance is denied and verification is green:
+
+- the REQ **closes** on its verification result;
+- the item **stays open** in the backlog, carrying an **attempt record**: this REQ tried to
+  cover this need, and did not succeed, for this stated reason;
+- the item is then available to be taken up by another REQ, reprioritized, left alone, or
+  retired — entirely at the owner's discretion.
+
+This mirrors Scrum exactly: an unaccepted backlog item returns to the product backlog; you
+do not reopen the sprint. And it makes the denial *productive* rather than merely negative,
+because the attempt record is the artifact that stops the next REQ from repeating the same
+mistake. Without the recorded reason, a denied item is just an item that failed twice.
+
+**The denial forks, and the fork is the V-model doing useful work at runtime:**
+
+- The build did not match the spec → a *verification* failure → rework, the existing loop.
+- The build matched the spec and the spec was wrong → the REQ closes as built-to-spec, the
+  item returns to the backlog with the learning recorded, and a new intake follows.
+
+**The hazard, and its guard.** An advisory gate is a loophole waiting to be used: *ship it,
+mark the item unsatisfied, move on.* The guard is doctrine DevSteward already owns, applied
+one level up — **a denial is never silent.** A denied item must, in the same act, either
+name the follow-on REQ that will complete it, or be explicitly retired with a reason.
+
+## Vocabulary, corrected
+
+Three terms are routinely crossed when agile and V-model practice meet, and getting them
+wrong here would bake the error into file formats that outlive the confusion.
+
+**Definition of Done.** In the Scrum Guide this is a *single, product-wide quality
+checklist applied to every backlog item* — stable across sprints, defined at team or
+organisation level. It is never per-item. Per-item conditions of satisfaction are
+**acceptance criteria**, which the Scrum Guide does not define at all; they are a
+complementary practice.
+
+The useful consequence: **DevSteward already has a Definition of Done in the correct
+sense.** It is the engine's land gate — lint green, the declared suite green, the capture
+gate satisfied, index and frontmatter in lockstep, everything in one commit. That checklist
+applies to every REQ, is stable across REQs, and is already mechanized. There is nothing to
+invent, only something to name.
+
+**Acceptance** belongs to the user. In 15288/29148 practice, acceptance testing is the
+customer's decision and sits on the validation side. So the word should be reserved for the
+item level.
+
+The resulting vocabulary, which the rest of this chapter uses:
+
+| Term | Level | Owner | Blocking? |
+|---|---|---|---|
+| **Definition of Done** | project-wide | the engine | yes — the land gate, every REQ |
+| **Verification criteria** | REQ (`check: regression`, `check: live`) | the engineering session | yes |
+| **Acceptance criteria** | backlog item | the person with the need | to the item, not the REQ |
+
+## What DevSteward already has
+
+The practical finding of this study is that the layer is much smaller than it first looks.
+Of thirteen concepts a Scrum-shaped delivery layer would bring, DevSteward already has six,
+would build three, deliberately rejects one, and three are vocabulary only.
+
+| Scrum concept | Requirements-engineering equivalent | In DevSteward today | Verdict |
+|---|---|---|---|
+| Product Backlog | Stakeholder requirements (StRS) | — | **build** |
+| Product Backlog Item | one stakeholder requirement | — | **build** |
+| Acceptance criteria (per item) | validation criteria | — | **build** |
+| Product Owner | acquirer / stakeholder | the operator, informally | doctrine only |
+| Sprint | *(no equivalent)* | one REQ cycle | vocabulary only |
+| Sprint Backlog | System requirements (SyRS) | the REQ and its plan | have |
+| Sprint Goal | — | the REQ's Requirement section | have |
+| **Definition of Done** | quality gate | **the engine's land gate** | have — name it |
+| Sprint Review | acceptance | System-Test, `check: manual` | have — add the item link |
+| Sprint Retrospective | process improvement | — | build, separately |
+| Increment | verified build | the landed commit | have |
+| Story points / velocity | — | — | **reject** |
+| — | verification | `check: regression`, `check: live` | have |
+| — | bidirectional traceability | — | **build** |
+
+## What would be built
+
+Four things, in two stages.
+
+**Stage one — the backlog and its link to intake.**
+
+- **The artifact.** A per-project backlog of items, each a need in the user's words with a
+  stable handle rather than a REQ id, so that listing an item commits to nothing. Config
+  seam like every other doc path, and inert when absent — a project with no user-need queue
+  is not required to keep an empty file.
+- **A frictionless way in.** Capture must cost nothing, or it will not happen. A one-line
+  command, usable by a person or by a session recording what the operator just said, is the
+  whole feature. The idea comes from a non-programmer running Claude Code who wired an
+  "add to backlog" button directly into his own application, and fed it one-sentence needs.
+- **The intake link.** `/intake` takes up one or more items and performs the translation
+  explicitly: first author the item's acceptance criteria in user language, *then* translate
+  into a requirement and its verification criteria. **The order is the point.** Criteria
+  written after the solution is known get quietly bent to fit what was going to be built
+  anyway — which is the failure this whole layer exists to prevent, reappearing one level
+  up. Capture stays frictionless; the discipline lands at intake.
+- **The acceptance verdict.** A standalone act, available at any time after the REQ lands:
+  the owner records, per item, whether the delivered result satisfies its acceptance
+  criteria — with a stated reason on a denial. Deliberately *not* a step inside the
+  System-Test session: acceptance belongs to the person with the need rather than to the
+  tester, the honest verdict on something like *"easy to use"* often arrives only after
+  living with the result, and Scrum likewise keeps the Review separate from the testing.
+  It also means a REQ that takes up an item does not thereby acquire a mandatory extra
+  validation session.
+
+**Stage two — the retrospective.** What went wrong, what to improve, triggered at REQ land
+rather than on a cadence, feeding a project's own accumulated doctrine. Every project run
+under DevSteward develops local specialties; today they live in the operator's head and in
+the REQ prose. This is the least-defined part of the study and is deliberately left for a
+separate design.
+
+**Stage three — a status surface.** A small server rendering an overview across projects:
+each project's state, its open backlog items, and a way to record an acceptance verdict
+directly. This is a separate objective and a separate design, but it exerts one constraint
+on stage one that is worth naming now: if a verdict is something a web page can record,
+then recording it must be an ordinary, callable act — not a decision buried inside a
+transcript. That is the practical reason acceptance is a standalone command rather than a
+step inside the System-Test session.
+
+**A field worth carrying on the item: provenance.** DriveSteward's backlog notes already
+distinguish items given in the operator's words from items *"proposed by the session and
+chosen by the operator from alternatives"*. That distinction is the real guard against a
+system writing its own requirements and then satisfying them. It deserves to be a field
+rather than a footnote.
+
+## What would deliberately not be built
+
+Subtraction is the harder half of the design, and most of the Scrum apparatus does not
+survive contact with this method:
+
+- **No sprint object.** No sprint file, goal, capacity, or committed-items list. The REQ is
+  the container; a second one would be a second status surface above the requirements index
+  — precisely the kind of artifact DevSteward has removed once already, for the reason that
+  a status copy with no writer drifts.
+- **No time-boxing.** Scope is fixed, time is not.
+- **No story points, no velocity.** They estimate human throughput. The useful quantities
+  for agent-driven work are different in kind — risk, uncertainty, validation cost, whether
+  a human decision is required.
+- **No agent role-play.** Some frameworks in this space instantiate a Scrum Master, a
+  Product Owner and a Developer as separate agents that argue from assigned incentives. The
+  product owner in this method is a person, and the value of that is precisely that they
+  are not simulated.
+- **No worktrees or per-task branches.** Several projects in the field isolate agent work in
+  git worktrees. DevSteward removed exactly that machinery, deliberately, after it produced
+  a string of failures that each added structure to patch the previous one.
+
+## The state of the field
+
+The Claude Code ecosystem does contain projects that put an agile layer around an
+engineering pipeline. As of August 2026 they are, with GitHub stars as a rough proxy for
+external adoption:
+
+| Project | Model | Stars |
+|---|---|---|
+| `seanyao/roll` | backlog → tasks → agents → PR, evidence per task | 14 |
+| `atusy/agentic-scrum` | AI-adapted Scrum; sprint = 1 item, not time-boxed | 8 |
+| `rbah31/claude-code-workflow` | sprint-based workflow, isolated phase sessions | 5 |
+| `cristian-robert/claude-code-harness` | PIV+E pipeline with an optional agile layer | 1 |
+| `mohammad-shaddad/cardo` | multi-agent sprint orchestration, gated delivery | 0 |
+
+These are single-author experiments with essentially no external adoption. That is not a
+criticism — several are substantial and self-applied at real scale, and `roll` reports
+3,478 commits and 435 delivered stories against itself — but it does mean the field has no
+established practice yet, and none of these should be treated as an authority. They are
+peers.
+
+Four of their ideas are worth taking:
+
+- **Gate modes — autonomous, advisory, shadow** (`cardo`). A gate that surfaces a finding
+  without blocking is a distinct and useful thing, and it is exactly the shape an item
+  acceptance verdict needs. Every gate DevSteward has today is blocking.
+- **Sprint = one item, not time-boxed** (`agentic-scrum`). Independent confirmation of the
+  ruling above.
+- **A lessons file updated after every correction** (`claude-code-workflow`). A
+  per-correction trigger, finer-grained than per-REQ, relevant to the retrospective.
+- **Acceptance evidence per unit of work** (`roll`). DevSteward has this already as the
+  evidence directory; the convergence is a good sign.
+
+The genuinely useful references are older and lie outside the ecosystem: **ISO/IEC/IEEE
+29148:2018** for the StRS→SyRS transformation and its quality attributes for stakeholder
+requirements — *necessary, implementation-free, unambiguous, singular, verifiable,
+traceable*, of which "implementation-free" is the rule DriveSteward's backlog derived
+independently; **EARS** (Mavin et al., Rolls-Royce, RE'09) for a teachable grammar for the
+translated requirement — `WHILE <precondition>, WHEN <trigger>, the <system> SHALL
+<response>`; **Specification by Example / ATDD** (Adzic, Larman) as the road not taken,
+where one artifact is both the user's criterion and the automated test; **dual-track agile**
+(Cagan, Patton) for the discovery track that fills a backlog, which maps onto DevSteward's
+concept phase; and **bidirectional traceability** as practised under ISO 26262 and DO-178C,
+which is the standard name for what links a need to a requirement to a test to its evidence.
+
+## Open questions
+
+- **How many items may one REQ take up?** Several, in the model as stated. But an item
+  denied while its siblings are accepted needs the attempt record to be per-item, not
+  per-REQ.
+- **Who plays product owner in a project of one?** The authority that makes a Scrum backlog
+  trustworthy comes from the role being separate from the team. When operator and engineer
+  are the same person, only the artifact enforces the separation — which raises the stakes
+  on provenance, and on the rule that item acceptance criteria are written before the
+  translation.
