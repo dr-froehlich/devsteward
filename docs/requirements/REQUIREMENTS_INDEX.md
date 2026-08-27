@@ -96,5 +96,6 @@ commit** as its frontmatter and the code.
 | REQ-090 | No model identifiers in engine code — a generic co-author trailer, and the spawn model moved to config | DONE | [REQ-090](REQ-090.md) | REQ-029, REQ-036, REQ-048, REQ-079 |
 | REQ-091 | A spawn never hides its model and a commit never misattributes it — surface the unset model, refuse it headless, retire the co-author trailer for `Assisted-by:`, and migrate the stamped consumers REQ-090 left behind | DONE | [REQ-091](REQ-091.md) | REQ-029, REQ-030, REQ-036, REQ-080, REQ-090 |
 | REQ-092 | The compass may be handed on — a superseded REQ-001 passes lint when a live north-star heir exists | DONE | [REQ-092](REQ-092.md) | REQ-027, REQ-087 |
+| REQ-093 | A backlog of user needs above the REQ — capture in the user's words, take items up at intake, and record an acceptance verdict the REQ cannot overrule | DRAFT | [REQ-093](REQ-093.md) | REQ-027, REQ-071, REQ-084, REQ-086, REQ-089 |
 
 New requirement template: [`_templates/req.md`](../../devsteward/templates/docs/requirements/_templates/req.md)
