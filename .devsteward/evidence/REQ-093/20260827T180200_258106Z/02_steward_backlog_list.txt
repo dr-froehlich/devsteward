@@ -1,0 +1,20 @@
+=== steward backlog-list ===
+  boot-to-menu                open              The tool autostarts when booted from a stick into a user men
+  graphical-first             open              The tool starts into a graphical environment, with fallbacks
+  hidpi-readable              open              On high resolution screens text is readable.
+  auto-smart-refresh          attempted         The default operation is a fully automatic smart refresh, wh
+      taken up by REQ-019
+  full-rewrite-option         open              There shall be a full rewrite option as manual user choice.
+  performance-dashboard       open              There is a graphic (fallback text graphic, fallback prompt) 
+  capture-compare             open              Two drive state captures can be compared relative to each ot
+  live-dashboard              open              The dashboard is live during the refresh operation → fallbac
+  session-record-on-stick     open              The stick contains a complete and machine readable record of
+  history-manager             open              There is a management tool or view which allows browsing his
+  drive-recognised            open              A drive is recognised as the same drive when it comes back, 
+  rewrite-response-health     open              Part of the drive's health assessment is its response to rew
+  drive-true-parameters       attempted         A drive's true parameters are determined during probing and/
+      taken up by REQ-019
+  rapid-verdict               open              In a few minutes, before committing to a long run, the opera
+  measured-as-used            held              The performance the tool reports is measured the way the dri
+      2026-08-27 held — a claim about workload realism; nothing measured so far needs it — the settled median is flat across all ten deciles, so the drive has no positional structure for a realistic access pattern to expose (FINDINGS-night-run §7). Waiting on a reason to be believed, not on a session.
+exit: 0
