@@ -1,10 +1,9 @@
-"""REQ-057 — the Claude-targeted `steward` black-box manual ships and is wired (AC2), and the
-handbook, the manual, and the bundled skills carry the current verbs (AC3).
+"""The `steward` black-box manual ships, is wired, and tracks the engine (REQ-057, REQ-094).
 
-These are documentation-shape regression tests: a missing manual, a broken stamp, an unwired
-CLAUDE.md, or a doc/skill that still presents `steward recover` as a live command must fail
-the gate. They cannot certify "complete revision" or "black-box sufficiency" — that is AC4's
-human oracle.
+Documentation-shape regression tests: a missing manual, a broken stamp, an unwired CLAUDE.md, a
+surface still presenting a retired verb, or a shipped verb the manual never documents must fail
+the gate. They cannot certify "complete revision" or "black-box sufficiency" — that stays a human
+oracle (REQ-057 AC4, and REQ-094 Decision 9's attended read).
 """
 
 from __future__ import annotations
@@ -37,9 +36,17 @@ def test_claude_manual_ships_stamped_and_referenced(tmp_path):
     assert "STEWARD.md" in claude_md
 
 
-def test_docs_and_skills_use_current_verbs():
-    """AC3: the handbook and the manual name `repeat` and `revalidate`; the bundled skills name
-    `repeat`; and none of the three presents `steward recover` as a live command."""
+def test_no_surface_presents_a_retired_verb():
+    """No doc surface advertises a verb the engine no longer has (was REQ-057 AC3).
+
+    REQ-057 filed this as an allowlist — the handbook and manual must *name* `repeat` and
+    `revalidate` — plus a denylist for the retired `steward recover`. REQ-094 deleted the
+    allowlist half: two substrings out of twenty-nine verbs certified nothing, and it was the
+    hand-enumerated shape that let ten verbs reach consumers undocumented. The manual's coverage
+    is now derived from the click registry below, in both directions. What survives here is the
+    denylist, which the derived guard cannot replace for the handbook and the bundled skills —
+    it reads neither.
+    """
     handbook = "\n".join(
         p.read_text(encoding="utf-8")
         for p in (_REPO / "devsteward" / "handbook").glob("*.qmd")
@@ -50,23 +57,21 @@ def test_docs_and_skills_use_current_verbs():
         for p in (_REPO / "devsteward" / "templates" / ".claude" / "skills").rglob("SKILL.md")
     )
 
-    assert "repeat" in handbook and "revalidate" in handbook
-    assert "repeat" in manual and "revalidate" in manual
-    assert "repeat" in skills
-
-    for surface in (handbook, manual, skills):
-        assert "steward recover" not in surface
+    for name, surface in (("handbook", handbook), ("manual", manual), ("skills", skills)):
+        assert "steward recover" not in surface, (
+            f"the {name} presents `steward recover` as a live command; it was renamed to "
+            "`steward repeat` in REQ-054"
+        )
 
 
 # -- REQ-094: the manual's command coverage is derived from the CLI, not enumerated ----------
 #
-# The pre-REQ-094 guard above (`test_docs_and_skills_use_current_verbs`, REQ-057 AC3) is a
-# hand-enumerated two-verb allowlist. It is retained — it is a landed REQ's oracle and it covers
-# the handbook and the bundled skills, which nothing below looks at — but it is no longer the
-# *guarantee*: it structurally cannot see a verb that never reached the manual, which is how ten
-# consumer-facing verbs accumulated across REQ-036/066, REQ-089 and REQ-093. Completeness now
-# comes from the click registry, the same way `skillsync.tracked_artifacts` derives its set from
-# what the template actually ships rather than from a list someone must remember to edit.
+# REQ-057 guarded the manual with a hand-enumerated two-verb allowlist. It structurally could not
+# see a verb that never reached the manual, which is how ten consumer-facing verbs accumulated
+# across REQ-036/066, REQ-089 and REQ-093 while the gate stayed green. REQ-094 deleted it and
+# derives coverage from the click registry instead — the same way `skillsync.tracked_artifacts`
+# derives its set from what the template actually ships rather than from a list someone must
+# remember to edit.
 
 _MANUAL = _REPO / "devsteward" / "templates" / "STEWARD.md"
 _REFERENCE_HEADING = "## Command reference"

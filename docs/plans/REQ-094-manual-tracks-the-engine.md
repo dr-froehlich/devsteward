@@ -12,17 +12,23 @@ go green. That sequence is the disconfirmability proof AC2 formalizes.
 
 ## Correction to the REQ text (Decision 11)
 
-REQ-094's Requirement said the hand-enumerated allowlist in
-`test_docs_and_skills_use_current_verbs` is *removed*. It cannot be: that node-id is **REQ-057's
-AC3 acceptance test**, and REQ-057 is `done`. Deleting or renaming it breaks a landed REQ's
-oracle, and its AC3 text explicitly requires "the Quarto handbook and the Claude manual both name
-`repeat` and `revalidate`" — so weakening it would make REQ-057's AC stop testing what it claims.
+A first pass claimed the hand-enumerated allowlist in `test_docs_and_skills_use_current_verbs`
+*could not* be removed, because it is REQ-057's AC3 test and REQ-057 is `done`. That was wrong,
+and the REQ's Decision 11 now records the correction:
 
-Resolution: **retain it untouched** and add the derived guard alongside. The redundancy is
-harmless (the manual will name both verbs in the reference table anyway), and the old test still
-covers two surfaces the derived guard deliberately does not — the Quarto handbook and the bundled
-skills. What REQ-094 actually replaces is the *guarantee*: completeness now comes from derivation,
-not from that list. The REQ's Decisions table records this as Decision 11.
+* `lint.py` checks only that an AC's `test:` field is **non-empty**, and only on **active** REQs —
+  terminal ones are skipped entirely.
+* Nothing re-runs a done REQ's named tests. The develop gate runs *this* REQ's named tests plus
+  the full suite, where the file is an ordinary member.
+* Retiring a landed REQ's acceptance test is the corpus's dominant pattern, not an exception:
+  **51 of 292** AC node-ids already do not resolve — whole files removed by the REQ-047 pivot,
+  and by REQ-079/REQ-091 superseding REQ-076/REQ-090.
+
+An acceptance criterion records what was accepted *then*; it is not a permanent fixture on the
+suite. So the allowlist is deleted as originally specified. Its `steward recover` denylist
+survives on independent merit — the derived guard reads neither the handbook nor the bundled
+skills — under the honest name `test_no_surface_presents_a_retired_verb`. REQ-057 AC3 stands as
+the historical record of what that REQ delivered.
 
 ## Files touched
 
