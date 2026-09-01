@@ -11,10 +11,10 @@ reverse-engineering the engine.
 ## The model in one breath
 
 A **REQ** (`REQ-NNN.md` in the requirements dir) is a spec with a machine-readable acceptance
-block. Where the documents live is per-project: `requirements_dir`, `index_file`, `plans_dir`
-and `concepts_dir` in `.devsteward/config.yaml` — read them before writing anything. Their
-defaults are `docs/requirements/`, `docs/plans/` and `docs/concepts/`, but a project whose
-`docs/` is owned by a docs generator keeps them elsewhere.
+block. Where the documents live is per-project: `requirements_dir`, `index_file`, `plans_dir`,
+`concepts_dir` and `backlog_file` in `.devsteward/config.yaml` — read them before writing
+anything. Their defaults are `docs/requirements/`, `docs/plans/`, `docs/concepts/` and
+`docs/BACKLOG.md`, but a project whose `docs/` is owned by a docs generator keeps them elsewhere.
 The **ledger** (`.devsteward/`) is the cursor: where work is and what happened. You do the
 thinking; **the engine verifies and commits** — it runs the acceptance tests itself and only
 marks a step `done` when they pass. You never write `status: done` and you never hand-edit the
@@ -31,9 +31,20 @@ session). A REQ whose acceptance has an `artifact` or `manual` criterion also ge
 ```sh
 steward status      # the cursor, eligible/blocked steps, parked decisions — the ONE read of the ledger
 steward lint        # schema-valid REQs, deps resolve, index↔REQ in sync, every AC has a test id
+steward sync        # refresh the engine-owned stamped artifacts after an engine upgrade
 ```
 
 `steward status` is the sanctioned way to see the ledger. Do not hand-read `.devsteward/state.yaml`.
+
+**The engine-owned artifacts are not yours to edit.** This manual, the bundled skills under
+`.claude/skills/`, and the REQ template at `<requirements_dir>/_templates/req.md` are *stamped*
+from the engine and must track it. The engine upgrades independently of your copies, so
+`steward status` reports any that have drifted and `steward sync` refreshes them (a *stale* or
+*missing* artifact is refreshed to byte-match the installed engine; `--force` also refreshes a
+locally *edited* one, backing yours up to `<name>.orig` first). Editing one of these files in
+your project marks it **customized**, and `sync` then refuses to refresh it — stranding you on a
+private fork of the manual while the engine moves on. If something here is wrong or missing, say
+so; do not fix it locally.
 
 ## The normal forward path
 
@@ -57,6 +68,12 @@ steward checkpoint        # close it: the engine re-runs the tests and lands on 
   green makes the one authoritative commit (frontmatter + index + code) and advances the ledger —
   all on `dev`. **On red nothing lands**: fix the cause and re-run `checkpoint`. The gate cannot
   be talked into green; certification is the engine's, never yours to assert.
+- **`steward gate [REQ-NNN] [PHASE]`** shows you that verdict *without* closing anything
+  (REQ-089). It runs the step's named acceptance tests exactly as the develop gate will and prints
+  each failure, and it is strictly **read-only** — no commit, no ledger write, no staging, nothing
+  added to the index. Use it to see where you stand mid-development. It is the *verify* gate only,
+  so a green `gate` is not a promise that `checkpoint` will land: the land also runs the capture
+  check and the artifact gates.
 
 Plan-first is enforced: the land **refuses** unless a file in the plans dir names the REQ id.
 Concept-first is enforced the same way for a REQ that declared `process.concept: true`: the land
@@ -77,6 +94,40 @@ is decided at intake: when the target ACs depend on the concept deliverable, the
 needs a declared home — `develop: split` (a post-freeze develop phase authors the target ACs) or
 a **named downstream REQ** — and the upstream REQ must **never carry the downstream REQ's
 acceptance bar**.
+
+## The backlog — user needs above the REQ
+
+A **backlog item** is a user need **in the user's words** — the stakeholder-level requirement a
+REQ is *translated from*. It sits one level above the REQ and answers a different question: a REQ
+asks *did we build what was specified*, an item asks *was what we specified worth building*.
+
+```sh
+steward backlog-add "<the need, in the owner's words>"   # the cheap way in: no interview, no id
+steward backlog-list                                     # every item, its derived state, its attempts
+steward backlog-accept HANDLE                            # the owner: this satisfies the need
+steward backlog-deny HANDLE --reason "<why not>"         # the owner: it does not
+steward backlog-hold HANDLE --reason "<what it waits on>"
+steward backlog-retire HANDLE --reason "<why dropped>"
+```
+
+- **Run `steward backlog-list` at the start of every `/intake`.** If the project keeps a backlog,
+  the intake probably starts from an item. A project with no backlog file simply reports so — that
+  is a valid state, not a missing artifact, and `backlog-add` creates the file when one is wanted.
+- **Take-up is recorded in the REQ's `backlog_refs:` frontmatter, and nowhere else.** That list is
+  the **only** stored record. There is no status column in the backlog file and no "taken up by"
+  column — `backlog-list` *derives* each item's state from `backlog_refs` across the corpus plus
+  the append-only verdict log, so there is no second copy to fall out of step.
+- **The item's acceptance is never the REQ's gate.** The owner's verdict is **advisory to the REQ
+  and blocking to the item**: a `backlog-deny` does *not* fail the REQ — the REQ closes on its
+  verification result — it leaves the item open, with the attempt on record, for another REQ to
+  take up. So never turn an item's acceptance criterion into a `manual` AC: that would let the
+  owner's opinion block a build that met its specification.
+- **Author an item's acceptance criteria before translating it,** in the owner's language. Criteria
+  written after the solution is known get quietly bent to fit it — which is the exact failure this
+  layer exists to prevent, one level up.
+- **A need that names a mechanism is not a need.** If an item says *how* rather than *what*, say so
+  and ask what it is for. Record anything you proposed yourself with `--origin proposed`, and only
+  when the owner chose it from alternatives.
 
 ## The batch lane (headless queues)
 
@@ -197,6 +248,7 @@ Pick the verb by **what is actually stuck**. None of these touch a `done` REQ (s
 | A parked **decision** on a `develop` step (a genuine fork) | The session hit a choice it couldn't resolve — the autopilot raised the captain | `steward decide DEC-NNN` (guided, from a plain shell) |
 | A **`manual`-AC** validate hold (state F): "awaits its human oracle" | Async QA — a human must sign off | `steward validate REQ-NNN` (**not** `decision-answer`) |
 | A **red validation** (the lab found a defect, or the validation test is wrong) | A human question — no auto-repair loop | `steward rework` or `steward revalidate` (below) |
+| A **`validate` step FAILED by a land-gate refusal** (a missing plan/concept doc, after a *green* validation) | The formality is missing; the sign-offs are already durable | `steward reland REQ-NNN` |
 | A **`done` REQ still surfacing a parked `:validate` decision** | A diverged ledger — the land already happened; the cursor was rewound behind it | `steward validate REQ-NNN` (reconciles it from the event log; **never** hand-edit `state.yaml`) |
 
 - **`steward repeat REQ-NNN`** — the re-run verb (REQ-054, renamed from `recover`). The common
@@ -217,10 +269,90 @@ Pick the verb by **what is actually stuck**. None of these touch a `done` REQ (s
   the cause and re-validate. Reads the red evidence dir as your repair context.
 - **`steward revalidate REQ-NNN`** — the validate-layer mirror: when the develop work **stands**
   and an external lab/setup issue was fixed, re-run the validation only (`develop` stays `done`).
+- **`steward reland REQ-NNN`** — the cheap edge when the *validation was green* and only the land
+  formality failed (no plan file, no concept deliverable). The sign-offs are durable in the green
+  validation event, so once you fix the formality `reland` re-certifies that same green and lands —
+  no re-prompting, no re-run, no paid session. Narrow preconditions: `REQ-NNN:validate` is FAILED
+  and its last events are a green validation followed by a `land_refused`. For a *red* validation
+  use `revalidate`; for a develop step use `repeat`.
 
 `steward decision-list` shows parked forks with their briefs (question, context, options,
 recommendation). Validation and attended waits are **holds**, not decisions (REQ-074): they never
 appear in that list — `steward status` shows each hold with the verb that resolves it.
+
+## Command reference
+
+Every verb the `steward` CLI ships, and **who runs it**. Not all of them are yours: some are the
+operator's, one belongs to a skill you will not have, and one must never be run from inside a
+session at all. They are all listed anyway — knowing that a verb exists and is not yours is
+information; a gap in this table is not.
+
+Arguments are shown in the middle column. Flags are not: `steward <verb> --help` is the
+authoritative flag reference and cannot drift.
+
+### Orienting
+
+| Verb | What it does | Run by / when |
+|---|---|---|
+| `steward status` | The ledger cursor, eligible and blocked steps, parked decisions, and any stamped-artifact drift. The one sanctioned read of the ledger. | You — first thing in every session, and again after every state change. |
+| `steward lint` | Schema-validates every REQ, resolves `depends_on`, checks the index ↔ frontmatter pair is in lockstep, requires a test id on every AC. | You — after any edit to a REQ or the index. It must be green before a close. |
+| `steward sync` | Refreshes stale or missing engine-owned stamped artifacts (the bundled skills, this manual, `<requirements_dir>/_templates/req.md`) to byte-match the installed engine. `--force` also replaces a locally edited one, backing yours up to `<name>.orig`. | The operator, or you when asked — after an engine upgrade, or when `status` reports drift. |
+| `steward sync-skills` | Back-compat alias of `sync`, kept so older stamped copies and runbooks that name it keep working. Identical behaviour. | Nobody, in new work — prefer `sync`. |
+
+### The forward path
+
+| Verb | What it does | Run by / when |
+|---|---|---|
+| `steward activate` | `activate REQ-NNN` — flips a `draft` (or `dropped`) REQ to `open` so its develop step becomes eligible, syncing the index row. Leaves the change uncommitted. | You — right after `/intake`, before the first `/advance`. |
+| `steward gate` | `gate [REQ-NNN] [PHASE]` — previews a step's acceptance verdict and prints each failure. Strictly read-only: no commit, no ledger write, no staging. | You — mid-development, as often as you like. It changes nothing. |
+| `steward checkpoint` | `checkpoint [REQ-NNN PHASE]` — the interactive close. Re-runs the acceptance tests through the land-grade gate, checks the plan artifact, makes the one authoritative commit (frontmatter + index + code) and advances the ledger. | You — once, as the **terminal** act of an attended step. Never mid-phase. |
+
+### The batch lane
+
+| Verb | What it does | Run by / when |
+|---|---|---|
+| `steward advance` | `advance [REQ-NNN]` — one develop checkpoint headless, then the fixed report. | The operator, from a plain shell. It spawns `claude -p`, so it refuses to run from inside a Claude session. |
+| `steward run` | `run [REQ-NNN]` — marches every eligible step headless; parks on forks, stops on a hard failure or a usage limit. | The operator, from a plain shell — same nesting rule as `advance`. |
+
+### The System-Test phase
+
+| Verb | What it does | Run by / when |
+|---|---|---|
+| `steward validate` | `validate REQ-NNN` — the whole phase from one command: spawns the fresh System Tester, grades the captures, takes any human sign-off, lands on green. | The operator, from a plain terminal. It spawns a session, so it refuses inside one. |
+| `steward validate-start` | `validate-start REQ-NNN` — warm cycle: opens the validate step and prints the evidence dir. Spawns nothing. | You — this is the half that *is* callable from inside a warm session. |
+| `steward validate-record` | `validate-record REQ-NNN` — warm cycle: grades the capture and takes the human verdict through its own prompt. | The operator, from a **second plain shell**, while the validation session stays warm and idle. A session can never host or relay that prompt. |
+
+### Recovery
+
+| Verb | What it does | Run by / when |
+|---|---|---|
+| `steward repeat` | `repeat REQ-NNN` — re-arms a FAILED step so the next run re-attempts it, with the failed attempt's partial work left intact in the tree. | You or the operator — on any FAILED step, and after fixing a D/H mechanical stop. |
+| `steward rework` | `rework REQ-NNN` — returns a red validation to develop (`develop → recover`, `validate → pending`) for a fix-and-revalidate cycle, carrying the green ACs forward. | The operator — when the red validation found a real defect. |
+| `steward revalidate` | `revalidate REQ-NNN` — re-runs only the ACs that were red; green one-offs are carried forward with provenance. `develop` stays `done`. | The operator — when the develop work stands and an external lab or setup cause was fixed. |
+| `steward reland` | `reland REQ-NNN` — replays the mechanical land after a land-gate *refusal*, re-certifying the durable green validation without re-prompting or re-running it. | The operator — only when `REQ-NNN:validate` is FAILED with a green validation followed by a `land_refused`. |
+| `steward decide` | `decide DECISION_ID` — guided resolution of a parked fork: briefs you on the question, context, options and the parked session's recommendation, and supports live interrogation before the engine records your choice. | The operator, from a plain shell. It spawns a session, so never from inside one. |
+| `steward decision-list` | Shows the forks parked while running unattended, each with its brief. Holds (a validation wait, an attended need) never appear here. | You or the operator — any time. |
+| `steward decision-answer` | `decision-answer DECISION_ID ANSWER` — the non-guided plumbing: records an answer against a parked fork and unblocks its step. | The operator — when the answer is already settled and no guided session is wanted. |
+
+### The backlog
+
+| Verb | What it does | Run by / when |
+|---|---|---|
+| `steward backlog-add` | `backlog-add "<need>"` — records a user need in the owner's words. Creates the backlog file from the bundled template when the project has none. | The owner's words; you type them. Never invent a need — record one you proposed with `--origin proposed`, and only when the owner chose it. |
+| `steward backlog-list` | Every item with its **derived** state and attempt record. Nothing is stored: state comes from `backlog_refs` plus the append-only verdict log. | You — at the start of every `/intake`. |
+| `steward backlog-accept` | `backlog-accept HANDLE` — the owner's verdict that a delivered result satisfies the need. | The **owner**, any time after the REQ lands — the honest answer to "is this actually usable" often arrives only after living with it. |
+| `steward backlog-deny` | `backlog-deny HANDLE --reason "<why>"` — the owner's verdict that it does not. The reason is mandatory. | The **owner**. It is advisory to the REQ and blocking to the item: it never fails the REQ. |
+| `steward backlog-hold` | `backlog-hold HANDLE --reason "<what it waits on>"` — the need stands but is deliberately not being worked. Taking it up in a REQ lifts the hold. | The **owner**. |
+| `steward backlog-retire` | `backlog-retire HANDLE --reason "<why>"` — the need is no longer wanted. Nothing is deleted; the item and its reason stay readable. | The **owner** — the only way an item leaves the backlog unsatisfied. |
+
+### Project setup
+
+| Verb | What it does | Run by / when |
+|---|---|---|
+| `steward new` | `new TARGET` — stamps the bundled scaffolding (the skills, this manual, the REQ template, the docs layout, a seed backlog) into a new project at TARGET. | The operator, from outside the project — once. There is no agent in a project that does not exist yet. |
+| `steward init` | Initializes a ledger in the current directory without stamping any templates. | The operator — once, in an existing directory being brought under the engine. |
+| `steward seed-ledger` | Marks every terminal REQ's phase-step(s) done, seeding a ledger for a corpus that was built before the engine arrived. | The `/onboard` skill, during a migration. That skill is operator-only and is never stamped into a consumer, so you will not have it. |
+| `steward cache` | Reports how long ago this project's newest Claude session transcript was written and whether the prompt cache is still warm (exit 0 warm, 1 cold, 2 none). | A **second shell** — never from inside a session. Measuring the session's cache warmth from inside that session warms the very thing it reports on, so the reading is worthless. |
 
 ## Hard rules
 
@@ -236,6 +368,11 @@ appear in that list — `steward status` shows each hold with the verb that reso
   REQ's commit, its ledger writes race, and the results are undefined. One session at a time is
   doctrine, not something the engine locks or detects — finish (or park) one before starting the
   next.
+- **Never** hand-edit an engine-owned stamped artifact — this manual, the bundled skills under
+  `.claude/skills/`, or `<requirements_dir>/_templates/req.md`. They are stamped from the engine
+  and must track it; editing one marks it **customized** and `steward sync` will then refuse to
+  refresh it, stranding the project on a private fork while the engine moves on. If something here
+  is wrong or missing, **say so** — that is the fix, not a local edit.
 - **Never** read the DevSteward engine source to operate it. This manual is the contract; the
   `steward` CLI is the API.
 - Move a REQ's frontmatter, its `REQUIREMENTS_INDEX.md` row, and the code that satisfies it in the

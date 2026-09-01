@@ -58,6 +58,18 @@ When you design or change anything here, hold to these:
   session exports `DEVSTEWARD_ASSISTED_BY` so a `steward` subprocess can name its driver.
   Neither the engine nor a session adds `Signed-off-by:` — the DCO is a certification only a
   human can make.
+- **The shipped manual tracks the engine (REQ-094).** A REQ that changes anything a *consumer
+  agent* observes — a CLI verb, a flag, a behaviour, a frontmatter field — updates
+  `devsteward/templates/STEWARD.md` in the **same commit**. That file is the black-box manual
+  `CLAUDE.md.tmpl` calls "the authoritative `steward` reference", and it is the only interface a
+  consumer has: a feature the manual does not describe does not exist for them, however green its
+  tests are. `tests/test_steward_manual.py` derives verb coverage from the click registry and will
+  go red on a new verb by itself, but it cannot see a behaviour change that adds no verb — that
+  half is yours. This obligation is **DevSteward's own** and must never be pushed into a shipped
+  artifact: the bundled skills are inode-shared with their templates, so a rule added to
+  `/advance` ships to every consumer, and telling a consumer to edit `STEWARD.md` would mark their
+  copy `customized` and make `steward sync` refuse it forever. Dogfooding does not license using
+  the engine's reach for what only this project needs.
 - **Sanitized public repo:** no real local paths (`/mnt/c/Users/...`), no emails, no
   account creds in committed files. Templates use placeholders.
 
