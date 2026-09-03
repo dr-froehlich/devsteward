@@ -99,6 +99,6 @@ commit** as its frontmatter and the code.
 | REQ-093 | A backlog of user needs above the REQ — capture in the user's words, take items up at intake, and record an acceptance verdict the REQ cannot overrule | DONE | [REQ-093](REQ-093.md) | REQ-027, REQ-071, REQ-084, REQ-086, REQ-089 |
 | REQ-094 | The shipped manual tracks the engine — a derived verb-coverage guard, the ten undocumented verbs, and a same-commit doc obligation | DONE | [REQ-094](REQ-094.md) | REQ-057, REQ-066, REQ-089, REQ-093 |
 | REQ-095 | Retire the `process.develop` key — subtract the engine-inert `split` declaration, keep the schema tolerant of the legacy value, and restate the concept doctrine it distorted | DONE | [REQ-095](REQ-095.md) | REQ-027, REQ-029, REQ-039, REQ-067, REQ-071, REQ-083, REQ-084, REQ-094 |
-| REQ-096 | Delete the stamped schema copy — one artifact, one file; the duplicate nothing read had drifted two REQ-cycles behind | DRAFT | [REQ-096](REQ-096.md) | REQ-021, REQ-048, REQ-051, REQ-066, REQ-083, REQ-095 |
+| REQ-096 | Delete the stamped schema copy — one artifact, one file; the duplicate nothing read had drifted two REQ-cycles behind | DONE | [REQ-096](REQ-096.md) | REQ-021, REQ-048, REQ-051, REQ-066, REQ-083, REQ-095 |
 
 New requirement template: [`_templates/req.md`](../../devsteward/templates/docs/requirements/_templates/req.md)

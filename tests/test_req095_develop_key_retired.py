@@ -193,15 +193,14 @@ def test_no_live_develop_declaration_in_package(tmp_path):
         "a retired develop-mode declaration crept back into the package:\n" + "\n".join(hits)
     )
 
-    # the schema files carry it only as a retired key, never as a live declaration
-    for rel in ("schema/req.schema.json",
-                "templates/docs/requirements/schema/req.schema.json"):
-        prop = json.loads((PACKAGE / rel).read_text(encoding="utf-8"))
-        develop = prop["properties"]["process"]["properties"]["develop"]
-        assert "RETIRED" in develop["description"]
-        assert "REQ-095" in develop["description"]
-        # historical values stay valid; a typo still fails schema
-        assert set(develop["enum"]) == {"fused", "split"}
+    # The schema carries it only as a retired key, never as a live declaration.
+    # REQ-096 deleted the stamped duplicate, so there is one schema to check.
+    schema = json.loads((PACKAGE / "schema" / "req.schema.json").read_text(encoding="utf-8"))
+    develop = schema["properties"]["process"]["properties"]["develop"]
+    assert "RETIRED" in develop["description"]
+    assert "REQ-095" in develop["description"]
+    # historical values stay valid; a typo still fails schema
+    assert set(develop["enum"]) == {"fused", "split"}
 
 
 # -- AC5 — the shipped CLAUDE.md.tmpl concept bullet is accurate --------------

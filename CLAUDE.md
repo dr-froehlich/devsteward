@@ -70,6 +70,20 @@ When you design or change anything here, hold to these:
   `/advance` ships to every consumer, and telling a consumer to edit `STEWARD.md` would mark their
   copy `customized` and make `steward sync` refuse it forever. Dogfooding does not license using
   the engine's reach for what only this project needs.
+- **One artifact, one file (REQ-096).** An artifact that has to exist in two locations —
+  an engine path and its stamped template path — is unified at the **filesystem**:
+  inode-shared (a hard link) or a symlink, never a second copy. A copy is a drift
+  generator, and the drift is silent because nothing fails when the twins disagree. The
+  existing instances are the pattern: `docs/requirements/_templates/req.md` is **one inode**
+  with `devsteward/templates/docs/requirements/_templates/req.md`, the root `STEWARD.md` is a
+  **symlink** to `devsteward/templates/STEWARD.md`, and every bundled skill is inode-shared
+  with its template — edit either path, both change, no synchronizer exists or is needed.
+  The one place this was not applied was the stamped `req.schema.json`, and it drifted two
+  REQ-cycles behind the packaged one (REQ-048's `supersedes` list, REQ-051's
+  `process.fixtures`) even though REQ-021's text named both paths. It was deleted rather
+  than guarded — nothing read it. So: when a new artifact needs a twin, **link it**; if it
+  cannot be linked, ask whether the second copy needs to exist at all before writing a
+  synchronizer for it.
 - **Sanitized public repo:** no real local paths (`/mnt/c/Users/...`), no emails, no
   account creds in committed files. Templates use placeholders.
 
