@@ -32,13 +32,13 @@ def test_process_block_schema_and_lab_resolution(tmp_path):
     assert lint(_cfg(tmp_path)) == []
 
     declared = parse_req(req_dir / "REQ-001.md")
+    # REQ-095: `develop:` is retired — still accepted by the schema and still echoed
+    # verbatim when a legacy REQ declares one, but defaulted nowhere and read by nothing.
     assert declared.process == {
         "develop": "split", "concept": True, "lab": ["REQ-002"], "fixtures": []
     }
     defaulted = parse_req(req_dir / "REQ-002.md")
-    assert defaulted.process == {
-        "develop": "fused", "concept": False, "lab": [], "fixtures": []
-    }
+    assert defaulted.process == {"concept": False, "lab": [], "fixtures": []}
 
     # (c) out-of-enum develop → schema problem (lint rule 1).
     write_req(req_dir, "REQ-003", status="open", process={"develop": "turbo"})
@@ -67,4 +67,9 @@ def test_process_block_partial_merges_over_defaults(tmp_path):
     req = parse_req(tmp_path / "REQ-001.md")
     assert req.process == {
         "develop": "split", "concept": False, "lab": [], "fixtures": []
+    }
+    # ...and a block that declares nothing at all yields no develop key whatsoever.
+    write_req(tmp_path, "REQ-002", process={"concept": True})
+    assert parse_req(tmp_path / "REQ-002.md").process == {
+        "concept": True, "lab": [], "fixtures": []
     }

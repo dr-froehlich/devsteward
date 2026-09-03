@@ -46,7 +46,7 @@ Ask, in `AskUserQuestion` form when interactive, until you genuinely understand:
 - **Risks / weaknesses:** what could make this the wrong call?
 - **Dependencies:** which existing REQs must be done first? (→ `depends_on`)
 - **Acceptance:** system-level, measurable, classified — §2a–§2b below.
-- **Process:** the three declarations only a present human can make — §2c below.
+- **Process:** the two declarations only a present human can make — §2c below.
 - **Localization split:** any user-facing strings? They stay isolated/translatable; all
   code and technical text is English.
 
@@ -173,8 +173,8 @@ exists. So screen every criterion whose real risk is corpus-shaped with one ques
 only trustworthy after running against the live/real system and iterating on what it turns up?*
 If yes, do **not** mechanically file it `artifact`/`manual` and ship it to validation: make the
 live proof a **develop-session obligation** — performed and iterated attended, **fixable in
-place**, stated in the Requirement + a Decision (`develop: split` is its natural shape), *not*
-an acceptance criterion routed to the fixless System-Test phase. Keep a synthetic-fixture
+place**, stated in the Requirement + a Decision, *not* an acceptance criterion routed to the
+fixless System-Test phase. Keep a synthetic-fixture
 `regression` alongside to prove the *mechanism* disconfirmably in the gate. Reserve
 `artifact`/`manual` System-Test deferral for proofs a synthetic fixture genuinely can't stand in
 for **and** whose oracle needs no fixing loop. Beware the two over-generalizations that breed
@@ -194,7 +194,7 @@ the proof gets **no repair loop** and every red costs a whole extra session. Fil
 proof as a develop obligation in the Requirement + a Decision, and keep a synthetic-fixture
 `regression` AC for the mechanism.
 
-### 2c. The three process declarations (while the human is present)
+### 2c. The two process declarations (while the human is present)
 
 Decide these now — they must not be made headless later — and record them in the
 optional `process:` frontmatter block (omit the block when every value is the default
@@ -219,19 +219,15 @@ and no lab is needed):
   skill carries that workflow).
   **Phase-model placement — ask this explicitly (REQ-071):** when `concept: true` is set
   *because the target ACs depend on the concept deliverable*, also decide where the
-  post-freeze work lives: **`develop: split`**, so a post-freeze develop phase iterates the
-  analysis and authors the target ACs against the frozen deliverable, **or** a **named
-  downstream REQ** that owns the modeling — and then the upstream REQ must **never carry the
-  downstream REQ's acceptance bar** (no "sufficient basis for phase-N+1"-style manual AC on
-  an upstream inventory step whose own Notes scope that work out — the FlowSteward REQ-081
-  AC6 trap). `concept: true` + `develop: fused` stays the legitimate default for spike-shaped
-  concepts whose ACs *are* writable at intake; either shape alone is fine — the *unexamined
-  combination* is the defect.
+  post-freeze work lives: **the concept session itself authors the target ACs** once the
+  deliverable is frozen, iterating the analysis against it, **or** a **named downstream REQ**
+  owns the modeling — and then the upstream REQ must **never carry the downstream REQ's
+  acceptance bar** (no "sufficient basis for phase-N+1"-style manual AC on an upstream
+  inventory step whose own Notes scope that work out — the FlowSteward REQ-081 AC6 trap).
+  Ask which one; an unexamined answer is the defect, and the choice belongs in the REQ's
+  Decisions table.
 - `lab:` — which REQs own the **lab assets** the System-Test phase will require?
   Default `[]`.
-- `develop:` — `fused`, one design+build session (the **default**), or `split`, an
-  attended design review before build — reserved for genuinely risky REQs. If split,
-  extract *why* and record the reason in the REQ's Decisions table.
 
 ### 2d. Taking up backlog items (REQ-093)
 

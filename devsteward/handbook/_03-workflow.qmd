@@ -23,9 +23,9 @@ Claude** (and it refuses unless a file in the plans dir names the REQ; for a `co
 REQ it also refuses unless a concept deliverable — `<concepts_dir>/REQ-NNN.md` **or** a non-empty
 `<concepts_dir>/REQ-NNN/` bundle directory (REQ-067) — exists and `concept_refs:` names it).
 On a **red** gate it spawns up to **two** fresh repair sessions (failure brief, on the model
-configured for the `repair` kind), then parks. A REQ that declared `develop: split` or `concept: true` is parked in
-batch, naming the attended need, rather than driven headless — and for `concept: true` the
-attended develop session *is* the concept phase. (See @sec-engine for the gate's teeth.)
+configured for the `repair` kind), then parks. A REQ that declared `concept: true` is parked
+in batch, naming the attended need, rather than driven headless — and the attended develop
+session *is* the concept phase. (See @sec-engine for the gate's teeth.)
 
 ## The V-model mapping: `check:` steers the phases
 
@@ -258,7 +258,7 @@ are reserved for genuine human forks.
   checked out (single ledger; no branch or tree gate) and never weakens a `done` REQ.
 - **An ineligible develop step (the old states D/H) → fix the cause, then `steward repeat`.**
   A develop step held because no file in the plans dir names the REQ, or because it declared
-  `develop: split` / `concept: true` (an attended need), is a **mechanical stop, not a
+  `concept: true` (an attended need), is a **mechanical stop, not a
   decision** (REQ-056 took these off the decision list — parking them only generated a
   stalemate). `steward status` names the real cause; add the plan / drive it attended, then
   `steward repeat REQ-NNN` to re-arm it. No `decision answer` is involved.

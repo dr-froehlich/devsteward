@@ -91,9 +91,9 @@ legitimately **iterates**: it may commit, push, and deploy repeatedly on `dev` t
 inputs. **`steward checkpoint` is the terminal act**, run once the deliverable is frozen; over an
 already-clean tree it simply records the step (an effectively no-op commit). And the phase model
 is decided at intake: when the target ACs depend on the concept deliverable, the post-freeze work
-needs a declared home — `develop: split` (a post-freeze develop phase authors the target ACs) or
-a **named downstream REQ** — and the upstream REQ must **never carry the downstream REQ's
-acceptance bar**.
+needs a declared home — either **the concept session itself authors the target ACs** once the
+deliverable is frozen, or a **named downstream REQ** owns the modeling — and the upstream REQ must
+**never carry the downstream REQ's acceptance bar**.
 
 ## The backlog — user needs above the REQ
 
@@ -138,7 +138,8 @@ steward run         # march every eligible step headless; park on forks, stop on
 
 In batch the engine drives `claude -p`, re-runs the tests itself, lands on green (repairing up to
 twice on red, then parking), and advances. There is no human channel, so a fork is **parked**, not
-asked. A REQ that needs a human (e.g. `develop: split`) is parked naming the attended need.
+asked. A REQ that needs a human (one declaring `process.concept: true`) is parked naming the
+attended need.
 
 ## The System-Test phase (`validate`)
 
@@ -244,7 +245,7 @@ Pick the verb by **what is actually stuck**. None of these touch a `done` REQ (s
 | State you see in `steward status` | What it means | The verb |
 |---|---|---|
 | A step is **FAILED** (a develop step errored or the gate stayed red) | The attempt left partial edits in the tree | `steward repeat REQ-NNN` |
-| **D/H** — a develop step ineligible (e.g. no plan artifact, or split/attended need) | **Not a decision.** A mechanical go-fix-and-retry stop | fix the cause, then `steward repeat REQ-NNN` |
+| **D/H** — a develop step ineligible (e.g. no plan artifact, or a declared concept phase's attended need) | **Not a decision.** A mechanical go-fix-and-retry stop | fix the cause, then `steward repeat REQ-NNN` |
 | A parked **decision** on a `develop` step (a genuine fork) | The session hit a choice it couldn't resolve — the autopilot raised the captain | `steward decide DEC-NNN` (guided, from a plain shell) |
 | A **`manual`-AC** validate hold (state F): "awaits its human oracle" | Async QA — a human must sign off | `steward validate REQ-NNN` (**not** `decision-answer`) |
 | A **red validation** (the lab found a defect, or the validation test is wrong) | A human question — no auto-repair loop | `steward rework` or `steward revalidate` (below) |

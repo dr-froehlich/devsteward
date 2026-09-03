@@ -82,11 +82,7 @@ class ReqStepSource:
             deps = [d for d in (dep_step(dep) for dep in r.depends_on) if d is not None]
             proc = r.process
             attended_reason = ""
-            if proc.get("develop") == "split":
-                attended_reason = (
-                    f"{r.id} declared a split develop — needs an attended design review"
-                )
-            elif proc.get("concept"):
+            if proc.get("concept"):
                 attended_reason = (
                     f"{r.id} declared a concept phase — needs an attended session"
                 )

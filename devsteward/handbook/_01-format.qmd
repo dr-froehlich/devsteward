@@ -19,7 +19,6 @@ scenario_refs: [SCN-002]
 supersedes: null
 tags: [access]
 process:                # optional (REQ-027) — omit when every value is the default
-  develop: fused        # fused (default) | split — split = attended design review first
   concept: false        # concept phase (risk buy-down / spike) before develop?
   lab: [REQ-031]        # REQs owning lab assets the System-Test phase requires
 ```
@@ -28,14 +27,16 @@ Validated against `req.schema.json` by `steward lint`. The `id` must match the f
 (`REQ-007.md`). This is the layer the engine reads to build the dependency graph.
 
 The optional **`process:` block** records the intake-time declarations a present human
-made: whether develop runs **fused** (one design+build session, the default) or **split**
-(an attended design review first, for genuinely risky REQs), whether a **concept phase**
-(architecture / risk buy-down / spike — whose deliverable is a `<concepts_dir>/REQ-NNN.md` doc or a
-`<concepts_dir>/REQ-NNN/` bundle directory, optionally a committed prototype, REQ-039/REQ-067)
-precedes develop, and which REQs own the **lab assets** the
-System-Test phase will require. An absent block means exactly the defaults
-(`develop: fused`, `concept: false`, `lab: []`); `lab:` references are lint-resolved like
+made: whether a **concept phase** (architecture / risk buy-down / spike — whose deliverable
+is a `<concepts_dir>/REQ-NNN.md` doc or a `<concepts_dir>/REQ-NNN/` bundle directory,
+optionally a committed prototype, REQ-039/REQ-067) precedes develop, and which REQs own the
+**lab assets** the System-Test phase will require. An absent block means exactly the
+defaults (`concept: false`, `lab: []`); `lab:` references are lint-resolved like
 `depends_on`.
+
+A retired `develop:` key (REQ-095) is still *accepted* by the schema so REQs written before
+its retirement stay valid, but it declares nothing and the engine never reads it — the one
+process declaration that makes a step attended is `concept:`.
 
 ## Layer 2 — the acceptance block (the verification contract)
 

@@ -98,6 +98,6 @@ commit** as its frontmatter and the code.
 | REQ-092 | The compass may be handed on — a superseded REQ-001 passes lint when a live north-star heir exists | DONE | [REQ-092](REQ-092.md) | REQ-027, REQ-087 |
 | REQ-093 | A backlog of user needs above the REQ — capture in the user's words, take items up at intake, and record an acceptance verdict the REQ cannot overrule | DONE | [REQ-093](REQ-093.md) | REQ-027, REQ-071, REQ-084, REQ-086, REQ-089 |
 | REQ-094 | The shipped manual tracks the engine — a derived verb-coverage guard, the ten undocumented verbs, and a same-commit doc obligation | DONE | [REQ-094](REQ-094.md) | REQ-057, REQ-066, REQ-089, REQ-093 |
-| REQ-095 | Retire the `process.develop` key — subtract the engine-inert `split` declaration, keep the schema tolerant of the legacy value, and restate the concept doctrine it distorted | DRAFT | [REQ-095](REQ-095.md) | REQ-027, REQ-029, REQ-039, REQ-067, REQ-071, REQ-083, REQ-084, REQ-094 |
+| REQ-095 | Retire the `process.develop` key — subtract the engine-inert `split` declaration, keep the schema tolerant of the legacy value, and restate the concept doctrine it distorted | DONE | [REQ-095](REQ-095.md) | REQ-027, REQ-029, REQ-039, REQ-067, REQ-071, REQ-083, REQ-084, REQ-094 |
 
 New requirement template: [`_templates/req.md`](../../devsteward/templates/docs/requirements/_templates/req.md)

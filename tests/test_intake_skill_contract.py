@@ -32,12 +32,14 @@ def test_intake_seeds_taxonomy_and_concept():
     for value in ("regression", "artifact", "manual"):
         assert value in md
 
-    # the three process declarations are decided while the human is present.
+    # the two process declarations are decided while the human is present
+    # (REQ-095 retired the third, `develop:`).
     assert "process:" in md or "`process:`" in md
     assert "concept" in md
     assert "lab" in md
-    assert "fused" in md and "split" in md
-    # fused is the default; split is the declared exception for risky REQs.
+    assert "two process declarations" in md
+    assert "fused" not in md and "develop: split" not in md
+    # each declaration states its default.
     assert "default" in md
 
     # honest deferral: a missing lab names its follow-on REQ, never a downgrade.

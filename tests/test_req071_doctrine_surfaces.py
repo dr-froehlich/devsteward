@@ -25,6 +25,9 @@ _ENTRYPOINT = "real running entrypoint"
 _FOLLOW_ON = "named follow-on REQ"
 _TERMINAL = "is the terminal act"
 _NO_IMPORTED_BAR = "never carry the downstream REQ's acceptance bar"
+# REQ-095: rule 5's fork lost its fictional half (`develop: split` never created a
+# post-freeze phase). The real fork is the concept session itself, or a downstream REQ.
+_POST_FREEZE_HOME = "the concept session itself authors the target ACs"
 
 
 def _steward() -> str:
@@ -60,7 +63,9 @@ def test_steward_manual_and_handbook_carry_all_five_rules():
         assert "already-clean tree" in doc
         # rule 5 (phase-model-placement).
         assert _NO_IMPORTED_BAR in doc
-        assert "develop: split" in doc
+        assert _POST_FREEZE_HOME in doc
+        assert "downstream REQ" in doc
+        assert "develop: split" not in doc
 
 
 def test_intake_skill_interrogates_the_doctrine():
@@ -72,9 +77,11 @@ def test_intake_skill_interrogates_the_doctrine():
     assert _ENTRYPOINT in intake and _WIRED in intake
     assert _FOLLOW_ON in intake
     assert _NO_IMPORTED_BAR in intake
-    # the fork itself is named: split vs. a named downstream REQ, asked explicitly.
-    assert "develop: split" in intake
+    # the fork itself is named — the concept session vs. a named downstream REQ,
+    # asked explicitly; the retired flag is not offered as a shape (REQ-095).
+    assert _POST_FREEZE_HOME in intake
     assert "downstream REQ" in intake
+    assert "develop: split" not in intake
 
 
 def test_advance_skill_seeds_the_iterative_concept_scope():

@@ -324,32 +324,34 @@ def test_per_step_model_config(tmp_path):
 # -- AC6 ----------------------------------------------------------------------
 
 
-def test_split_and_concept_park_in_batch(tmp_path):
-    """`steward run` parks a REQ declaring develop: split or concept: true with a decision
-    naming the attended need, and spawns no develop session for it; a default REQ still lands."""
+def test_concept_parks_in_batch(tmp_path):
+    """`steward run` parks a REQ declaring concept: true, naming the attended need, and
+    spawns no develop session for it; a default REQ still lands.
+
+    REQ-095: a legacy `develop: split` REQ is the *negative* case — the key is retired, so
+    it is an ordinary unattended REQ that lands like any other.
+    """
     req_dir = tmp_path / "docs" / "requirements"
     write_req(req_dir, "REQ-001", status="open", process={"develop": "split"})
     write_req(req_dir, "REQ-002", status="open", process={"concept": True})
     write_req(req_dir, "REQ-003", status="open")
     write_index(req_dir, [(r, f"{r} t", "OPEN", "–") for r in ("REQ-001", "REQ-002", "REQ-003")])
-    _write_plan(tmp_path, "REQ-003")
+    _write_plan(tmp_path, "REQ-001", "REQ-003")
     Ledger.init(tmp_path)
     runner = FakeRunner(default=ok_result())
     ex = _executor(tmp_path, runner=runner)
 
     results = ex.run()
     outcomes = {r.step.id: r.outcome for r in results}
-    assert outcomes["REQ-001:develop"] is RunOutcome.PARKED
+    assert outcomes["REQ-001:develop"] is RunOutcome.DONE  # legacy split: no longer attended
     assert outcomes["REQ-002:develop"] is RunOutcome.PARKED
     assert outcomes["REQ-003:develop"] is RunOutcome.DONE
 
-    # no develop session was spawned for the attended REQs
-    assert all("REQ-001" not in c["command"] and "REQ-002" not in c["command"]
-               for c in runner.calls)
+    # no develop session was spawned for the attended REQ
+    assert all("REQ-002" not in c["command"] for c in runner.calls)
     # REQ-074: the attended wait is a ledger hold (no decision) naming the attended need.
     led = Ledger(tmp_path)
     assert led.open_decisions() == []
-    assert "split" in led.hold_note("REQ-001:develop")
     assert "concept" in led.hold_note("REQ-002:develop")
 
 

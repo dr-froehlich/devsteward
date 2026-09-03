@@ -42,9 +42,13 @@ ACTIVE_STATUSES = {"open", "in-progress", "blocked"}
 TERMINAL_STATUSES = {"done", "dropped", "superseded"}
 
 # REQ-027: defaults for the optional `process:` frontmatter block — the intake-time
-# declarations (develop mode, concept phase, lab assets). An absent block means exactly
-# these values; REQ-029/030 read them through :attr:`ReqFile.process`.
-PROCESS_DEFAULTS = {"develop": "fused", "concept": False, "lab": [], "fixtures": []}
+# declarations (concept phase, lab assets). An absent block means exactly these values;
+# REQ-029/030 read them through :attr:`ReqFile.process`.
+#
+# REQ-095 retired `develop:`. It is not defaulted here, so nothing in the engine can read
+# a develop mode; a legacy REQ still carrying the key merges it through untouched (the
+# schema keeps accepting it) and no reader ever sees it.
+PROCESS_DEFAULTS = {"concept": False, "lab": [], "fixtures": []}
 
 
 @dataclass
@@ -120,7 +124,10 @@ class ReqFile:
         """The optional ``process:`` block merged over :data:`PROCESS_DEFAULTS` (REQ-027).
 
         Always returns all keys; an absent or partial block yields the defaults
-        (``develop: fused``, ``concept: False``, ``lab: []``, ``fixtures: []``).
+        (``concept: False``, ``lab: []``, ``fixtures: []``).
+
+        A legacy ``develop:`` (retired by REQ-095) passes through unchanged when a REQ
+        still declares one — it is defaulted nowhere and read by nothing.
         """
         raw = self.frontmatter.get("process")
         merged = dict(PROCESS_DEFAULTS)

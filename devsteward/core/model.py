@@ -62,7 +62,7 @@ class Step:
     req: str | None = None
     phase: str | None = None
     #: This step needs a human present (the profile sets it; the core only honors it by
-    #: parking in batch). REQ-029: a REQ that declared a split develop or a concept phase.
+    #: parking in batch). REQ-029/REQ-095: a REQ that declared a concept phase.
     attended: bool = False
     #: Opaque human-readable reason the step is attended (the profile fills it; the core
     #: surfaces it verbatim in the batch park decision). Empty when ``attended`` is False.

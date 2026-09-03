@@ -88,7 +88,7 @@ restart is cheap) — then parks the step for a human. Model/effort are configur
 step kind** (`claude.steps.<kind>`, falling back to the flat `claude.model`/`claude.effort`).
 Every model identifier lives in `.devsteward/config.yaml` and none in the engine's code
 (REQ-090), so what a step spawns with is readable in one file — and an unset `claude.model`
-means no `--model` flag at all, i.e. claude's own default. A REQ that declared `develop: split` or
+means no `--model` flag at all, i.e. claude's own default. A REQ that declared
 `concept: true` is **batch-ineligible**: `steward run` parks it naming the attended need
 rather than simulating the human's presence.
 

@@ -39,8 +39,10 @@ def test_handbook_documents_taxonomy_and_example():
     assert "phase existence" in workflow
 
     # the optional process: block is documented with its defaults (01 · format).
+    # REQ-095 retired `develop:`, so the block is concept + lab.
     assert "`process:` block" in fmt
-    assert "develop: fused" in fmt and "concept: false" in fmt
+    assert "concept: false" in fmt and "lab: []" in fmt
+    assert "develop:" not in fmt.replace("retired `develop:`", "")
 
 
 def test_handbook_documents_environment_bound_regression():

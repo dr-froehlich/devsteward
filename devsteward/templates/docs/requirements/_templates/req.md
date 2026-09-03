@@ -12,7 +12,6 @@ scenario_refs: []        # [SCN-001, ...]
 supersedes: null
 tags: []
 # process:               # optional (REQ-027) — omit when every value is the default
-#   develop: fused       # fused (default) | split — split = attended design review first
 #   concept: false       # concept phase (risk buy-down / spike) before develop?
 #   lab: []              # REQs owning lab assets the System-Test phase requires
 ---

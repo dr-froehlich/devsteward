@@ -77,13 +77,13 @@
     },
     "process": {
       "type": "object",
-      "description": "Optional intake-time process declarations (REQ-027). Absent keys default to develop: fused, concept: false, lab: [].",
+      "description": "Optional intake-time process declarations (REQ-027). Absent keys default to concept: false, lab: [].",
       "additionalProperties": false,
       "properties": {
         "develop": {
           "type": "string",
           "enum": ["fused", "split"],
-          "description": "fused = one design+build session (default); split = an attended design review before build, for genuinely risky REQs."
+          "description": "RETIRED (REQ-095) — a legacy key the engine does not read. Still accepted so REQs written before its retirement stay schema-valid; it declares nothing and has no effect. Attendance is declared by `concept:` alone."
         },
         "concept": {
           "type": "boolean",

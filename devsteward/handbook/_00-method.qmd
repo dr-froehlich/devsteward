@@ -58,11 +58,10 @@ doctrine rules (REQ-071) govern that split — each one a codified consumer post
    place — never deferred to the fixless System-Test phase, which has no repair loop.
 5. **Phase-model placement.** When `concept: true` is set *because the target ACs depend
    on the concept deliverable*, intake also decides where the post-freeze work lives:
-   `develop: split` (a post-freeze develop phase authors the target ACs) or a named
-   downstream REQ — and the upstream REQ must **never carry the downstream REQ's
-   acceptance bar**. `concept: true` + `develop: fused` remains the legitimate default for
-   spike-shaped concepts; either shape alone is fine — the *unexamined combination* is the
-   defect.
+   either **the concept session itself authors the target ACs** once the deliverable is
+   frozen, or a **named downstream REQ** owns the modeling — and the upstream REQ must
+   **never carry the downstream REQ's acceptance bar**. Intake asks which; an unexamined
+   answer is the defect.
 
 ## First-class conventions
 
