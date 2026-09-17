@@ -190,15 +190,6 @@ def test_absent_backlog_is_inert_across_lint_status_and_commands(tmp_path, cli_p
     assert _run(cli_project, "status").exit_code == 0
 
 
-def test_devsteward_itself_keeps_no_backlog_and_lints_green():
-    """AC3 — the honor-when-present promise, checked against the live repo."""
-    root = Path(__file__).resolve().parent.parent
-    cfg = Config(root=root, requirements_dir="docs/requirements",
-                 index_file="docs/requirements/REQUIREMENTS_INDEX.md")
-    assert not cfg.backlog_path.exists()
-    assert not any("backlog" in p for p in lint(cfg))
-
-
 # -- AC4 ----------------------------------------------------------------------
 
 

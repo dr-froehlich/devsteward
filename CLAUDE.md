@@ -100,6 +100,8 @@ When you design or change anything here, hold to these:
 - `devsteward/handbook/` — the reference guide (00-method … 04-skills).
 - `docs/requirements/` — DevSteward's **own** REQs (dogfooded). `.devsteward/` holds its
   own ledger.
+- `docs/BACKLOG.md` — DevSteward's **own** backlog of user needs (REQ-093 dogfooded, since
+  2026-09-17). Take items up at `/intake`; never add a status column.
 
 ## Build / test
 
