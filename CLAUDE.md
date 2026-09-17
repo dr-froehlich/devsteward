@@ -96,6 +96,10 @@ When you design or change anything here, hold to these:
   on the core. The only content-aware part.
 - `devsteward/cli.py` — `steward` (click): `new`, `advance`, `run`, `checkpoint`,
   `lint`, `status`, `decision`.
+- `devsteward/verbs.py` — one callable per state-changing verb; the CLI and the dashboard
+  both call these (REQ-097). Never re-implement a verb's body in a second surface.
+- `devsteward/dashboard/` — the status dashboard (`steward dashboard`, the optional
+  `dashboard` extra): `model.py` pure reads, `app.py` Flask routes, `templates/`.
 - `devsteward/templates/` — the scaffolding `steward new` stamps (package-data).
 - `devsteward/handbook/` — the reference guide (00-method … 04-skills).
 - `docs/requirements/` — DevSteward's **own** REQs (dogfooded). `.devsteward/` holds its

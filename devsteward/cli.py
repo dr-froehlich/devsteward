@@ -22,13 +22,8 @@ from .core.ledger import Ledger
 from .core.stop import StopController
 from .core.model import DecisionStatus, StepStatus
 from .core.transaction import transaction
-from .lifecycle import (
-    LifecycleError,
-    activate as lifecycle_activate,
-    repeat as lifecycle_repeat,
-    revalidate as lifecycle_revalidate,
-    rework as lifecycle_rework,
-)
+from . import verbs
+from .lifecycle import LifecycleError
 from .lint import lint as run_lint
 
 
@@ -225,13 +220,9 @@ def activate(req_id: str) -> None:
     files for you to commit deliberately. Refuses done/superseded REQs (supersede instead).
     """
     cfg = _load_or_die()
-    ex = build_executor(cfg)
-    # REQ-049: the frontmatter flip + index row move atomically (same-commit discipline — a
-    # mid-edit crash must not leave them out of sync); regardless of HEAD (allow_any_head).
-    check_invariants(ex, allow_any_head=True)
+    # REQ-097 Decision 5: one body per verb, shared with the dashboard (devsteward.verbs).
     try:
-        with transaction(ex.git, label=f"activate {req_id}", pass_through=(LifecycleError,)):
-            res = lifecycle_activate(cfg, req_id)
+        res = verbs.activate(cfg, req_id)
     except LifecycleError as exc:
         raise click.ClickException(str(exc)) from exc
     color = "green" if res.changed else "yellow"
@@ -252,14 +243,8 @@ def repeat(req_id: str) -> None:
     `steward rework REQ_ID` instead.
     """
     cfg = _load_or_die()
-    ex = build_executor(cfg)
-    # REQ-049 AC3: a recovery verb succeeds regardless of HEAD — INV-1 (single ledger) only,
-    # not the branch/tree gate — and is atomic. A LifecycleError is a graceful refusal raised
-    # before any mutation, so it passes through the boundary untouched (no rollback).
-    check_invariants(ex, allow_any_head=True)
     try:
-        with transaction(ex.git, label=f"repeat {req_id}", pass_through=(LifecycleError,)):
-            res = lifecycle_repeat(ex.ledger, req_id)
+        res = verbs.repeat(cfg, req_id)
     except LifecycleError as exc:
         raise click.ClickException(str(exc)) from exc
     flipped = ", ".join(res.steps)
@@ -288,11 +273,8 @@ def rework(req_id: str) -> None:
     is not re-walked because of a code fix elsewhere. The carried ACs are printed here.
     """
     cfg = _load_or_die()
-    ex = build_executor(cfg)
-    check_invariants(ex, allow_any_head=True)  # REQ-049 AC3: regardless of HEAD; single-ledger only
     try:
-        with transaction(ex.git, label=f"rework {req_id}", pass_through=(LifecycleError,)):
-            res = lifecycle_rework(cfg, ex.ledger, req_id)
+        res = verbs.rework(cfg, req_id)
     except LifecycleError as exc:
         raise click.ClickException(str(exc)) from exc
     where = f" (evidence: {res.evidence})" if res.evidence else ""
@@ -328,11 +310,8 @@ def revalidate(req_id: str) -> None:
     instead when the develop was hollow.
     """
     cfg = _load_or_die()
-    ex = build_executor(cfg)
-    check_invariants(ex, allow_any_head=True)  # REQ-049 AC3: regardless of HEAD; single-ledger only
     try:
-        with transaction(ex.git, label=f"revalidate {req_id}", pass_through=(LifecycleError,)):
-            res = lifecycle_revalidate(cfg, ex.ledger, req_id)
+        res = verbs.revalidate(cfg, req_id)
     except LifecycleError as exc:
         raise click.ClickException(str(exc)) from exc
     where = f" (evidence: {res.evidence})" if res.evidence else ""
@@ -360,20 +339,10 @@ def reland(req_id: str) -> None:
     cfg = _load_or_die()
     ctrl = StopController()
     ctrl.install()
-    ex = build_executor(cfg, announce=_stderr_announcer, stop=ctrl)
-    routine = ex.validate_runner
-    if routine is None:
-        raise click.ClickException("the generic profile has no validation phase")
-    check_invariants(ex)  # REQ-049: refuse on production / mid-merge before any write
-    # REQ-049: the replayed land is atomic — a git failure mid-commit rolls repo + ledger back.
-    with transaction(ex.git, label=f"reland {req_id}"):
-        res = routine.reland(ex, req_id, driver="interactive")
-    if res.outcome is RunOutcome.REFUSED:
-        raise click.ClickException(res.detail)
-    if res.outcome is RunOutcome.FAILED:
-        raise click.ClickException(res.detail)
-    if res.outcome is RunOutcome.VERIFY_FAILED:
-        raise click.ClickException(f"reland could not land — {res.detail}")
+    try:
+        ex, res = verbs.reland(cfg, req_id, announce=_stderr_announcer, stop=ctrl)
+    except LifecycleError as exc:
+        raise click.ClickException(str(exc)) from exc
     _print_report(ex, res)
 
 
@@ -462,6 +431,46 @@ def status() -> None:
                 click.style(f"  ⚠ {d.name:<14} {d.bucket.value}", fg="yellow")
                 + "  — run `steward sync`"
             )
+
+
+# -- dashboard (REQ-097) ------------------------------------------------------
+
+
+@main.command()
+@click.option(
+    "--root", type=click.Path(file_okay=False, path_type=Path), default=None,
+    help="The directory whose children are the projects. Default: the parent of the "
+         "enclosing project, else the current directory.",
+)
+@click.option("--port", default=8765, show_default=True, help="Loopback port to serve on.")
+def dashboard(root: Path | None, port: int) -> None:
+    """Serve the status dashboard over every stamped project under --root (REQ-097).
+
+    One local page per box: each project's steward status and git facts, what waits on
+    you across all of them, each project's backlog with its derived states, and its REQs
+    (read-only). State changes on the page — rework, revalidate, repeat, reland, activate,
+    a decision answer, the backlog verdicts and edits — call the same functions the CLI
+    verbs call, with the same refusals. The page never spawns a Claude session: a session
+    command is shown for you to run in a shell.
+
+    Binds to 127.0.0.1 only. Needs the `dashboard` extra (flask, markdown); without it this
+    verb exits non-zero naming the install command.
+    """
+    import importlib.util
+
+    from .dashboard import INSTALL_HINT
+    from .dashboard.model import resolve_root
+
+    if importlib.util.find_spec("flask") is None:
+        raise click.ClickException(INSTALL_HINT)
+    from .dashboard.app import create_app
+
+    where = resolve_root(root)
+    template = (_package_templates() / "docs" / "BACKLOG.md").read_text(encoding="utf-8")
+    app = create_app(where, templates_root=_package_templates(), backlog_template=template)
+    click.echo(f"dashboard over {where}")
+    click.echo(click.style(f"  http://127.0.0.1:{port}/", fg="green") + "   (Ctrl-C to stop)")
+    app.run(host="127.0.0.1", port=port, debug=False, threaded=True)
 
 
 # -- sync (engine-owned stamped-artifact drift) -------------------------------
@@ -1175,28 +1184,10 @@ def decision_list() -> None:
 def decision_answer(decision_id: str, answer: str) -> None:
     """Record ANSWER against the parked fork DECISION_ID, unblocking its step."""
     cfg = _load_or_die()
-    ex = build_executor(cfg)
-    # REQ-049 AC3: answering a parked decision succeeds regardless of HEAD — the historical
-    # stranding (a parked decision stuck on the wrong branch, no command able to recover it)
-    # is unreachable: single-ledger (INV-1) only, no branch/tree gate.
-    check_invariants(ex, allow_any_head=True)
-    d = ex.ledger.find_decision(decision_id)
-    if d is None or d.status is not DecisionStatus.OPEN:
-        raise click.ClickException(f"no open decision {decision_id}")
-    # REQ-057 Decision 5: a validation-phase hold is *not* a fork to answer here. A `manual`-AC
-    # await (state F) or a red validation parks on a `:validate` step and has dedicated verbs.
-    # Answering it would flip the validate step BLOCKED -> PENDING; unattended it re-runs, still
-    # can't reach the human, and re-parks — the circular trap REQ-056 removed for D/H. Refuse
-    # *before* any mutation (so the step stays BLOCKED, no re-park) and redirect to the real verb.
-    if d.step.endswith(":validate"):
-        req = d.req or d.step.split(":", 1)[0]
-        raise click.ClickException(
-            f"{decision_id} is a validation hold on {d.step}, not a fork to answer. "
-            f"Record the human sign-off with `steward validate {req}` "
-            f"(or, for a red validation, `steward rework {req}` / `steward revalidate {req}`)."
-        )
-    with transaction(ex.git, label=f"decision answer {decision_id}"):
-        d = ex.ledger.answer_decision(decision_id, answer)
+    try:
+        d = verbs.answer_decision(cfg, decision_id, answer)
+    except LifecycleError as exc:
+        raise click.ClickException(str(exc)) from exc
     click.echo(f"Answered {decision_id}; {d.step} unblocked. Run `steward run` to resume.")
 
 
@@ -1337,59 +1328,18 @@ def seed_ledger_cmd() -> None:
 # -- backlog (the stakeholder-requirement layer, REQ-093) ---------------------
 
 
-def _backlog_bits(cfg: Config):
-    """The parsed backlog, its verdict log and the REQ corpus — the three derivation inputs."""
-    from .profiles.req import backlog as bl
-    from .profiles.req.reqfile import load_reqs
-
-    items = bl.load(cfg.backlog_path)
-    reqs = load_reqs(cfg.req_dir) if cfg.req_dir.exists() else []
-    criteria = (
-        bl.parse_criteria(cfg.backlog_path.read_text(encoding="utf-8"))
-        if cfg.backlog_path.exists()
-        else {}
-    )
-    return bl, items, reqs, bl.read_events(cfg.root), criteria
-
-
-def _require_item(bl, items, handle: str, cfg: Config):
-    """Resolve ``handle`` or fail with the list of what does exist."""
-    for i in items:
-        if i.handle == handle:
-            return i
-    if not items:
-        raise click.ClickException(
-            f"no backlog at {cfg.backlog_file} — record a need with "
-            f'`steward backlog-add "…"` first'
-        )
-    known = ", ".join(i.handle for i in items)
-    raise click.ClickException(f"no backlog item '{handle}' in {cfg.backlog_file}\n  known: {known}")
-
-
 def _record_verdict(handle: str, verdict: str, reason: str | None, note: str | None) -> None:
+    from .profiles.req import backlog as bl
+
     cfg = _load_or_die()
-    bl, items, reqs, _, criteria = _backlog_bits(cfg)
-    item = _require_item(bl, items, handle, cfg)
-    # Show the owner what they are judging against. The criteria are the item's own, in the
-    # user's language — not the REQ's verification criteria, which the engine already ran.
-    for line in criteria.get(handle, []):
-        click.echo(f"  · {line}")
-    # Name the REQ that most recently attempted this need, so the attempt record reads as
-    # "REQ-019 tried and the owner said no, because …" without the operator retyping it.
-    attempted = [r.id for r in reqs if handle in r.backlog_refs]
     try:
-        event = bl.append_event(
-            cfg.root,
-            bl.Event(
-                handle=handle,
-                event=verdict,
-                req=attempted[-1] if attempted else None,
-                reason=reason,
-                note=note,
-            ),
-        )
+        item, event, criteria = bl.record_verdict(cfg, handle, verdict, reason=reason, note=note)
     except bl.BacklogError as exc:
         raise click.ClickException(str(exc)) from exc
+    # Show the owner what they judged against. The criteria are the item's own, in the
+    # user's language — not the REQ's verification criteria, which the engine already ran.
+    for line in criteria:
+        click.echo(f"  · {line}")
     colour = {"accepted": "green", "denied": "yellow",
               "retired": "blue", "held": "magenta"}[verdict]
     click.echo(click.style(f"  {handle}: {verdict}", fg=colour) + f" — {item.need[:70]}")
@@ -1427,27 +1377,52 @@ def backlog_add(need: str, handle: str | None, origin: str) -> None:
     from .profiles.req import backlog as bl
 
     cfg = _load_or_die()
-    path = cfg.backlog_path
-    if not path.exists():
-        template = _package_templates() / "docs" / "BACKLOG.md"
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(template.read_text(encoding="utf-8"), encoding="utf-8")
-        click.echo(f"Created {cfg.backlog_file}")
-    text = path.read_text(encoding="utf-8")
+    template = (_package_templates() / "docs" / "BACKLOG.md").read_text(encoding="utf-8")
     try:
-        existing = bl.parse(text)
-        taken = {i.handle for i in existing}
-        if handle is None:
-            handle = bl.mint_handle(need, taken)
-        elif handle in taken:
-            raise click.ClickException(f"handle '{handle}' is already used")
-        path.write_text(
-            bl.append_item(text, bl.Item(handle=handle, need=need, origin=origin)),
-            encoding="utf-8",
-        )
+        handle, created = bl.add(cfg, need, handle=handle, origin=origin, template=template)
     except bl.BacklogError as exc:
         raise click.ClickException(str(exc)) from exc
+    if created:
+        click.echo(f"Created {cfg.backlog_file}")
     click.echo(click.style(f"  + {handle}", fg="green") + f" — {need}")
+
+
+@main.command("backlog-edit")
+@click.argument("handle")
+@click.option("--need", default=None, help="The reworded need, in the owner's words.")
+@click.option(
+    "--origin", type=click.Choice(["operator", "proposed"]), default=None,
+    help="Re-state the provenance: operator = the owner's words; proposed = session-proposed, owner-chosen.",
+)
+@click.option(
+    "--criterion", "criteria", multiple=True,
+    help="An acceptance criterion in the owner's words; repeat for several. "
+         "Given at all, the list REPLACES the item's criteria; `--criterion ''` alone clears them.",
+)
+def backlog_edit(handle: str, need: str | None, origin: str | None, criteria: tuple[str, ...]) -> None:
+    """Reword one item's need, origin and/or acceptance criteria in place (REQ-097).
+
+    The handle never changes — it is what `backlog_refs` and the verdict log key on. Only
+    the parts you name are rewritten; every other byte of the file is preserved. REQ-093
+    shipped add plus the four verdicts and no edit, so "modify" used to mean hand-editing
+    a markdown table; the dashboard's edit form calls exactly this function.
+    """
+    from .profiles.req import backlog as bl
+
+    if need is None and origin is None and not criteria:
+        raise click.ClickException("nothing to change — give --need, --origin and/or --criterion")
+    cfg = _load_or_die()
+    new_criteria = [c for c in criteria if c.strip()] if criteria else None
+    try:
+        item = bl.edit(cfg, handle, need=need, origin=origin, criteria=new_criteria)
+    except bl.BacklogError as exc:
+        raise click.ClickException(str(exc)) from exc
+    click.echo(click.style(f"  ~ {handle}", fg="green") + f" — {item.need} [{item.origin}]")
+    if criteria:
+        for line in new_criteria or []:
+            click.echo(f"      · {line}")
+        if not new_criteria:
+            click.echo("      (criteria cleared)")
 
 
 @main.command("backlog-list")
@@ -1464,8 +1439,7 @@ def backlog_list() -> None:
     from .profiles.req import backlog as bl
 
     try:
-        _, items, reqs, events, criteria = _backlog_bits(cfg)
-        rows = bl.standings(items, reqs, events, criteria)
+        rows = bl.bits(cfg).standings()
     except bl.BacklogError as exc:
         raise click.ClickException(str(exc)) from exc
     if not rows:

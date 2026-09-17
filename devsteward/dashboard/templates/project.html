@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+{% block title %}{{ p.name }} — DevSteward{% endblock %}
+{% block crumbs %}<span class="muted">›</span> <span>{{ p.name }}</span> <span class="root">{{ p.ref.root }}</span>{% endblock %}
+{% block body %}
+<h1>{{ p.name }}</h1>
+{% if p.error %}<div class="flash error">{{ p.error }}</div>{% endif %}
+
+<div class="facts small">
+{% if p.git %}
+  <span>branch <code>{{ p.git.branch }}</code></span>
+  <span>{% if p.git.dirty %}<span class="warn">{{ p.git.dirty }} dirty path(s)</span>{% else %}<span class="ok">clean</span>{% endif %}</span>
+  <span>{% if p.git.remote is none %}<span class="badge">no remote</span>{% elif p.git.unpushed is none %}<span class="muted">no remote-tracking branch</span>{% elif p.git.unpushed %}<span class="warn">{{ p.git.unpushed }} unpushed on {{ p.cfg.integration_branch }}</span>{% else %}nothing unpushed{% endif %}</span>
+  <span>{% if p.git.gap is none %}<span class="muted">no {{ p.cfg.integration_branch }} → {{ p.cfg.production_branch }} gap known</span>{% else %}{{ p.git.gap }} commit(s) {{ p.cfg.integration_branch }} → {{ p.cfg.production_branch }}{% endif %}</span>
+  <span>last commit {{ p.git.age }} ago <span class="mono muted">{{ p.git.head }}</span> {{ p.git.subject }}</span>
+{% else %}<span class="muted">not a git repository</span>{% endif %}
+</div>
+
+<h2>Steward status</h2>
+{% if p.status %}
+<p class="small muted">profile: {{ p.status.profile }}{% if p.status.cursor %} · cursor: <code>{{ p.status.cursor }}</code>{% endif %}</p>
+{% if p.status.terminal %}<p>{{ p.status.terminal }}</p>{% else %}
+<table>
+  <tr><th>Step</th><th>Status</th><th>Note</th><th>Action</th></tr>
+  {% for s in p.status.steps %}
+  <tr>
+    <td class="mono nowrap"><span class="s-{{ s.status }}">{{ s.mark }}</span> {{ s.id }}</td>
+    <td class="nowrap"><span class="s-{{ s.status }}">{{ s.status }}</span>{% if s.eligible %} <span class="badge">eligible</span>{% endif %}{% if s.attended %} <span class="badge">attended</span>{% endif %}</td>
+    <td class="small">{{ s.note }}</td>
+    <td class="nowrap">
+      {% for verb in s.actions %}
+      <form class="inline" method="post" action="{{ url_for('step_verb', name=p.name, verb=verb) }}">
+        <input type="hidden" name="req" value="{{ s.req }}"><button>steward {{ verb }}</button>
+      </form>
+      {% endfor %}
+      {% if s.shell %}<span class="small muted">run <code>{{ s.shell }}</code> in a shell</span>{% endif %}
+    </td>
+  </tr>
+  {% endfor %}
+</table>
+{% endif %}
+{% if p.status.decisions %}
+<h3 class="warn">Parked forks</h3>
+{% for d in p.status.decisions %}
+<div class="card">
+  <div><strong class="mono">{{ d.id }}</strong> <span class="mono muted">[{{ d.step }}]</span></div>
+  <div style="white-space:pre-wrap">{{ d.question }}</div>
+  {% if d.context %}<div class="small muted" style="white-space:pre-wrap">{{ d.context }}</div>{% endif %}
+  {% for opt in d.options %}<div class="small">option {{ loop.index }}: {{ opt }}</div>{% endfor %}
+  {% if d.recommendation %}<div class="small">recommendation: {{ d.recommendation }}</div>{% endif %}
+  <form method="post" action="{{ url_for('decision', name=p.name, decision_id=d.id) }}">
+    <label>Answer (steward decision-answer)</label><input type="text" name="answer" required>
+    <label>Rationale (optional)</label><input type="text" name="rationale">
+    <div style="margin-top:.4rem"><button class="primary">Record answer</button>
+    <span class="small muted">or the guided session: <code>steward decide {{ d.id }}</code></span></div>
+  </form>
+</div>
+{% endfor %}
+{% endif %}
+{% if p.status.drift %}
+<h3 class="warn">Stamped artifacts drifted</h3>
+<ul class="plain small">{% for name, bucket in p.status.drift %}<li>⚠ <code>{{ name }}</code> {{ bucket }} — run <code>steward sync</code></li>{% endfor %}</ul>
+{% endif %}
+{% endif %}
+
+<h2>Requirements <span class="badge">{{ p.reqs|length }}</span></h2>
+<table>
+  <tr><th>ID</th><th>Title</th><th>Status</th><th>Depends on</th><th>Backlog items</th><th></th></tr>
+  {% for r in p.reqs|reverse %}
+  <tr class="{% if r.is_terminal %}dim{% endif %}">
+    <td class="mono nowrap"><a href="{{ url_for('req_page', name=p.name, req_id=r.id) }}">{{ r.id }}</a></td>
+    <td>{{ r.title }}</td>
+    <td class="nowrap">{{ r.status }}</td>
+    <td class="small mono">{{ r.depends_on|join(', ') }}</td>
+    <td class="small mono">{{ r.backlog_refs|join(', ') }}</td>
+    <td class="nowrap">{% if r.status in ('draft', 'dropped') %}
+      <form class="inline" method="post" action="{{ url_for('step_verb', name=p.name, verb='activate') }}">
+        <input type="hidden" name="req" value="{{ r.id }}"><button>steward activate</button></form>{% endif %}</td>
+  </tr>
+  {% endfor %}
+</table>
+
+<h2>Backlog <span class="muted small mono">{{ p.backlog_file }}</span></h2>
+{% if p.backlog_error %}<div class="flash error">{{ p.backlog_error }}</div>{% endif %}
+{% if p.backlog %}
+<table>
+  <tr><th>Handle</th><th>State</th><th>Need</th><th>Origin</th><th>Taken up by / verdicts</th><th></th></tr>
+  {% for st in p.backlog %}
+  <tr>
+    <td class="mono nowrap">{{ st.item.handle }}</td>
+    <td class="nowrap"><span class="badge b-{{ st.state }}">{{ bl.describe(st) }}</span></td>
+    <td>{{ st.item.need }}
+      {% if st.criteria %}<ul class="small muted" style="margin:.3rem 0 0; padding-left:1.1rem">{% for c in st.criteria %}<li>{{ c }}</li>{% endfor %}</ul>{% endif %}
+    </td>
+    <td class="small">{{ st.item.origin }}</td>
+    <td class="small">
+      {% if st.taken_up_by %}<div>taken up by {% for rid in st.taken_up_by %}<a class="mono" href="{{ url_for('req_page', name=p.name, req_id=rid) }}">{{ rid }}</a>{% if not loop.last %}, {% endif %}{% endfor %}</div>{% endif %}
+      {% for v in st.verdicts %}<div>{{ v.ts[:10] }} <strong>{{ v.event }}</strong>{% if v.req %} ({{ v.req }}){% endif %}{% if v.reason %} — {{ v.reason }}{% endif %}{% if v.note %} — {{ v.note }}{% endif %}</div>{% endfor %}
+    </td>
+    <td class="nowrap">
+      <details><summary>edit</summary>
+        <form method="post" action="{{ url_for('backlog_edit', name=p.name, handle=st.item.handle) }}" style="min-width:26rem">
+          <label>Need</label><textarea name="need">{{ st.item.need }}</textarea>
+          <label>Origin</label><select name="origin"><option value="operator" {% if st.item.origin == 'operator' %}selected{% endif %}>operator</option><option value="proposed" {% if st.item.origin == 'proposed' %}selected{% endif %}>proposed</option></select>
+          <label>Acceptance criteria (one per line)</label><textarea name="criteria">{{ st.criteria|join('\n') }}</textarea>
+          <div style="margin-top:.4rem"><button class="primary">steward backlog-edit</button></div>
+        </form>
+      </details>
+      <details><summary>verdict</summary>
+        <form method="post" action="{{ url_for('backlog_verdict', name=p.name, handle=st.item.handle) }}" style="min-width:26rem">
+          <label>Verdict</label>
+          <select name="verdict"><option value="accepted">accept</option><option value="denied">deny</option><option value="held">hold</option><option value="retired">retire</option></select>
+          <label>Reason (required for deny / hold / retire)</label><input type="text" name="reason">
+          <label>Note (accept only)</label><input type="text" name="note">
+          <div style="margin-top:.4rem"><button class="primary">Record verdict</button></div>
+        </form>
+      </details>
+    </td>
+  </tr>
+  {% endfor %}
+</table>
+{% else %}<p class="muted">{% if p.backlog_file %}No items yet — this project keeps none until a need is recorded.{% endif %}</p>{% endif %}
+
+<details style="margin-top:.6rem"><summary>Add a need (steward backlog-add)</summary>
+<form method="post" action="{{ url_for('backlog_add', name=p.name) }}" class="card" style="max-width:40rem">
+  <label>Need, in the owner's words</label><textarea name="need" required></textarea>
+  <label>Handle (optional; minted from the need when empty)</label><input type="text" name="handle" placeholder="kebab-case">
+  <label>Origin</label><select name="origin"><option value="operator">operator — the owner's own words</option><option value="proposed">proposed — a session proposed it, the owner chose it</option></select>
+  <div style="margin-top:.5rem"><button class="primary">Record need</button></div>
+</form>
+</details>
+{% endblock %}

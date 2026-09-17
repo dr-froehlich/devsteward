@@ -58,11 +58,15 @@ def final_phase(req: ReqFile) -> str:
 class ReqStepSource:
     """A :class:`devsteward.core.seams.StepSource` backed by ``docs/requirements/``."""
 
-    def __init__(self, req_dir: Path):
+    def __init__(self, req_dir: Path, reqs: list[ReqFile] | None = None):
         self.req_dir = Path(req_dir)
+        # REQ-097: a caller that already parsed the corpus (the dashboard reads it once per
+        # page) hands it in; the CLI path leaves it None and re-reads from disk each call, so
+        # a step derivation never sees a stale file.
+        self._reqs = reqs
 
     def steps(self, ledger=None) -> list[Step]:  # ledger unused (no side effects)
-        reqs = load_reqs(self.req_dir)
+        reqs = self._reqs if self._reqs is not None else load_reqs(self.req_dir)
         by_id = {r.id: r for r in reqs}
         (phase,) = PHASES  # one fused develop phase per REQ (REQ-029)
         out: list[Step] = []

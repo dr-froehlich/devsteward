@@ -24,10 +24,10 @@ from .profiles.req.verify import ReqVerifier
 REPAIR_BUDGET = 2
 
 
-def build_step_source(cfg: Config):
+def build_step_source(cfg: Config, reqs=None):
     if cfg.profile == "generic":
         return GenericStepSource()
-    return ReqStepSource(cfg.req_dir)
+    return ReqStepSource(cfg.req_dir, reqs=reqs)
 
 
 def build_on_verified(cfg: Config):
@@ -58,7 +58,7 @@ def build_validate_runner(cfg: Config):
     return ReqValidateRoutine(cfg.req_dir, python=cfg.verify_python)
 
 
-def _validation_nodeids(cfg: Config) -> tuple[str, ...]:
+def _validation_nodeids(cfg: Config, reqs=None) -> tuple[str, ...]:
     """The project-wide ``artifact``/``manual`` acceptance node-ids (REQ-068 Decision 2).
 
     The develop full-suite gate deselects these so a one-time validation of an already-done
@@ -70,7 +70,7 @@ def _validation_nodeids(cfg: Config) -> tuple[str, ...]:
     ``tests`` that ``--deselect`` would read as the whole ``tests/`` tree (REQ-070).
     """
     nodeids: list[str] = []
-    for req in load_reqs(cfg.req_dir):
+    for req in (reqs if reqs is not None else load_reqs(cfg.req_dir)):
         for ac in req.acceptance:
             if ac.check in ("artifact", "manual") and ac.test:
                 nodeids.extend(_pytest_targets(ac.test))
@@ -78,7 +78,7 @@ def _validation_nodeids(cfg: Config) -> tuple[str, ...]:
     return tuple(dict.fromkeys(nodeids))
 
 
-def build_verifier(cfg: Config):
+def build_verifier(cfg: Config, reqs=None):
     # The REQ profile gives the guarantee teeth at land (a land step must run real
     # acceptance tests, no skip/zero-collection passes, the full suite is clean, and the
     # project env is resolved — REQ-028); the generic profile keeps the plain verifier.
@@ -88,7 +88,7 @@ def build_verifier(cfg: Config):
         cwd=str(cfg.root),
         full_suite=cfg.verify_full_suite,
         python=cfg.verify_python,
-        exclude_nodeids=_validation_nodeids(cfg),
+        exclude_nodeids=_validation_nodeids(cfg, reqs),
     )
 
 
@@ -126,6 +126,7 @@ def build_executor(
     announce=None,
     stop=None,
     autocommit: bool = True,
+    reqs=None,
 ) -> Executor:
     # Per-step-kind (model, effort) (REQ-029 Decision 4). A CLI --model/--effort override
     # wins for the develop session (the primary); repair keeps its configured default.
@@ -143,8 +144,10 @@ def build_executor(
     repair_budget = 0 if cfg.profile == "generic" else REPAIR_BUDGET
     return Executor(
         root=cfg.root,
-        source=build_step_source(cfg),
-        verifier=build_verifier(cfg),
+        # REQ-097: `reqs` is an already-parsed corpus a read-only caller may hand in so one
+        # page load parses each REQ once; None (every CLI path) reads from disk as before.
+        source=build_step_source(cfg, reqs),
+        verifier=build_verifier(cfg, reqs),
         accounts=build_accounts(
             cfg,
             pin=pin,

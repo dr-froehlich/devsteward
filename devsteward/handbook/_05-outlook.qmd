@@ -7,8 +7,8 @@ chapters.
 **Stage one shipped** (REQ-093): the backlog artifact, the capture verb, the take-up link at
 intake and the acceptance verdict are built, and @sec-backlog is their reference. Everything
 here is the reasoning that produced them — kept because the argument matters more than the
-feature, and because two further stages are still outlook: the **retrospective** and the
-**status server**.
+feature, and because one further stage is still outlook: the **retrospective**. The
+**status server** shipped as REQ-097 (`steward dashboard`, 2026-09-17).
 
 ## The question
 

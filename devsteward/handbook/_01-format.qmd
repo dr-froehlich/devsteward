@@ -159,10 +159,17 @@ its own requirements and then satisfying them.
 |---|---|
 | `steward backlog-add "<need>"` | Record a need. No interview, no schema, no id — the cheap way in. Creates the file if the project has none. |
 | `steward backlog-list` | Every item with its **derived** state and attempt record. |
+| `steward backlog-edit <handle> [--need …] [--origin …] [--criterion …]` | Reword a need, its origin or its criteria in place; the handle never changes (REQ-097). |
 | `steward backlog-accept <handle>` | The owner's verdict: this satisfies the need. |
 | `steward backlog-deny <handle> --reason "…"` | It does not. The reason is mandatory. |
 | `steward backlog-hold <handle> --reason "…"` | The need stands but is deliberately not being worked. Taking it up lifts the hold. |
 | `steward backlog-retire <handle> --reason "…"` | No longer wanted. Nothing is deleted. |
+
+The same operations — and the recovery verbs of @sec-engine — are also on the **status
+dashboard** (`steward dashboard`, REQ-097): one local page over every stamped project on the
+box, showing each project's steward status and git facts, what waits on the operator, the
+backlog with its derived states, and the REQs read-only. Its buttons call the same functions
+as the verbs, with the same refusals, and it never spawns a session.
 
 ### Two verdicts, and why one of them cannot fail a REQ
 

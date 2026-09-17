@@ -433,3 +433,195 @@ def describe(standing: Standing) -> str:
     if standing.state == OPEN and n:
         return f"open (denied {n}×)"
     return standing.state
+
+
+# -- file-level operations shared by the CLI and the dashboard (REQ-097) -------------
+
+# Every write below is the body of one ``steward backlog-*`` verb. The click command prints
+# the result; the dashboard route redirects with it. Neither surface re-implements a write.
+
+
+@dataclass
+class Bits:
+    """The derivation inputs of one project's backlog: items, REQ corpus, verdicts, criteria."""
+
+    items: list[Item]
+    reqs: list
+    events: list[Event]
+    criteria: dict[str, list[str]]
+
+    def standings(self) -> list[Standing]:
+        return standings(self.items, self.reqs, self.events, self.criteria)
+
+
+def bits(cfg, reqs=None) -> Bits:
+    """Load the parsed backlog, its verdict log and the REQ corpus — the three derivation
+    inputs. ``reqs`` may hand in an already-parsed corpus (REQ-097)."""
+    from .reqfile import load_reqs
+
+    items = load(cfg.backlog_path)
+    if reqs is None:
+        reqs = load_reqs(cfg.req_dir) if cfg.req_dir.exists() else []
+    criteria = (
+        parse_criteria(cfg.backlog_path.read_text(encoding="utf-8"))
+        if cfg.backlog_path.exists()
+        else {}
+    )
+    return Bits(items=items, reqs=reqs, events=read_events(cfg.root), criteria=criteria)
+
+
+def require_item(items: list[Item], handle: str, backlog_file: str) -> Item:
+    """Resolve ``handle`` or raise :class:`BacklogError` naming what does exist."""
+    for i in items:
+        if i.handle == handle:
+            return i
+    if not items:
+        raise BacklogError(
+            f"no backlog at {backlog_file} — record a need with `steward backlog-add \"…\"` first"
+        )
+    known = ", ".join(i.handle for i in items)
+    raise BacklogError(f"no backlog item '{handle}' in {backlog_file}\n  known: {known}")
+
+
+def add(cfg, need: str, *, handle: str | None = None, origin: str = OPERATOR,
+        template: str | None = None) -> tuple[str, bool]:
+    """``steward backlog-add`` — append an item, creating the file from ``template`` when absent.
+
+    Returns ``(handle, created)``. A handle is minted from the need when none is given; a
+    given handle that collides is a :class:`BacklogError`.
+    """
+    path = cfg.backlog_path
+    created = False
+    if not path.exists():
+        if template is None:
+            raise BacklogError(f"no backlog at {cfg.backlog_file} and no template to create it from")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(template, encoding="utf-8")
+        created = True
+    if origin not in ORIGINS:
+        raise BacklogError(f"origin {origin!r} is not one of {' | '.join(ORIGINS)}")
+    text = path.read_text(encoding="utf-8")
+    existing = parse(text)
+    taken = {i.handle for i in existing}
+    if handle is None:
+        handle = mint_handle(need, taken)
+    elif handle in taken:
+        raise BacklogError(f"handle '{handle}' is already used")
+    elif not _HANDLE_RE.match(handle):
+        raise BacklogError(f"handle {handle!r} is not lowercase kebab-case")
+    path.write_text(
+        append_item(text, Item(handle=handle, need=need, origin=origin)), encoding="utf-8"
+    )
+    return handle, created
+
+
+def set_criteria(text: str, handle: str, bullets: list[str]) -> str:
+    """Return ``text`` with ``handle``'s ``###`` block under the acceptance section replaced.
+
+    Every byte outside that block is preserved. An empty ``bullets`` removes the block; a
+    handle with no block yet gets one appended at the end of the acceptance section; a file
+    with no acceptance section gets the section appended at its end.
+    """
+    lines = text.splitlines(keepends=True)
+    live = list(_live_lines(text))
+    section_start: int | None = None  # index of the line *after* the acceptance heading
+    section_end = len(lines)  # index of the next level<=2 heading, or EOF
+    block_start: int | None = None  # index of the `### handle` line
+    block_end: int | None = None  # index of the line after the block
+    for idx, stripped in live:
+        if not stripped.startswith("#"):
+            continue
+        level = len(stripped) - len(stripped.lstrip("#"))
+        title = stripped.lstrip("#").strip().strip("`")
+        if section_start is None:
+            if _ACCEPTANCE_SECTION_RE.match(title):
+                section_start = idx + 1
+            continue
+        if level <= 2:
+            section_end = idx
+            break
+        if block_start is None and title == handle:
+            block_start = idx
+            continue
+        if block_start is not None and block_end is None:
+            block_end = idx
+    if block_start is not None and block_end is None:
+        block_end = section_end
+
+    body = [f"- {b.strip()}\n" for b in bullets if b.strip()]
+    block = [f"### {handle}\n", *body, "\n"] if body else []
+
+    if block_start is not None:
+        # Keep a blank line between the previous block and the next heading.
+        return "".join(lines[:block_start] + block + lines[block_end:])
+    if not body:
+        return text
+    if section_start is None:
+        tail = "" if not lines or lines[-1].endswith("\n") else "\n"
+        return text + tail + "\n## Acceptance criteria\n\n" + "".join(block)
+    insert_at = section_end
+    # Insert before the trailing blank lines that separate the section from the next heading.
+    while insert_at > section_start and not lines[insert_at - 1].strip():
+        insert_at -= 1
+    prefix = lines[:insert_at]
+    if prefix and not prefix[-1].endswith("\n"):
+        prefix[-1] += "\n"
+    if prefix and prefix[-1].strip():
+        prefix.append("\n")
+    return "".join(prefix + block + lines[insert_at:])
+
+
+def edit(cfg, handle: str, *, need: str | None = None, origin: str | None = None,
+         criteria: list[str] | None = None) -> Item:
+    """``steward backlog-edit`` — rewrite one item's need, origin and/or acceptance criteria.
+
+    Only the named parts change; the item's row is rewritten in place and its criteria block
+    is spliced under the acceptance section. Every other byte of the file is preserved. The
+    handle itself is never renamed (it is what ``backlog_refs`` and the verdict log key on).
+    """
+    path = cfg.backlog_path
+    if not path.exists():
+        raise BacklogError(f"no backlog at {cfg.backlog_file} (this project keeps none).")
+    text = path.read_text(encoding="utf-8")
+    item = require_item(parse(text), handle, cfg.backlog_file)
+    if origin is not None and origin not in ORIGINS:
+        raise BacklogError(f"origin {origin!r} is not one of {' | '.join(ORIGINS)}")
+    if need is not None and not need.strip():
+        raise BacklogError("an item's need cannot be empty")
+    if need is not None or origin is not None:
+        new_item = Item(
+            handle=handle,
+            need=need.strip() if need is not None else item.need,
+            origin=origin if origin is not None else item.origin,
+        )
+        lines = text.splitlines(keepends=True)
+        lines[item.line] = (
+            f"| {_cell(new_item.handle)} | {_cell(new_item.need)} | {_cell(new_item.origin)} |\n"
+        )
+        text = "".join(lines)
+        item = new_item
+    if criteria is not None:
+        text = set_criteria(text, handle, criteria)
+    path.write_text(text, encoding="utf-8")
+    parse(text)  # must still round-trip
+    return item
+
+
+def record_verdict(cfg, handle: str, verdict: str, *, reason: str | None = None,
+                   note: str | None = None) -> tuple[Item, Event, list[str]]:
+    """``steward backlog-accept|deny|hold|retire`` — append one verdict event.
+
+    Returns ``(item, event, criteria)``: the item judged, the event as appended (its ``req``
+    names the REQ that most recently attempted the need, so the attempt record reads as
+    "REQ-019 tried and the owner said no, because …"), and the item's own criteria so the
+    caller can show the owner what they are judging against.
+    """
+    b = bits(cfg)
+    item = require_item(b.items, handle, cfg.backlog_file)
+    attempted = [r.id for r in b.reqs if handle in r.backlog_refs]
+    event = append_event(
+        cfg.root,
+        Event(handle=handle, event=verdict, req=attempted[-1] if attempted else None,
+              reason=reason, note=note),
+    )
+    return item, event, b.criteria.get(handle, [])

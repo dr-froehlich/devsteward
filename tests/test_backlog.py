@@ -450,3 +450,61 @@ def test_held_is_neither_open_nor_retired(cli_project):
     write_req(cli_project / "reqs", "REQ-030", status="open", backlog_refs=["measured-as-used"])
     write_index(cli_project / "reqs", [("REQ-030", "t", "OPEN", "–")])
     assert "in-progress" in _run(cli_project, "backlog-list").output
+
+
+# -- REQ-097 AC5: `steward backlog-edit` ----------------------------------------------
+
+
+def test_backlog_edit_rewrites_one_item_and_preserves_the_rest(cli_project):
+    """One item's row and criteria block change; every other byte survives; the file still
+    parses; unknown handles and bad origins are refused before any write."""
+    path = cli_project / "docs" / "BACKLOG.md"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    original = (
+        "# Backlog\n\nSeed prose.\n\n| Handle | Need | Origin |\n|---|---|---|\n"
+        "| keep-me | Untouched need. | operator |\n"
+        "| edit-me | Old wording. | operator |\n"
+        "| also-keep | Another untouched need. | proposed |\n\n"
+        "## Acceptance criteria\n\n### keep-me\n- Keep this criterion.\n\n"
+        "### edit-me\n- Old criterion one.\n- Old criterion two.\n\n"
+        "### also-keep\n- Also kept.\n\n"
+        "## Notes\n\nTrailing prose that must survive.\n"
+    )
+    path.write_text(original, encoding="utf-8")
+
+    r = _run(cli_project, "backlog-edit", "edit-me", "--need", "New wording.", "--origin", "proposed",
+             "--criterion", "New criterion.", "--criterion", "And another.")
+    assert r.exit_code == 0, r.output
+    text = path.read_text(encoding="utf-8")
+    assert "| edit-me | New wording. | proposed |" in text
+    assert "### edit-me\n- New criterion.\n- And another.\n\n### also-keep" in text
+    # every other line is byte-identical
+    before = [ln for ln in original.splitlines() if "edit-me" not in ln and "Old " not in ln]
+    after = [ln for ln in text.splitlines() if "edit-me" not in ln and "New " not in ln and "And another" not in ln]
+    assert before == after
+    items = {i.handle: i for i in bl.parse(text)}
+    assert items["edit-me"].need == "New wording." and items["edit-me"].origin == "proposed"
+    assert bl.parse_criteria(text) == {
+        "keep-me": ["Keep this criterion."], "edit-me": ["New criterion.", "And another."],
+        "also-keep": ["Also kept."],
+    }
+
+    # need only, then criteria cleared, then criteria added to an item that had none
+    assert _run(cli_project, "backlog-edit", "keep-me", "--need", "Kept, reworded.").exit_code == 0
+    assert "| keep-me | Kept, reworded. | operator |" in path.read_text()
+    assert _run(cli_project, "backlog-edit", "keep-me", "--criterion", "").exit_code == 0
+    assert "keep-me" not in bl.parse_criteria(path.read_text())
+    assert "### also-keep\n- Also kept.\n\n## Notes" in path.read_text()
+    assert _run(cli_project, "backlog-edit", "keep-me", "--criterion", "Fresh.").exit_code == 0
+    assert bl.parse_criteria(path.read_text())["keep-me"] == ["Fresh."]
+    assert path.read_text().endswith("## Notes\n\nTrailing prose that must survive.\n")
+
+    snapshot = path.read_bytes()
+    for args in (("backlog-edit", "nope", "--need", "x"),
+                 ("backlog-edit", "keep-me", "--origin", "wizard"),
+                 ("backlog-edit", "keep-me", "--need", "   "),
+                 ("backlog-edit", "keep-me")):
+        r = _run(cli_project, *args)
+        assert r.exit_code != 0, args
+        assert path.read_bytes() == snapshot
+    assert "no backlog item 'nope'" in _run(cli_project, "backlog-edit", "nope", "--need", "x").output

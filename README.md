@@ -46,7 +46,8 @@ DevSteward's own requirements (dogfooded in the format it ships).
 ## Develop
 
 ```sh
-pipx install --editable .
+pipx install --editable .              # the engine
+pipx install --editable '.[dashboard]' # + the status dashboard (`steward dashboard`, REQ-097)
 python -m pytest
 ```
 
