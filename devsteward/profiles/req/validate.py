@@ -363,14 +363,18 @@ class ReqValidateRoutine:
         return ex.mechanical_land(step, detail, driver=driver, run_gate=False)
 
     def _reland_refusal(self, req_id: str, led: Ledger) -> str:
-        """The diagnostic for a reland outside its narrow precondition shape (Decision 4)."""
+        """The diagnostic for a land replay outside its narrow precondition shape (D4).
+
+        REQ-098 routes here through ``steward repeat``, which classifies the ledger before
+        calling — so this is the routine's own backstop, reached when the shape changed
+        under a direct caller."""
         validate_id = f"{req_id}:validate"
         status = led.status_of(validate_id)
         return (
-            f"steward reland only applies to a {validate_id} step left FAILED by a "
+            f"the land replay only applies to a {validate_id} step left FAILED by a "
             f"land-gate refusal (its last events a green validation followed by a "
-            f"land_refused) — {validate_id} is {status.value}. For a red validation use "
-            f"`steward revalidate {req_id}`; for a develop step use `steward repeat {req_id}`."
+            f"land_refused) — {validate_id} is {status.value}. `steward repeat {req_id}` "
+            f"re-arms it instead; `steward rework {req_id}` sends it back to develop."
         )
 
     # -- guided two-phase bookkeeping (REQ-034) ---------------------------------
@@ -451,17 +455,18 @@ class ReqValidateRoutine:
                     f"`steward validate-start {req_id}` first"
                 ),
                 StepStatus.BLOCKED: (
-                    f"its validation is already recorded (parked) — for a red use "
-                    f"`steward rework {req_id}` or `steward revalidate {req_id}`; for a "
-                    f"pending sign-off run `steward validate {req_id}`"
+                    f"its validation is already recorded (parked) — go back to develop "
+                    f"with `steward rework {req_id}`, or run it again with "
+                    f"`steward repeat {req_id}`; for a pending sign-off run "
+                    f"`steward validate {req_id}`"
                 ),
                 StepStatus.DONE: (
                     f"the validation already landed — a fresh re-run is "
                     f"`steward validate {req_id}`"
                 ),
                 StepStatus.FAILED: (
-                    f"the step is failed — `steward repeat {req_id}` (or `steward reland "
-                    f"{req_id}` after a land-gate refusal)"
+                    f"the step is failed — `steward repeat {req_id}` (after a land-gate "
+                    f"refusal that same verb replays the recorded green instead)"
                 ),
             }.get(status, f"unexpected step status {status.value}")
             return StepResult(
@@ -1124,26 +1129,26 @@ class ReqValidateRoutine:
     ) -> StepResult:
         """Red validation parks immediately with the failure brief — no repair loop
         (REQ-030 Decision 8): a red here is a human question (hollow develop or broken lab).
-        It names **both** V-model return edges as a choice keyed on the root cause (REQ-055):
-        ``steward rework`` when the develop was hollow (internal cause — redo it), or
-        ``steward revalidate`` when an external lab/setup issue was fixed and the develop
-        stands (re-run the validation only). It does not presume the cause.
+        It names the operator's **two moves** (REQ-098, was REQ-055's pair of return edges):
+        ``steward rework`` to go back to develop when the develop was hollow, or
+        ``steward repeat`` to run the validation again when an external lab/setup issue was
+        fixed and the develop stands. It does not presume the cause.
 
         ``attended`` marks the guided path (not wrapped by ``_drive_step``): it self-commits
         the ledger close on ``dev`` (REQ-048)."""
         led = ex.ledger
         brief = "\n".join(r["detail"] for r in results if not r["ok"]) or "validation red"
         choice = (
-            f"Pick the edge that fits the root cause: if the develop was hollow, return it "
+            f"Pick the move that fits the root cause: if the develop was hollow, go back "
             f"to develop for a fix with `steward rework {req.id}`; if an external lab/setup "
-            f"issue was fixed and the develop stands, re-run the validation only with "
-            f"`steward revalidate {req.id}`."
+            f"issue was fixed and the develop stands, run the validation again with "
+            f"`steward repeat {req.id}` (only the red ACs re-open; the greens carry forward)."
         )
         if not in_flight:
             return StepResult(step, RunOutcome.VERIFY_FAILED, f"{brief}\n\n{choice}")
         question = f"{req.id} validation red — needs a human:\n{brief[:1500]}\n\n{choice}"
-        # REQ-074: the red validation's two return edges already have dedicated verbs
-        # (`steward rework` / `steward revalidate`, keyed on the validation event) — the
+        # REQ-074: the red validation's return edges already have dedicated verbs
+        # (`steward rework` / `steward repeat`, keyed on the validation event) — the
         # wait is a hold, not a decision to answer.
         led.set_hold(step.id, question)
         led.save()

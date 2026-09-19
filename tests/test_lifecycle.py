@@ -86,18 +86,20 @@ def test_repeat_flips_failed_step(project):
     led.set_status("REQ-007:land", StepStatus.FAILED)
     led.save()
 
-    res = repeat(led, "REQ-007")
+    res = repeat(Config(root=project), led, "REQ-007")
 
-    assert res.steps == ["REQ-007:land"]
+    assert res.steps == ["REQ-007:land"] and res.recovered == ["REQ-007:land"]
+    assert res.kinds == ["recover"]
     reloaded = Ledger(project)
     assert reloaded.status_of("REQ-007:land") is StepStatus.RECOVER
     assert reloaded.status_of("REQ-007:build") is StepStatus.DONE  # untouched
     assert any(e["event"] == "step_recover" and e.get("req") == "REQ-007"
                for e in reloaded.events())
 
-    # No failed step left -> refusal.
-    with pytest.raises(LifecycleError, match="no failed step"):
-        repeat(reloaded, "REQ-007")
+    # Nothing stopped left -> refusal (REQ-098 folded `repeat`'s "no failed step" into the
+    # one refusal that covers every non-stopped shape).
+    with pytest.raises(LifecycleError, match="nothing to repeat"):
+        repeat(Config(root=project), reloaded, "REQ-007")
 
 
 def test_messages_name_repeat_not_recover(tmp_path, monkeypatch):

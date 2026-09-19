@@ -62,11 +62,21 @@ Everything tagged *(batch)* or *(interactive)* below applies to that mode only.
   working tree (the failed attempt left them; the engine only commits on success). Read and
   assess what is there first: reconcile or fix the prior work, don't start clean.
   - **Rework (a `rework` event for your step):** if the ledger's latest event for this
-    develop step is `rework`, a red System-Test validation was returned to you for a fix
-    (`steward rework`, REQ-033). The event names the red validation's `evidence` dir — read
-    it (the System Tester's `SYSTEM-TEST-FINDINGS.md`, the captured logs/artifacts) as your
-    repair context: the lab found a real defect (or the validation test itself is wrong).
-    Fix the cause on `dev` so the next validation passes; the findings travel
+    develop step is `rework`, the operator sent the validation back to you for a fix
+    (`steward rework`, REQ-033). **Read the event for your repair context — which of two
+    shapes it has depends on what was returned (REQ-098):**
+    - it names an `evidence` dir → a *red* System-Test validation was returned. Read that dir
+      (the System Tester's `SYSTEM-TEST-FINDINGS.md`, the captured logs/artifacts): the lab
+      found a real defect, or the validation test itself is wrong.
+    - it names **no** `evidence` dir → the validation was returned *before* any verdict was
+      recorded (never started, or held awaiting its human oracle). There is no write-up to
+      read, so the event's **`brief`** is your whole repair context — the operator's
+      `--reason` when they gave one, else a fixed line saying only that it was returned. When
+      the brief is that bare default, the return is a judgement you cannot reconstruct from
+      the ledger: re-read the REQ against what develop actually produced, and **ask** rather
+      than guess (interactive) or park the question (batch).
+
+    Either way, fix the cause on `dev` so the next validation passes; the findings travel
     through the ledger, never on the command line.
 - **Repair (`--repair` in your command):** a previous develop attempt left the acceptance
   gate **red**. Your prompt carries the failure brief (the failed test ids + verifier

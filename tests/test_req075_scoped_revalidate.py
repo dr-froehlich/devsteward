@@ -1,4 +1,8 @@
-"""REQ-075 AC1 — red-only re-open is the engine default of `revalidate`.
+"""REQ-075 AC1 — red-only re-open is the engine default when a red validation re-opens.
+
+Reached through `steward repeat` since REQ-098 folded the `revalidate` verb into it; the
+ledger event it writes is still `revalidate` (REQ-098 Decision 5), which is what the
+scope-consuming read below matches on.
 
 `revalidate` reads the red validation's per-AC results and re-opens **only** the red (or
 unrecorded) `artifact`/`manual` ACs, carrying the green ones forward. The revalidate event
@@ -17,7 +21,7 @@ import pytest
 from devsteward.config import Config
 from devsteward.core.ledger import Ledger
 from devsteward.core.model import Decision, StepStatus
-from devsteward.lifecycle import revalidate
+from devsteward.lifecycle import repeat
 from devsteward.profiles.req.validate import _ac_flag, _pending_revalidate
 
 from conftest import write_index
@@ -64,7 +68,7 @@ def test_revalidate_reopens_only_red_acs(tmp_path):
     ]
     led = _seed_mixed_red(tmp_path, acs, results, evidence=".devsteward/evidence/REQ-001/src")
 
-    res = revalidate(Config(root=tmp_path), led, "REQ-001")
+    res = repeat(Config(root=tmp_path), led, "REQ-001")
 
     assert res.scope == ["AC3"]                      # only the red AC re-opens
     carried_acs = [c["ac"] for c in res.carried]
@@ -98,7 +102,7 @@ def test_unrecorded_ac_is_reopened(tmp_path):
     ]
     led = _seed_mixed_red(tmp_path, acs, results)
 
-    res = revalidate(Config(root=tmp_path), led, "REQ-001")
+    res = repeat(Config(root=tmp_path), led, "REQ-001")
     assert res.scope == ["AC3"]                      # unrecorded AC3 re-opens
     assert [c["ac"] for c in res.carried] == ["AC2"]
 
@@ -120,7 +124,7 @@ def test_all_red_is_full_rerun(tmp_path):
     ]
     led = _seed_mixed_red(tmp_path, acs, results)
 
-    res = revalidate(Config(root=tmp_path), led, "REQ-001")
+    res = repeat(Config(root=tmp_path), led, "REQ-001")
     assert res.scope is None and res.carried is None
 
     fresh = Ledger(tmp_path)
@@ -137,7 +141,7 @@ def test_no_per_ac_results_is_full_rerun(tmp_path):
     results = [{"ac": "-", "check": "artifact", "ok": False, "detail": "session failed"}]
     led = _seed_mixed_red(tmp_path, acs, results)
 
-    res = revalidate(Config(root=tmp_path), led, "REQ-001")
+    res = repeat(Config(root=tmp_path), led, "REQ-001")
     assert res.scope is None and res.carried is None
 
 
@@ -154,7 +158,7 @@ def test_pending_revalidate_consumed_by_a_later_validation(tmp_path):
         {"ac": "AC3", "check": "artifact", "ok": False, "detail": "boom"},
     ]
     led = _seed_mixed_red(tmp_path, acs, results)
-    revalidate(Config(root=tmp_path), led, "REQ-001")
+    repeat(Config(root=tmp_path), led, "REQ-001")
 
     fresh = Ledger(tmp_path)
     assert _pending_revalidate(fresh, "REQ-001") is not None

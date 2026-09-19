@@ -105,7 +105,7 @@ def test_same_second_revalidate_carries_without_self_copy(tmp_path, monkeypatch,
     _capture(tmp_path)
     assert _invoke(tmp_path, ["validate-record", "REQ-001"]).exit_code == 1  # AC4 red
 
-    assert _invoke(tmp_path, ["revalidate", "REQ-001"]).exit_code == 0
+    assert _invoke(tmp_path, ["repeat", "REQ-001"]).exit_code == 0
     (tmp_path / "fixed.marker").write_text("external cause fixed\n", encoding="utf-8")
 
     # No sleep — the re-start happens inside the same pinned second as the source validation.

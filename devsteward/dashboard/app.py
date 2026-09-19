@@ -28,8 +28,33 @@ from . import model
 #: same discipline as typing verbs into one shell.
 _WRITE_LOCK = threading.Lock()
 
-#: The state-changing verbs a step form may name (Decision 5: exactly the CLI's set).
-STEP_VERBS = ("repeat", "rework", "revalidate", "reland", "activate")
+#: The state-changing verbs a step form may name (REQ-097 Decision 5: exactly the CLI's
+#: set — which REQ-098 shrank to the operator's two moves plus ``activate``).
+STEP_VERBS = ("repeat", "rework", "activate")
+
+
+def _repeat_message(req_id: str, res) -> str:
+    """``steward repeat``'s report, one line per branch it took (REQ-098 Decision 3).
+
+    The verb reads the ledger for what stopped the REQ, so the page cannot know in advance
+    which body ran — it says what happened, exactly as the CLI prints it.
+    """
+    if res.land is not None:
+        return f"repeating {req_id}: the recorded green was replayed and landed — {res.land.detail}"
+    parts: list[str] = []
+    if "recover" in res.kinds:
+        parts.append(f"{', '.join(res.recovered)} -> recover. Re-run `steward run` to re-attempt.")
+    if "revalidate" in res.kinds:
+        carried = (
+            " carried forward: " + ", ".join(f"{c['ac']} [{c['check']}]" for c in res.carried)
+            if res.carried else ""
+        )
+        parts.append(f"{req_id}:validate -> pending (develop stays done). Re-run "
+                     f"`steward validate {req_id}` to re-validate.{carried}")
+    if "unhold" in res.kinds:
+        parts.append(f"{req_id}:validate -> pending (hold cleared). Re-run "
+                     f"`steward validate {req_id}` for a full re-run.")
+    return f"repeating {req_id}: " + " ".join(parts)
 
 
 def create_app(root: Path, *, templates_root: Path | None = None,
@@ -113,21 +138,15 @@ def create_app(root: Path, *, templates_root: Path | None = None,
                 return verbs.activate(cfg, req_id).message
             if verb == "repeat":
                 res = verbs.repeat(cfg, req_id)
-                return f"repeating {req_id}: {', '.join(res.steps)} -> recover. Re-run `steward run` to re-attempt."
-            if verb == "rework":
-                res = verbs.rework(cfg, req_id)
-                carried = (
-                    " carried forward: " + ", ".join(f"{c['ac']} [{c['check']}]" for c in res.carried)
-                    if res.carried else ""
-                )
-                return (f"reworking {req_id}: {res.develop_step} -> recover, {res.validate_step} -> "
-                        f"pending. Re-run `steward run` to fix and revalidate.{carried}")
-            if verb == "revalidate":
-                res = verbs.revalidate(cfg, req_id)
-                return (f"revalidating {req_id}: {res.validate_step} -> pending (develop stays done). "
-                        f"Re-run `steward run` to re-validate.")
-            _, res = verbs.reland(cfg, req_id)
-            return f"relanded {req_id}: {res.detail}"
+                return _repeat_message(req_id, res)
+            res = verbs.rework(cfg, req_id, reason=request.form.get("reason", "").strip() or None)
+            carried = (
+                " carried forward: " + ", ".join(f"{c['ac']} [{c['check']}]" for c in res.carried)
+                if res.carried else ""
+            )
+            return (f"reworking {req_id}: {res.develop_step} -> recover, {res.validate_step} -> "
+                    f"pending (was {res.from_status}). Re-run `steward run` to fix and "
+                    f"re-validate.{carried} — {res.brief.splitlines()[0]}")
 
         return _run(name, f"{verb} {req_id}", fn)
 

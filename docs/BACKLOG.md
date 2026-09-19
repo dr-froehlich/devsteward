@@ -44,6 +44,7 @@ owner chose it from alternatives. Items a session derived on its own do not belo
 | error-resolution | When a step has failed or a validation is red, I want to repeat it or send it back to the previous step from the same place, changing the status, without starting any Claude session. | operator |
 | up-when-wanted | I want the dashboard available on this box whenever I want it, in my browser, seeing the same working copies my sessions use. | operator |
 | simpler-state-changes | Steward's state changes are overly rigid: recently I had to run a validation I already knew would fail, because I cannot rework without a failed validation. I want only the two moves I actually use: repeat the same step, or go back to the previous step. | operator |
+| backlog-commit-ui-changes | From a consumer project: "  - Uncommitted backlog changes. docs/BACKLOG.md is modified and .devsteward/backlog.jsonl (the new verdict log holding your two accepts) is untracked. The ledger is meant to be committed. If they stay dirty, the next checkpoint sweeps them into the next REQ's commit. I can commit them now as their own commit on dev if you say so." The need is to commit backlog changes from the UI in safe way. Safe means: If the operation is accepted and performed it does not disturb a running session or cause issues because of the repo's current state. We only commit to dev in DevSteward. | operator |
 
 ## Acceptance criteria
 

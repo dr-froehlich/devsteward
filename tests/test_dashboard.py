@@ -72,7 +72,7 @@ def _build_alpha(root: Path):
     """Default layout, a real git repo with a bare remote, every step shape the page offers
     an action for: a red validation, a genuine parked fork, a FAILED step, an eligible
     attended develop step, a draft, a manual hold, an eligible validate step, and a validate
-    step failed after a green validation + land refusal (reland)."""
+    step failed after a green validation + land refusal (the land replay)."""
     cfg = _stamp(root)
     rd = cfg.req_dir
     write_req(rd, "REQ-001", status="done", backlog_refs=["first-need"])
@@ -99,7 +99,7 @@ def _build_alpha(root: Path):
 
     led = Ledger(root)
     led.set_status("REQ-001:develop", StepStatus.DONE)
-    # REQ-002: develop done, validate blocked on a *red* validation (rework/revalidate).
+    # REQ-002: develop done, validate blocked on a *red* validation (repeat/rework).
     led.set_status("REQ-002:develop", StepStatus.DONE)
     led.set_hold("REQ-002:validate", "REQ-002 validation red — needs a human")
     led.append_event("validation", step="REQ-002:validate", req="REQ-002", ok=False,
@@ -117,7 +117,8 @@ def _build_alpha(root: Path):
     led.set_hold("REQ-007:validate", "REQ-007 awaits a human sign-off")
     # REQ-008: an eligible validate step (steward validate).
     led.set_status("REQ-008:develop", StepStatus.DONE)
-    # REQ-009: validate FAILED after a green validation and a land refusal (reland).
+    # REQ-009: validate FAILED after a green validation and a land refusal (`repeat`
+    # replays the recorded green from here — REQ-098).
     led.set_status("REQ-009:develop", StepStatus.DONE)
     led.set_status("REQ-009:validate", StepStatus.FAILED)
     led.append_event("validation", step="REQ-009:validate", req="REQ-009", ok=True,
@@ -278,7 +279,10 @@ def test_needs_me_aggregates_parked_decisions_pending_signoffs_and_failed_steps(
     }
     hints = {a.ref: a.hint for a in alpha.attention}
     assert hints["DEC-001"] == "steward decide DEC-001"
-    assert hints["REQ-002:validate"] == "steward rework REQ-002  |  steward revalidate REQ-002"
+    assert hints["REQ-002:validate"] == "steward repeat REQ-002  |  steward rework REQ-002"
+    # A `manual` hold keeps its own forward path — the two moves sit beside it, never
+    # instead of it (REQ-098 Decision 6): `_offer` returns the shell command, `attention`
+    # prefers it as the operator's move.
     assert hints["REQ-007:validate"] == "steward validate REQ-007"
     assert hints["REQ-004:develop"] == "steward repeat REQ-004"
     assert hints["REQ-005:develop"] == "/advance REQ-005 develop"
@@ -328,8 +332,11 @@ def test_state_changes_reuse_the_cli_lifecycle_functions_and_never_spawn_claude(
     # Refusals: the page renders the CLI's own refusal text and the ledger is untouched.
     twin = root.parent / "twin"
     shutil.copytree(alpha, twin, symlinks=True)
-    for verb, req in (("rework", "REQ-004"), ("repeat", "REQ-002"), ("reland", "REQ-002"),
-                      ("revalidate", "REQ-001"), ("activate", "REQ-001")):
+    # REQ-098 shrank the verb set to the two moves: a repeat of a red now *succeeds*, so
+    # the refusing shapes are a develop that is not closed, a REQ with nothing stopped, and
+    # the two terminal REQ-001 refusals.
+    for verb, req in (("rework", "REQ-004"), ("repeat", "REQ-001"),
+                      ("rework", "REQ-001"), ("activate", "REQ-001")):
         before = state.read_bytes()
         resp = client.post(f"/p/alpha/verb/{verb}", data={"req": req}, follow_redirects=True)
         assert resp.status_code == 200
@@ -350,6 +357,12 @@ def test_state_changes_reuse_the_cli_lifecycle_functions_and_never_spawn_claude(
     resp = client.post("/p/alpha/verb/repeat", data={"req": "REQ-004"}, follow_redirects=True)
     assert "repeating REQ-004" in _flash(resp)
     assert Ledger(alpha).status_of("REQ-004:develop") is StepStatus.RECOVER
+
+    # The rework form's `reason` reaches the same `verbs.rework` the CLI calls (Decision 4).
+    resp = client.post("/p/alpha/verb/rework", data={"req": "REQ-007", "reason": "spec was wrong"},
+                       follow_redirects=True)
+    assert "reworking REQ-007" in _flash(resp) and "spec was wrong" in _flash(resp)
+    assert Ledger(alpha).events()[-1]["brief"] == "spec was wrong"
 
     resp = client.post("/p/alpha/verb/activate", data={"req": "REQ-006"}, follow_redirects=True)
     assert "activated REQ-006" in _flash(resp)
@@ -495,7 +508,7 @@ def test_frozen_page_inventory_is_rendered(root, client):
         assert marker in page, marker
     # forms: step verbs, the decision answer, activate on the draft, backlog edit/verdict/add
     for action in ('action="/p/alpha/verb/rework"', 'action="/p/alpha/verb/repeat"',
-                   'action="/p/alpha/verb/reland"', 'action="/p/alpha/verb/activate"',
+                   'name="reason"', 'action="/p/alpha/verb/activate"',
                    'action="/p/alpha/decision/DEC-001"', 'action="/p/alpha/backlog/add"',
                    'action="/p/alpha/backlog/first-need/edit"',
                    'action="/p/alpha/backlog/first-need/verdict"'):
@@ -514,18 +527,23 @@ def test_offered_actions_mirror_the_cli_hints_and_no_batch_route_exists(root, cl
     cfg = load_config(root / "alpha")
     st = model.project_status(cfg)
     offers = {s.id: (s.actions, s.shell) for s in st.steps}
-    assert offers["REQ-004:develop"] == (["repeat"], "")
-    assert offers["REQ-009:validate"] == (["reland", "repeat"], "")
-    assert offers["REQ-002:validate"] == (["rework", "revalidate"], "")
-    assert offers["REQ-007:validate"] == ([], "steward validate REQ-007")
-    assert offers["REQ-008:validate"] == ([], "steward validate REQ-008")
+    assert offers["REQ-004:develop"] == (["repeat"], "")      # no step before develop
+    assert offers["REQ-009:validate"] == (["repeat", "rework"], "")
+    assert offers["REQ-002:validate"] == (["repeat", "rework"], "")
+    # A `manual` hold and a never-started validation keep `steward validate` beside the moves.
+    assert offers["REQ-007:validate"] == (["repeat", "rework"], "steward validate REQ-007")
+    assert offers["REQ-008:validate"] == (["rework"], "steward validate REQ-008")
     assert offers["REQ-005:develop"] == ([], "/advance REQ-005 develop")
     assert offers["REQ-002:develop"] == ([], "")  # done: nothing to offer
     assert st.drafts == ["REQ-006"]
 
     from devsteward.dashboard.app import STEP_VERBS
 
-    assert set(STEP_VERBS) == {"repeat", "rework", "revalidate", "reland", "activate"}
+    assert set(STEP_VERBS) == {"repeat", "rework", "activate"}
+    # The deleted verbs are gone from the route too, not merely unlinked (Decision 1).
+    for retired in ("revalidate", "reland"):
+        assert client.post(f"/p/alpha/verb/{retired}",
+                           data={"req": "REQ-002"}).status_code == 404
     rules = {r.rule for r in client.application.url_map.iter_rules() if "POST" in r.methods}
     assert rules == {
         "/p/<name>/verb/<verb>", "/p/<name>/decision/<decision_id>", "/p/<name>/backlog/add",

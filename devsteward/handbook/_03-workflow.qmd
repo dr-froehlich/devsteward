@@ -98,8 +98,8 @@ Mechanics around the gate:
   session does the guided work and captures; the human then runs `steward validate-record
   REQ-NNN` from a **second plain shell** — the engine grades the capture and takes the
   verdict through its own interactive prompt (a Claude session can neither host nor relay
-  it; `record` refuses there when a manual verdict is due). On a red, the rework/revalidate
-  and the repair run from that same shell while the validation session stays warm and
+  it; `record` refuses there when a manual verdict is due). On a red, the return move
+  (`steward rework` or `steward repeat`) and the repair run from that same shell while the validation session stays warm and
   **idle** (one session writes at a time, REQ-079); once the step is back to `PENDING`, the
   warm session re-runs `start`, scoped to the red ACs (REQ-075). Shape A remains the
   cold-start path; the halves are the same flow, not a second one — same pre-flight, same
@@ -115,18 +115,18 @@ Mechanics around the gate:
 - **A red validation parks immediately — no repair loop.** A red here means the develop
   was hollow or the lab is broken; both are human questions, so the engine never auto-loops
   on red (REQ-030 Decision 8).
-- **A red validation names two return edges, keyed on the root cause (REQ-033, REQ-055).**
-  When the red is a real defect — the lab found one, or the validation test itself is wrong —
-  **`steward rework REQ-NNN`** flips `REQ-NNN:develop` back to `RECOVER` and
-  `REQ-NNN:validate` to `PENDING`, answers the parked decision, and records a `rework` event
-  naming the red evidence dir (the `/advance` repair session reads it as context); the fix
-  runs on `dev` and re-validates. When instead the develop work **stands** and an external
-  lab/setup issue was fixed, **`steward revalidate REQ-NNN`** re-runs the validation only —
-  it leaves `REQ-NNN:develop` at `DONE`, flips `REQ-NNN:validate` to `PENDING`, and records a
-  `revalidate` event. One explicit verb per fix-and-revalidate cycle is the bound (it amends
-  Decision 8 without repealing it). Both refuse on a `done` REQ (supersede instead — done is
-  never weakened) and touch no REQ file. (`steward repeat` — REQ-054's rename of the old
-  `recover` — is for a step that actually *failed*; a red validation leaves no failed step.)
+- **A red validation takes one of the operator's two moves, keyed on the root cause
+  (REQ-033, REQ-055, REQ-098).** When the red is a real defect — the lab found one, or the
+  validation test itself is wrong — **`steward rework REQ-NNN`** flips `REQ-NNN:develop` back
+  to `RECOVER` and `REQ-NNN:validate` to `PENDING`, answers any parked decision, and records a
+  `rework` event naming the red evidence dir (the `/advance` repair session reads it as
+  context); the fix runs on `dev` and validates again. When instead the develop work **stands**
+  and an external lab/setup issue was fixed, **`steward repeat REQ-NNN`** re-runs the
+  validation only — it leaves `REQ-NNN:develop` at `DONE`, flips `REQ-NNN:validate` to
+  `PENDING`, and records a `revalidate` event (the event vocabulary is unchanged, REQ-098
+  Decision 5). One explicit verb per fix-and-validate cycle is the bound (it amends Decision 8
+  without repealing it). Both refuse on a `done` REQ (supersede instead — done is never
+  weakened) and touch no REQ file.
 - **Lab availability is an eligibility dependency.** While any `process.lab` REQ is not
   `done` the validate step is simply ineligible — `steward status` names the lab REQ
   being waited on; no red event, no parked decision.
@@ -276,11 +276,19 @@ are reserved for genuine human forks.
   holds for the attended-step wait in batch (run the step attended) — holds keep the
   decisions list an alarm panel for genuine forks only, closing the circular
   answer→re-run→re-park trap REQ-056/057 fought.
-- **A red validation → `steward rework` or `steward revalidate`, keyed on the root cause.**
+- **A red validation → `steward rework` or `steward repeat`, keyed on the root cause.**
   `rework` when the develop was hollow (internal cause — send it back to develop and fix it);
-  `revalidate` when the develop stands and an external lab/setup issue was fixed (re-run the
-  validation only). See the System-Test bullets above for the full mechanics. A red validation
-  leaves no failed step, so `repeat` does not apply.
+  `repeat` when the develop stands and an external lab/setup issue was fixed (run the
+  validation again, only the red ACs re-opening). See the System-Test bullets above for the
+  full mechanics.
+
+**Two moves, not four (REQ-098).** The operator's recovery vocabulary is *again*
+(`steward repeat`) and *back* (`steward rework`), and the **engine** reads the ledger to
+decide which body each one runs — a failed step, a red or held validation, a refused land.
+Two verbs that used to sit beside them were deleted, not aliased; `rework` also lost its
+"a real red must exist" precondition, because it made the operator pay for a validation whose
+verdict they already knew in order to type the verb they wanted (REQ-098 Decision 2 amends
+REQ-033 Decision 3 and REQ-055 Decision 2).
 
 Across all of these the engine never switches a branch and the operator never hand-edits the
 ledger or writes `status: done` — the verbs are the only sanctioned mutations.

@@ -207,7 +207,7 @@ def cache(ctx: click.Context, ttl_minutes: int) -> None:
     ctx.exit(report.exit_code)
 
 
-# -- lifecycle (activate / repeat) --------------------------------------------
+# -- lifecycle (activate / repeat / rework) --------------------------------------------
 
 
 @main.command()
@@ -232,59 +232,108 @@ def activate(req_id: str) -> None:
 @main.command()
 @click.argument("req_id")
 def repeat(req_id: str) -> None:
-    """Re-arm REQ_ID's failed step so the next run runs it again (its partial work intact).
+    """Run REQ_ID's stopped step again — the engine reads the ledger for what stopped it.
 
-    The run-it-again recovery verb (REQ-026, renamed from `recover` by REQ-054): the common
-    case is sound work failed by an external cause (claude crashed, an API timed out, an
-    account swap), so the honest action is *repeat the step*. Flips the REQ's FAILED ledger
-    step(s) to RECOVER and records an event; the working tree is left exactly as the failed
-    attempt left it, for the resuming skill to assess. Fails (non-zero) when the REQ has no
-    failed step — a *red validation* leaves no failed step, so return it to develop with
-    `steward rework REQ_ID` instead.
+    One of the operator's two recovery moves (REQ-098): *again*. It re-arms whatever stopped
+    the REQ, so you never have to recognise a ledger state and pick a verb for it —
+
+    \b
+      a FAILED step            -> RECOVER, its partial tree left intact for the next attempt
+      a validate step on a RED -> PENDING, re-running only the red ACs (the greens carry
+                                  forward with provenance; develop stays done)
+      a validate step on a HOLD-> PENDING, hold cleared, a full re-run at `steward validate`
+      a validate step FAILED by a land-gate refusal after a GREEN validation
+                               -> the recorded green is replayed and the REQ lands, with no
+                                  session and no re-prompting
+
+    Touches no git except on that last branch, which commits the land it replays. Fails
+    (non-zero) when nothing stopped. To go *back* a step instead, use `steward rework REQ_ID`.
     """
     cfg = _load_or_die()
+    ctrl = StopController()
+    ctrl.install()
     try:
-        res = verbs.repeat(cfg, req_id)
+        res = verbs.repeat(cfg, req_id, announce=_stderr_announcer, stop=ctrl)
     except LifecycleError as exc:
         raise click.ClickException(str(exc)) from exc
-    flipped = ", ".join(res.steps)
-    click.echo(
-        click.style(
-            f"repeating {req_id}: {flipped} -> recover. Re-run `steward run` to re-attempt.",
-            fg="green",
+    if res.land is not None:
+        _print_report(res.ex, res.land)
+        return
+    if "recover" in res.kinds:
+        click.echo(
+            click.style(
+                f"repeating {req_id}: {', '.join(res.recovered)} -> recover. Re-run "
+                f"`steward run` to re-attempt.",
+                fg="green",
+            )
         )
-    )
+    if "revalidate" in res.kinds:
+        where = f" (evidence: {res.evidence})" if res.evidence else ""
+        click.echo(
+            click.style(
+                f"repeating {req_id}: {req_id}:validate -> pending (develop stays done)"
+                f"{where}. Re-run `steward validate {req_id}` to re-validate.",
+                fg="green",
+            )
+        )
+        # REQ-089 Decision 7: the carry is unconditional, so make it *visible* — the operator
+        # sees what the resumed validation will not re-walk before it starts.
+        if res.carried:
+            click.echo(
+                "carried forward (not re-walked): "
+                + ", ".join(f"{c['ac']} [{c['check']}]" for c in res.carried)
+            )
+            click.echo(f"re-opening only: {', '.join(res.scope) or '(nothing — all green)'}")
+    if "unhold" in res.kinds:
+        click.echo(
+            click.style(
+                f"repeating {req_id}: {req_id}:validate -> pending (hold cleared). Re-run "
+                f"`steward validate {req_id}` for a full re-run.",
+                fg="green",
+            )
+        )
 
 
 @main.command()
 @click.argument("req_id")
-def rework(req_id: str) -> None:
-    """Return REQ_ID's red validation to develop for a fix-and-revalidate cycle.
+@click.option(
+    "--reason", default=None,
+    help="Why it goes back — the resuming session's repair context when no red validation "
+         "left an evidence dir. Optional: the verb never blocks on prose.",
+)
+def rework(req_id: str, reason: str | None) -> None:
+    """Send REQ_ID's validation back to develop — the other of the two moves: *back*.
 
-    The human-authorized return edge of the V-model (REQ-033): on an in-flight REQ whose
-    latest System-Test validation went red, this flips REQ_ID:develop to RECOVER and
-    REQ_ID:validate back to PENDING, answers the parked decision, and records a `rework`
-    event carrying the red evidence dir — the resuming `/advance` session reads it as its
-    repair context. Touches no git and no REQ file. Refuses when there is no red validation
-    to rework (a done REQ → supersede instead; nothing parked red → nothing to do).
+    The human-authorized return edge of the V-model (REQ-033), widened by REQ-098 to **any
+    unfinished validate state**: never started, held on a `manual` AC awaiting its oracle,
+    parked on a red, or failed. It flips REQ_ID:develop to RECOVER and REQ_ID:validate back
+    to PENDING (clearing any hold), answers any parked decision, and records a `rework`
+    event. Touches no git and no REQ file.
 
-    REQ-089: every AC the red validation recorded green is **carried forward** with its
+    Its `brief` is --reason when you give one, else the red validation's failure brief, else
+    a fixed line — so the resuming `/advance` session always has some repair context. A red
+    additionally carries its evidence dir. Refuses on a done REQ (supersede instead), a REQ
+    with no validate step, a develop step that is not closed, and a validation in flight.
+
+    REQ-089: every AC a red validation recorded green is **carried forward** with its
     provenance, so the re-validation re-opens only what was red — a long manual walkthrough
     is not re-walked because of a code fix elsewhere. The carried ACs are printed here.
     """
     cfg = _load_or_die()
     try:
-        res = verbs.rework(cfg, req_id)
+        res = verbs.rework(cfg, req_id, reason=reason)
     except LifecycleError as exc:
         raise click.ClickException(str(exc)) from exc
     where = f" (evidence: {res.evidence})" if res.evidence else ""
     click.echo(
         click.style(
             f"reworking {req_id}: {res.develop_step} -> recover, {res.validate_step} -> "
-            f"pending{where}. Re-run `steward run` to fix and revalidate.",
+            f"pending (was {res.from_status}){where}. Re-run `steward run` to fix and "
+            f"re-validate.",
             fg="green",
         )
     )
+    click.echo(f"repair context: {res.brief.splitlines()[0]}")
     # REQ-089 Decision 7: the carry is unconditional, so make it *visible* — the operator
     # sees what the resumed validation will not re-walk before it starts.
     if res.carried:
@@ -293,57 +342,6 @@ def rework(req_id: str) -> None:
             + ", ".join(f"{c['ac']} [{c['check']}]" for c in res.carried)
         )
         click.echo(f"re-opening only: {', '.join(res.scope) or '(nothing — all green)'}")
-
-
-@main.command()
-@click.argument("req_id")
-def revalidate(req_id: str) -> None:
-    """Re-run REQ_ID's red validation without redoing develop (the external-cause edge).
-
-    The validate-layer mirror of `steward rework` (REQ-055): when a red validation was
-    caused by something *external* to the work (a broken lab fixture, a missing credential,
-    a downed host) that you have since fixed, the develop work stands. This flips
-    REQ_ID:validate back to PENDING, **leaves REQ_ID:develop at DONE**, answers the parked
-    decision, and records a `revalidate` event — then `steward run`/`steward validate`
-    re-runs the validation only. Touches no git and no REQ file. Same refusals as `rework`
-    (a done REQ → supersede; nothing parked red → nothing to do). Use `steward rework`
-    instead when the develop was hollow.
-    """
-    cfg = _load_or_die()
-    try:
-        res = verbs.revalidate(cfg, req_id)
-    except LifecycleError as exc:
-        raise click.ClickException(str(exc)) from exc
-    where = f" (evidence: {res.evidence})" if res.evidence else ""
-    click.echo(
-        click.style(
-            f"revalidating {req_id}: {res.validate_step} -> pending (develop stays "
-            f"done){where}. Re-run `steward run` to re-validate.",
-            fg="green",
-        )
-    )
-
-
-@main.command()
-@click.argument("req_id")
-def reland(req_id: str) -> None:
-    """Replay REQ_ID's mechanical land after a land-gate refusal — no re-validation (REQ-065).
-
-    The cheap recovery edge for a validate step left FAILED by a land-gate refusal (a missing
-    concept doc / plan): the session already ran and its sign-offs are durable in the green
-    validation event, so once the formality is fixed this re-certifies that same green and
-    lands — no re-prompting, no re-run. Narrow preconditions: REQ_ID:validate is FAILED and
-    its last events are a green validation followed by a land_refused. For a *red* validation
-    use `steward revalidate`; for a develop step use `steward repeat`.
-    """
-    cfg = _load_or_die()
-    ctrl = StopController()
-    ctrl.install()
-    try:
-        ex, res = verbs.reland(cfg, req_id, announce=_stderr_announcer, stop=ctrl)
-    except LifecycleError as exc:
-        raise click.ClickException(str(exc)) from exc
-    _print_report(ex, res)
 
 
 # -- status -------------------------------------------------------------------
@@ -401,6 +399,14 @@ def status() -> None:
             hold = led.hold_note(s.id) if st is StepStatus.BLOCKED else ""
             if hold:
                 note = click.style(f"  ⏳ {hold.splitlines()[0]}", fg="yellow")
+                # REQ-098: a held or red validate step is stopped, so it names the two
+                # moves — beside (never instead of) the hold's own forward path, which for
+                # a `manual`-AC await is still `steward validate` (Decision 6).
+                if s.phase == "validate":
+                    who = s.req or s.id.split(":", 1)[0]
+                    note += click.style(
+                        f"  → steward repeat {who}  |  steward rework {who}", fg="magenta"
+                    )
             elif s.blocked_note and s.id not in eligible and st is not StepStatus.DONE:
                 note = click.style(f"  ⏳ {s.blocked_note}", fg="yellow")
             elif st is StepStatus.FAILED:
@@ -448,7 +454,7 @@ def dashboard(root: Path | None, port: int) -> None:
 
     One local page per box: each project's steward status and git facts, what waits on
     you across all of them, each project's backlog with its derived states, and its REQs
-    (read-only). State changes on the page — rework, revalidate, repeat, reland, activate,
+    (read-only). State changes on the page — repeat, rework, activate,
     a decision answer, the backlog verdicts and edits — call the same functions the CLI
     verbs call, with the same refusals. The page never spawns a Claude session: a session
     command is shown for you to run in a shell.
@@ -978,9 +984,9 @@ def validate_start(req_id: str) -> None:
     # shape A's re-entry after a killed session). Anything else routes elsewhere.
     if status not in (StepStatus.PENDING, StepStatus.RUNNING):
         raise click.ClickException(
-            f"{step.id} is {status.value} — nothing to start. A parked red returns via "
-            f"`steward rework {req_id}` / `steward revalidate {req_id}`; a failed step "
-            f"via `steward repeat {req_id}`."
+            f"{step.id} is {status.value} — nothing to start. Re-arm it with "
+            f"`steward repeat {req_id}`, or send it back to develop with "
+            f"`steward rework {req_id}`."
         )
     check_invariants(ex)  # REQ-049: refuse on production / mid-merge
     ctx = routine.start(ex, step)
@@ -1253,7 +1259,8 @@ def decide(decision_id: str) -> None:
         raise click.ClickException(
             f"{decision_id} is a legacy validation hold on {d.step}, not a fork to decide. "
             f"Record the human sign-off with `steward validate {req}` "
-            f"(or, for a red validation, `steward rework {req}` / `steward revalidate {req}`)."
+            f"(or send it back to develop with `steward rework {req}`, or re-arm the "
+            f"validation with `steward repeat {req}`)."
         )
     code = claude_mod.run_claude_interactive(
         _fork_briefing_prompt(d),

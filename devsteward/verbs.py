@@ -26,11 +26,10 @@ from .lifecycle import (
     ActivateResult,
     LifecycleError,
     RepeatResult,
-    RevalidateResult,
     ReworkResult,
     activate as _activate,
+    plan_repeat as _plan_repeat,
     repeat as _repeat,
-    revalidate as _revalidate,
     rework as _rework,
 )
 
@@ -38,9 +37,7 @@ __all__ = [
     "LifecycleError",
     "activate",
     "answer_decision",
-    "reland",
     "repeat",
-    "revalidate",
     "rework",
 ]
 
@@ -55,55 +52,63 @@ def activate(cfg: Config, req_id: str) -> ActivateResult:
         return _activate(cfg, req_id)
 
 
-def repeat(cfg: Config, req_id: str) -> RepeatResult:
-    """``steward repeat`` — re-arm a FAILED step (its partial work left intact)."""
-    ex = build_executor(cfg)
+def repeat(cfg: Config, req_id: str, *, announce=None, stop=None) -> RepeatResult:
+    """``steward repeat`` — re-arm whatever stopped the REQ (REQ-098 Decision 3).
+
+    The classification is a pure ledger read (:func:`~devsteward.lifecycle.plan_repeat`) and
+    runs **first**, because the two branches need different invariant gates: the ledger flips
+    succeed regardless of HEAD (REQ-049 AC3 — a recovery must not depend on which branch is
+    checked out), while the land replay commits and so keeps the strict production/mid-merge
+    refusal. On the land branch the result carries the executor and the ``StepResult`` so the
+    CLI can print its usual checkpoint report.
+    """
+    ex = build_executor(cfg, announce=announce, stop=stop)
+    plan = _plan_repeat(ex.ledger, req_id)  # raises LifecycleError when nothing stopped
+
+    if plan.lands:
+        return _replay_land(ex, req_id)
+
     # REQ-049 AC3: a recovery verb succeeds regardless of HEAD — INV-1 (single ledger) only,
     # not the branch/tree gate — and is atomic. A LifecycleError is a graceful refusal raised
     # before any mutation, so it passes through the boundary untouched (no rollback).
     check_invariants(ex, allow_any_head=True)
     with transaction(ex.git, label=f"repeat {req_id}", pass_through=(LifecycleError,)):
-        return _repeat(ex.ledger, req_id)
+        return _repeat(cfg, ex.ledger, req_id, plan=plan)
 
 
-def rework(cfg: Config, req_id: str) -> ReworkResult:
-    """``steward rework`` — return a red validation to develop, carrying the green ACs."""
-    ex = build_executor(cfg)
-    check_invariants(ex, allow_any_head=True)  # REQ-049 AC3: regardless of HEAD; single-ledger only
-    with transaction(ex.git, label=f"rework {req_id}", pass_through=(LifecycleError,)):
-        return _rework(cfg, ex.ledger, req_id)
+def _replay_land(ex, req_id: str) -> RepeatResult:
+    """The land-replay branch of ``repeat`` — REQ-065's ``reland`` body, unchanged (D3).
 
-
-def revalidate(cfg: Config, req_id: str) -> RevalidateResult:
-    """``steward revalidate`` — re-run only the red ACs; develop stays done."""
-    ex = build_executor(cfg)
-    check_invariants(ex, allow_any_head=True)  # REQ-049 AC3: regardless of HEAD; single-ledger only
-    with transaction(ex.git, label=f"revalidate {req_id}", pass_through=(LifecycleError,)):
-        return _revalidate(cfg, ex.ledger, req_id)
-
-
-def reland(cfg: Config, req_id: str, *, announce=None, stop=None):
-    """``steward reland`` — replay the mechanical land after a land-gate refusal (REQ-065).
-
-    Returns ``(executor, StepResult)`` on a landed replay so the CLI can print its report.
-    A refusal, a failure or a red re-gate raises :class:`LifecycleError` with the routine's
-    own diagnostic — the same text the CLI prints.
+    The session already ran and its artifact gate + human sign-offs are durable in the green
+    ``validation`` event, so once the land formality is fixed this re-certifies that same
+    green and lands — no re-spawn, no re-prompt. The routine re-runs the (now-fixed) gate as
+    a final pre-flight and refuses if it is still red; that refusal is the operator's, so it
+    surfaces as a :class:`LifecycleError` with the routine's own diagnostic.
     """
     from .core.executor import RunOutcome
 
-    ex = build_executor(cfg, announce=announce, stop=stop)
     routine = ex.validate_runner
     if routine is None:
         raise LifecycleError("the generic profile has no validation phase")
     check_invariants(ex)  # REQ-049: refuse on production / mid-merge before any write
     # REQ-049: the replayed land is atomic — a git failure mid-commit rolls repo + ledger back.
-    with transaction(ex.git, label=f"reland {req_id}"):
+    with transaction(ex.git, label=f"repeat {req_id} (land replay)"):
         res = routine.reland(ex, req_id, driver="interactive")
     if res.outcome in (RunOutcome.REFUSED, RunOutcome.FAILED):
         raise LifecycleError(res.detail)
     if res.outcome is RunOutcome.VERIFY_FAILED:
-        raise LifecycleError(f"reland could not land — {res.detail}")
-    return ex, res
+        raise LifecycleError(f"the land replay could not land — {res.detail}")
+    return RepeatResult(
+        req_id, ["reland"], [f"{req_id}:validate"], land=res, ex=ex,
+    )
+
+
+def rework(cfg: Config, req_id: str, *, reason: str | None = None) -> ReworkResult:
+    """``steward rework`` — return a validation to develop from any unfinished state."""
+    ex = build_executor(cfg)
+    check_invariants(ex, allow_any_head=True)  # REQ-049 AC3: regardless of HEAD; single-ledger only
+    with transaction(ex.git, label=f"rework {req_id}", pass_through=(LifecycleError,)):
+        return _rework(cfg, ex.ledger, req_id, reason=reason)
 
 
 def answer_decision(
@@ -128,7 +133,8 @@ def answer_decision(
         raise LifecycleError(
             f"{decision_id} is a validation hold on {d.step}, not a fork to answer. "
             f"Record the human sign-off with `steward validate {req}` "
-            f"(or, for a red validation, `steward rework {req}` / `steward revalidate {req}`)."
+            f"(or send it back to develop with `steward rework {req}`, or re-arm the "
+            f"validation with `steward repeat {req}`)."
         )
     with transaction(ex.git, label=f"decision answer {decision_id}"):
         answered = ex.ledger.answer_decision(decision_id, answer, rationale)

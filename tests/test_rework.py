@@ -113,74 +113,57 @@ def test_rework_rearms_develop_and_validate(tmp_path):
 
 
 def test_rework_refusals(tmp_path):
-    """rework refuses when there is no red validation to rework: unknown id, a done REQ
-    (points at supersede), a REQ with no validate step, a validate step that is not
-    blocked-red (green validation), and an awaiting-oracle manual park (no red event)."""
+    """rework's refusal taxonomy — **amended by REQ-098 Decision 2**.
+
+    REQ-033 Decision 3 scoped this verb to "in-flight reds only", so it refused a green,
+    never-started or awaiting-oracle validate step. That precondition is withdrawn: the
+    operator was paying for a validation whose verdict they already knew in order to unlock
+    the verb they wanted. What still refuses is a state where going *back* is meaningless or
+    forbidden — a `done` REQ, a REQ with no validate step, a develop step that is not closed,
+    and a validation in flight. The states that used to refuse and now succeed are covered by
+    `test_req098_two_moves.py::test_rework_returns_any_unfinished_validate_to_develop`.
+    """
+    def _project(root, acs, *, status="open", develop=StepStatus.DONE):
+        rdir = root / "docs" / "requirements"
+        _write_req(rdir, "REQ-001", acs, status=status)
+        write_index(rdir, [("REQ-001", "t", status.upper(), "–")])
+        Ledger.init(root)
+        led = Ledger(root)
+        led.set_status("REQ-001:develop", develop)
+        led.save()
+        return led
+
     led, _ = _seed_red(tmp_path)
     with pytest.raises(LifecycleError, match="not a known requirement"):
         rework(Config(root=tmp_path), led, "REQ-999")
 
-    # done REQ → supersede pointer (done is never weakened, D3).
-    done = tmp_path / "done"
-    done.mkdir()
-    ddir = done / "docs" / "requirements"
-    _write_req(ddir, "REQ-001", [_REGRESSION, _ARTIFACT_OK], status="done")
-    write_index(ddir, [("REQ-001", "t", "DONE", "–")])
-    Ledger.init(done)
-    led_d = Ledger(done)
-    led_d.set_status("REQ-001:develop", StepStatus.DONE)
+    # done REQ → supersede pointer (done is never weakened, D3 — the one REQ-033 rule kept).
+    done = tmp_path / "done"; done.mkdir()
+    led_d = _project(done, [_REGRESSION, _ARTIFACT_OK], status="done")
     led_d.set_status("REQ-001:validate", StepStatus.DONE)
     led_d.save()
     with pytest.raises(LifecycleError, match="supersed"):
         rework(Config(root=done), led_d, "REQ-001")
 
-    # regression-only REQ → no validate step at all.
-    reg = tmp_path / "reg"
-    reg.mkdir()
-    rdir = reg / "docs" / "requirements"
-    _write_req(rdir, "REQ-001", [_REGRESSION], status="open")
-    write_index(rdir, [("REQ-001", "t", "OPEN", "–")])
-    Ledger.init(reg)
-    led_r = Ledger(reg)
-    led_r.set_status("REQ-001:develop", StepStatus.DONE)
-    led_r.save()
+    # regression-only REQ → no validate step at all, so nothing to come back from.
+    reg = tmp_path / "reg"; reg.mkdir()
+    led_r = _project(reg, [_REGRESSION])
     with pytest.raises(LifecycleError, match="no validate step"):
         rework(Config(root=reg), led_r, "REQ-001")
 
-    # validate present but green (not blocked-red) → nothing to rework.
-    green = tmp_path / "green"
-    green.mkdir()
-    gdir = green / "docs" / "requirements"
-    _write_req(gdir, "REQ-001", [_REGRESSION, _ARTIFACT_OK], status="open")
-    write_index(gdir, [("REQ-001", "t", "OPEN", "–")])
-    Ledger.init(green)
-    led_g = Ledger(green)
-    led_g.set_status("REQ-001:develop", StepStatus.DONE)
-    led_g.save()
-    led_g.append_event(
-        "validation", step="REQ-001:validate", req="REQ-001", ok=True,
-        evidence="x", results=[{"ac": "AC2", "check": "artifact", "ok": True, "detail": "ok"}],
-    )
-    with pytest.raises(LifecycleError, match="no red validation"):
-        rework(Config(root=green), led_g, "REQ-001")
+    # develop not closed → there is nothing to go *back* to; that is `repeat`'s move.
+    open_dev = tmp_path / "open_dev"; open_dev.mkdir()
+    led_o = _project(open_dev, [_REGRESSION, _ARTIFACT_OK], develop=StepStatus.FAILED)
+    with pytest.raises(LifecycleError, match="nothing to go back from"):
+        rework(Config(root=open_dev), led_o, "REQ-001")
 
-    # a manual park merely awaiting its oracle is BLOCKED but records no red validation
-    # event → not a red, rework refuses (run `steward validate` attended instead).
-    awaiting = tmp_path / "awaiting"
-    awaiting.mkdir()
-    adir = awaiting / "docs" / "requirements"
-    _write_req(adir, "REQ-001", [_REGRESSION, _MANUAL], status="open")
-    write_index(adir, [("REQ-001", "t", "OPEN", "–")])
-    Ledger.init(awaiting)
-    led_a = Ledger(awaiting)
-    led_a.set_status("REQ-001:develop", StepStatus.DONE)
-    led_a.save()
-    led_a.park_decision(Decision(
-        id=led_a.next_decision_id(), step="REQ-001:validate",
-        question="awaits human oracle", req="REQ-001",
-    ))
-    with pytest.raises(LifecycleError, match="no red validation"):
-        rework(Config(root=awaiting), led_a, "REQ-001")
+    # a validation in flight belongs to someone's live session.
+    running = tmp_path / "running"; running.mkdir()
+    led_x = _project(running, [_REGRESSION, _ARTIFACT_OK])
+    led_x.set_status("REQ-001:validate", StepStatus.RUNNING)
+    led_x.save()
+    with pytest.raises(LifecycleError, match="is running"):
+        rework(Config(root=running), led_x, "REQ-001")
 
 
 # -- AC3 ------------------------------------------------------------------------

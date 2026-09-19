@@ -99,7 +99,8 @@ empty named-test list is acceptable here because the runnable gate lives at vali
 a `REQ-NNN:validate` step follows — a fresh, diff-free System Tester session captures
 artifacts, the engine runs the `artifact` tests itself, manual criteria take a human
 sign-off, and on green the *same* mechanical land fires. A red validation parks with no
-repair loop, naming the root-cause edge (`steward rework` or `steward revalidate`). A
+repair loop, naming the move that fits the root cause (`steward rework` back to develop
+when the develop was hollow, `steward repeat` to run the validation again when the lab was). A
 `manual` criterion is a **guided** human validation (REQ-034): `steward validate` runs a
 two-phase bookkeeping around a foreground *interactive* session attached to the terminal (the
 editor pattern — never `claude -p`, never spawned from within Claude), and a pending verdict

@@ -17,7 +17,7 @@ from devsteward.core.ledger import Ledger
 from devsteward.core.model import Step, StepStatus
 from devsteward.core.verify import CommandVerifier
 from devsteward.core.accounts import SingleAccountProvider
-from devsteward.lifecycle import revalidate, rework
+from devsteward.lifecycle import repeat, rework
 from devsteward.profiles.req.validate import Signoff
 
 from conftest import (
@@ -94,12 +94,16 @@ def test_validate_holds_park_no_decision(tmp_path):
     led2 = Ledger(red)
     assert led2.open_decisions() == []
     hold2 = led2.hold_note("REQ-001:validate")
-    assert "steward rework REQ-001" in hold2 and "steward revalidate REQ-001" in hold2
+    assert "steward rework REQ-001" in hold2 and "steward repeat REQ-001" in hold2
 
 
-def test_rework_and_revalidate_work_without_decision_record(tmp_path):
-    """`steward rework` / `steward revalidate` key on the red validation event + the
-    blocked step — with no Decision record present (the REQ-074 shape), both edges work."""
+def test_rework_and_repeat_work_without_decision_record(tmp_path):
+    """`steward rework` / `steward repeat` key on the red validation event + the blocked
+    step — with no Decision record present (the REQ-074 shape), both moves work.
+
+    REQ-098 renamed the second edge from `revalidate` to `repeat`; the ledger event it
+    writes is still `revalidate` (Decision 5), which is what this fixture's hold and the
+    carry machinery read."""
     from devsteward.config import Config
 
     def seed(root):
@@ -118,7 +122,7 @@ def test_rework_and_revalidate_work_without_decision_record(tmp_path):
             results=[{"ac": "AC2", "check": "artifact", "ok": False, "detail": "red"}],
             artifacts=[], signoffs=[],
         )
-        led.set_hold("REQ-001:validate", "REQ-001 validation red — rework or revalidate")
+        led.set_hold("REQ-001:validate", "REQ-001 validation red — rework or repeat")
         led.save()
         return Config(root=root), Ledger(root)
 
@@ -133,8 +137,8 @@ def test_rework_and_revalidate_work_without_decision_record(tmp_path):
     other = tmp_path / "reval"
     other.mkdir()
     cfg2, led2 = seed(other)
-    res2 = revalidate(cfg2, led2, "REQ-001")
-    assert res2.validate_step == "REQ-001:validate"
+    res2 = repeat(cfg2, led2, "REQ-001")
+    assert res2.kinds == ["revalidate"] and res2.steps == ["REQ-001:validate"]
     assert led2.status_of("REQ-001:develop") is StepStatus.DONE
     assert led2.status_of("REQ-001:validate") is StepStatus.PENDING
 

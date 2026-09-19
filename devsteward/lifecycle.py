@@ -1,5 +1,5 @@
 """Operator verbs that shape the queue: ``activate``, ``repeat`` (REQ-026, renamed from
-``recover`` by REQ-054), ``rework`` (REQ-033), ``revalidate`` (REQ-055).
+``recover`` by REQ-054) and ``rework`` (REQ-033).
 
 Pure status mutations, kept out of the content-agnostic core:
 
@@ -7,39 +7,44 @@ Pure status mutations, kept out of the content-agnostic core:
   frontmatter **and** its ``REQUIREMENTS_INDEX.md`` row in lockstep so the index↔REQ
   same-commit invariant stays green (REQ-002, D1). It leaves both files *uncommitted*
   (D3) — declaration is committed deliberately by the operator/skill.
-* :func:`repeat` flips a REQ's ``FAILED`` ledger step(s) to the ``RECOVER`` status
-  (a :class:`StepStatus`, not a REQ-frontmatter status — D4) so the executor re-attempts
-  them. It does not touch the working tree (D6): the failed attempt's partial edits are
-  left for the resuming skill to assess. The verb is named for its dominant use — the
-  work was sound and an external cause failed the step, so the action is *run it again*
-  (REQ-054); the internal ``RECOVER`` status symbol keeps its name (REQ-054 D4).
-* :func:`rework` is the human-authorized return edge from a red validation (REQ-033): on
-  an in-flight REQ whose latest validation is red, it flips ``REQ-NNN:develop``
-  ``DONE → RECOVER`` and ``REQ-NNN:validate`` ``BLOCKED → PENDING``, answers any open
-  decision parked on the validate step, and appends a ``rework`` event carrying the red
-  validation's evidence path and failure brief. It amends REQ-030 Decision 8 without
-  repealing it (the engine still never auto-loops on red — this is the *recorded human
-  answer* to the parked question) and, like ``repeat``, touches neither git nor the REQ
+* :func:`repeat` — *run the same step again.* It re-arms whatever stopped the REQ, reading
+  the ledger to decide which body applies (REQ-098 Decision 3): a ``FAILED`` step goes back
+  to ``RECOVER`` (REQ-026/054), a validate step parked on a **red** re-arms with REQ-075's
+  scope and the green ACs carried forward, a validate step parked on a **manual hold**
+  re-arms for a full run, and a validate step ``FAILED`` by a land-gate refusal after a
+  *green* validation replays that recorded land (REQ-065). It does not touch the working
+  tree (D6): a failed attempt's partial edits are left for the resuming skill to assess.
+* :func:`rework` — *go back to the previous step.* The human-authorized return edge from
+  the validate step to develop (REQ-033): it flips ``REQ-NNN:develop`` ``DONE → RECOVER``
+  and ``REQ-NNN:validate`` → ``PENDING``, answers any decision parked on the validate step,
+  and appends a ``rework`` event carrying a repair brief. Touches neither git nor the REQ
   file (D5).
 
-* :func:`revalidate` is the validate-layer mirror of ``rework`` (REQ-055): the
-  **external-cause** return edge. When a red validation was caused by something outside the
-  work (a broken lab fixture, a missing credential, a downed host) that the human then
-  fixed, the develop *stands* — so it flips ``REQ-NNN:validate`` ``BLOCKED → PENDING`` while
-  leaving ``REQ-NNN:develop`` at ``DONE``, answers the parked decision, and appends a
-  ``revalidate`` event. Same precondition as ``rework``, opposite action; like it, touches
-  neither git nor the REQ file.
+**REQ-098 — two moves, not four.** ``steward revalidate`` and ``steward reland`` are gone.
+Their bodies are not: they live inside :func:`repeat`, reached by reading the ledger rather
+than by making the operator recognise a state and name a verb. Two facts changed with them.
+(1) ``rework`` no longer demands a *real red* — REQ-033 Decision 3 and REQ-055 Decision 2
+scoped both return edges to "in-flight reds only", and the guard turned out to protect
+nothing: the red it demanded carried no information the operator did not already have, so
+they paid for a validation whose verdict they knew in order to type the verb they wanted.
+It now returns a validate step from **any state except done** (Decision 2). (2) ``rework``
+takes an optional ``reason`` (Decision 4) — without a red there is no System-Tester
+write-up, so the operator's one line is the resuming session's only repair context.
 
-No verb introduces a new ``claude`` invocation or skill — the reopened work is picked up
-by the existing ``/advance`` skill via the status flip (``rework`` reopens develop as
-``RECOVER``, so the executor carries its usual ``--repeat`` resume signal; ``revalidate``
-re-arms only validate, which ``steward validate`` / ``steward run`` then re-runs).
+The **ledger event vocabulary is unchanged** (Decision 5): ``repeat`` still writes
+``step_recover`` for a failed step, ``revalidate`` for a validate re-arm and ``reland`` for
+a land replay; ``rework`` still writes ``rework``. Existing consumer ledgers must keep
+replaying — the event names are the engine's, the verb names are the operator's.
+
+No verb introduces a new ``claude`` invocation or skill — the reopened work is picked up by
+the existing ``/advance`` skill via the status flip (``rework`` reopens develop as
+``RECOVER``, so the executor carries its usual ``--repeat`` resume signal; a validate re-arm
+is re-run by ``steward validate`` / ``steward run``).
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from pathlib import Path
+from dataclasses import dataclass, field
 
 from .config import Config
 from .core.ledger import Ledger
@@ -57,6 +62,10 @@ _REFUSE_REOPEN = {"done", "superseded"}
 # A status that already produces work — activating it is a no-op, not an error.
 _ALREADY_ACTIVE = {"open", "in-progress", "blocked"}
 
+#: What a ``rework`` event says when no red validation and no ``--reason`` supplied a brief
+#: (REQ-098 Decision 4). The resuming ``/advance`` session reads it as its only context.
+DEFAULT_REWORK_BRIEF = "returned to develop by the operator"
+
 
 @dataclass
 class ActivateResult:
@@ -68,32 +77,64 @@ class ActivateResult:
 
 
 @dataclass
+class RepeatPlan:
+    """What :func:`repeat` would do to ``req_id``, read from the ledger (REQ-098 D3).
+
+    A pure read, so the caller can pick the right invariant gate *before* anything mutates:
+    the ledger flips succeed regardless of HEAD (REQ-049 AC3), while the land replay commits
+    and so keeps the strict production/mid-merge refusal.
+    """
+
+    req_id: str
+    #: ``FAILED`` steps to re-arm to ``RECOVER``. Never contains the land-replay step.
+    failed: list[str] = field(default_factory=list)
+    #: The validate step this plan re-arms or lands, when it touches one.
+    validate: str | None = None
+    #: ``revalidate`` (parked on a red) | ``unhold`` (parked on a manual hold) |
+    #: ``reland`` (a recorded green to replay) | ``None`` (failed steps only).
+    mode: str | None = None
+
+    @property
+    def lands(self) -> bool:
+        """True when this repeat replays a recorded green land (REQ-065's body)."""
+        return self.mode == "reland"
+
+
+@dataclass
 class RepeatResult:
     req_id: str
-    steps: list[str]  # the step ids flipped FAILED -> RECOVER
+    #: What the verb did, in the order it did it: ``recover`` | ``revalidate`` |
+    #: ``unhold`` | ``reland``. A repeat may do more than one (a REQ can hold a failed
+    #: develop *and* a stopped validate; the executor's dependency order runs develop first).
+    kinds: list[str]
+    #: Every step id this verb moved.
+    steps: list[str]
+    #: The subset flipped ``FAILED -> RECOVER`` — what the "run it again" line names.
+    recovered: list[str] = field(default_factory=list)
+    evidence: str | None = None  # the red validation's evidence dir, red branch only
+    brief: str = ""  # the red validation's failure brief, red branch only
+    decision: str | None = None  # the parked validate decision answered, if any
+    scope: list[str] | None = None  # the red/unrecorded AC ids to re-capture
+    carried: list[dict] | None = None  # per carried green AC {ac, check, source_evidence, …}
+    #: The land replay's :class:`~devsteward.core.executor.StepResult` and the executor that
+    #: produced it — filled by :func:`devsteward.verbs.repeat` on the ``reland`` branch only,
+    #: because replaying a land needs the executor this module deliberately does not build.
+    land: object | None = None
+    ex: object | None = None
 
 
 @dataclass
 class ReworkResult:
     req_id: str
     develop_step: str  # flipped DONE -> RECOVER
-    validate_step: str  # flipped BLOCKED -> PENDING
-    evidence: str | None  # the red validation's evidence dir (the repair context)
-    brief: str  # the red validation's failure brief
+    validate_step: str  # flipped -> PENDING (any hold cleared by the transition)
+    evidence: str | None  # the red validation's evidence dir, when a red exists
+    brief: str  # the --reason, else the red's failure brief, else the default text
     decision: str | None  # the parked validate decision answered, if any
     scope: list[str] | None  # the red/unrecorded AC ids to re-capture; None = full re-run
     carried: list[dict] | None  # per carried green AC {ac, check, source_evidence, ...}
-
-
-@dataclass
-class RevalidateResult:
-    req_id: str
-    validate_step: str  # flipped BLOCKED -> PENDING (develop is left untouched at DONE)
-    evidence: str | None  # the red validation's evidence dir
-    brief: str  # the red validation's failure brief
-    decision: str | None  # the parked validate decision answered, if any
-    scope: list[str] | None  # the red/unrecorded AC ids to re-capture; None = full re-run
-    carried: list[dict] | None  # per carried green AC {ac, check, source_evidence, ...}
+    #: The validate status the return edge started from — what the operator went back *from*.
+    from_status: str = ""
 
 
 def _scope_revalidation(
@@ -178,75 +219,64 @@ def activate(cfg: Config, req_id: str) -> ActivateResult:
     )
 
 
-def repeat(ledger: Ledger, req_id: str) -> RepeatResult:
-    """Flip ``req_id``'s ``FAILED`` ledger step(s) to ``RECOVER`` and record an event (D4).
-
-    Refuses (``LifecycleError``) when the REQ has no failed step. Leaves the working tree
-    as the failed attempt left it (D6) — no git is touched. The internal status symbol and
-    the ``step_recover`` event name are unchanged (REQ-054 D4); only the operator verb is.
-    """
-    failed = sorted(
-        sid for sid, st in ledger.all_statuses().items()
-        if sid.startswith(f"{req_id}:") and st is StepStatus.FAILED
-    )
-    if not failed:
-        raise LifecycleError(
-            f"{req_id} has no failed step to repeat "
-            f"(repeat only re-arms a step the executor marked failed)."
-        )
-    for sid in failed:
-        ledger.set_status(sid, StepStatus.RECOVER)
-    ledger.save()
-    ledger.append_event("step_recover", req=req_id, steps=failed)
-    return RepeatResult(req_id, failed)
+# -- shared reads ---------------------------------------------------------------------
 
 
-def _resolve_red_validation(cfg: Config, ledger: Ledger, req_id: str, *, verb: str):
-    """Shared precondition for the two red-validation return edges (``rework`` /
-    ``revalidate``): resolve the REQ and assert a *real* red parked on its validate step.
-
-    Returns ``(validate_step, brief, evidence)`` on success. Raises :class:`LifecycleError`
-    (CLI → non-zero) on the identical refusal taxonomy both verbs share: an unknown id, a
-    ``done`` REQ (points at supersede — done is never weakened, D3), a REQ with no validate
-    step, or a validate step not ``BLOCKED`` on a red. ``verb`` only shapes the message.
-    """
-    reqs = {r.id: r for r in load_reqs(cfg.req_dir)}
-    req = reqs.get(req_id)
+def _load_req(cfg: Config, req_id: str):
+    req = next((r for r in load_reqs(cfg.req_dir) if r.id == req_id), None)
     if req is None:
         raise LifecycleError(f"{req_id} is not a known requirement (no REQ file found).")
-    if req.status.lower() == "done":
-        raise LifecycleError(
-            f"{req_id} is done — a finished requirement's red re-validation is never "
-            f"{verb}ed (done is never weakened). Change direction by superseding it with "
-            f"a new REQ (`supersedes: {req_id}`)."
-        )
+    return req
 
-    validate = f"{req_id}:validate"
-    # A validate step exists iff the REQ declares an artifact/manual AC (REQ-030) — read it
-    # from the REQ's own acceptance block, not the ledger overlay (an untouched validate
-    # step has no recorded status yet).
-    if not any(c.check in ("artifact", "manual") for c in req.acceptance):
-        raise LifecycleError(
-            f"{req_id} has no validate step to {verb} — it declares no artifact/manual "
-            f"acceptance criterion, so no validation can have gone red."
-        )
 
-    # The substantive test (D3, AC2): a *real* red — the latest validation event is
-    # ``ok: false`` and the step is parked. A manual park that only awaits its oracle
-    # records no validation event; a green/never-run validation records none or ok:true.
+def _declares_validation(req) -> bool:
+    """A validate step exists iff the REQ declares an ``artifact``/``manual`` AC (REQ-030).
+
+    Read from the REQ's own acceptance block, not the ledger overlay — an untouched validate
+    step has no recorded status yet.
+    """
+    return any(c.check in ("artifact", "manual") for c in req.acceptance)
+
+
+def _red_park(ledger: Ledger, req_id: str, validate: str) -> dict | None:
+    """The red validation a return edge may carry, or ``None``.
+
+    A *park* is both halves: the latest validation event is ``ok: false`` **and** the step
+    sits ``BLOCKED`` on it. A ``FAILED`` validate step is not a park however red its history
+    — its partial attempt is tree state the ``repeat`` doctrine leaves alone, so REQ-098
+    routes it through the plain re-arm rather than the carry (REQ-098, the `rework` section).
+    """
     latest = ledger.latest_validation(req_id)
-    is_red = latest is not None and latest.get("ok") is False
-    if not (is_red and ledger.status_of(validate) is StepStatus.BLOCKED):
-        raise LifecycleError(
-            f"{req_id} has no red validation to {verb} — {validate} is not blocked on a "
-            f"red System-Test result. Run `steward validate {req_id}` to validate it, or "
-            f"`steward repeat {req_id}` if a step actually failed."
-        )
+    if latest is None or latest.get("ok") is not False:
+        return None
+    if ledger.status_of(validate) is not StepStatus.BLOCKED:
+        return None
+    return latest
 
-    brief = "\n".join(
+
+def _red_brief(latest: dict) -> str:
+    return "\n".join(
         r.get("detail", "") for r in latest.get("results", []) if not r.get("ok")
     ) or "validation red"
-    return validate, brief, latest.get("evidence")
+
+
+def _green_then_refused(ledger: Ledger, req_id: str) -> bool:
+    """A validate step left ``FAILED`` by a land-gate refusal *after* a green validation —
+    the land replay's precondition (REQ-065 Decision 4), read here so :func:`repeat` can
+    route to it. Mirrors ``ReqValidateRoutine.reland``'s own scan, so the verb and the
+    routine can never disagree about which shape qualifies."""
+    validate = f"{req_id}:validate"
+    green = refused = None
+    for ev in ledger.events():
+        if (
+            ev.get("event") == "validation"
+            and ev.get("req") == req_id
+            and ev.get("ok") is True
+        ):
+            green = ev.get("ts")
+        elif ev.get("event") == "land_refused" and ev.get("step") == validate:
+            refused = ev.get("ts")
+    return bool(green and refused and refused >= green)
 
 
 def _answer_validate_decision(ledger: Ledger, validate: str, answer: str) -> str | None:
@@ -259,50 +289,246 @@ def _answer_validate_decision(ledger: Ledger, validate: str, answer: str) -> str
     return None
 
 
-def rework(cfg: Config, ledger: Ledger, req_id: str) -> ReworkResult:
-    """Return a red validation to develop for a fix-and-revalidate cycle (REQ-033) — the
-    **internal-cause** edge: the develop was hollow, so reopen it.
+# -- repeat: run the same step again --------------------------------------------------
 
-    On an in-flight REQ whose latest validation event is red (an artifact red or a
-    *declined* manual sign-off), flip ``REQ-NNN:develop`` to ``RECOVER`` and
-    ``REQ-NNN:validate`` to ``PENDING``, answer any open decision parked on the validate
-    step, and append a ``rework`` event carrying the red validation's evidence path and
-    failure brief. Touches neither git nor the REQ file (D5).
+
+def plan_repeat(ledger: Ledger, req_id: str) -> RepeatPlan:
+    """Read what stopped ``req_id`` and name the body that re-arms it (REQ-098 D3).
+
+    A pure read — nothing mutates here. The cases, in the order they are recognised:
+
+    * every ``FAILED`` step of the REQ → ``RECOVER`` (REQ-026/054);
+    * *unless* the only stopped step is a validate step whose last events are a green
+      validation followed by a ``land_refused`` → the land replay (REQ-065). The land replay
+      is exclusive on purpose: re-certifying a green while a *develop* step sits failed would
+      land work the gate has not seen, so a REQ stopped in both places takes the plain
+      re-arm and reaches the replay on the next repeat;
+    * a validate step ``BLOCKED`` on a red → ``PENDING`` with REQ-075's scope (``revalidate``);
+    * a validate step ``BLOCKED`` on a manual hold → ``PENDING``, hold cleared (``unhold``).
+
+    Refuses when nothing stopped: every step ``DONE``, ``PENDING``, ``RECOVER`` or
+    ``RUNNING``. ``PENDING`` is the honest boundary — a validation that was never started has
+    not stopped, it has not begun, and its forward path is ``steward validate``.
+    """
+    validate = f"{req_id}:validate"
+    statuses = ledger.all_statuses()
+    failed = sorted(
+        sid for sid, st in statuses.items()
+        if sid.startswith(f"{req_id}:") and st is StepStatus.FAILED
+    )
+    mode: str | None = None
+    val_status = statuses.get(validate)
+
+    if val_status is StepStatus.FAILED:
+        if failed == [validate] and _green_then_refused(ledger, req_id):
+            return RepeatPlan(req_id, [], validate, "reland")
+    elif val_status is StepStatus.BLOCKED:
+        mode = "revalidate" if _red_park(ledger, req_id, validate) else "unhold"
+
+    if not failed and mode is None:
+        raise LifecycleError(
+            f"{req_id} has nothing to repeat — no failed step, and its validate step is "
+            f"neither held nor parked on a red. `steward repeat` re-arms a step that "
+            f"stopped; to send a validation back to develop use `steward rework {req_id}`."
+        )
+    return RepeatPlan(req_id, failed, validate if mode else None, mode)
+
+
+def repeat(
+    cfg: Config, ledger: Ledger, req_id: str, *, plan: RepeatPlan | None = None
+) -> RepeatResult:
+    """Re-arm whatever stopped ``req_id`` and record the matching event (REQ-098 D3).
+
+    ``plan`` lets the caller pass the classification it already computed (see
+    :func:`plan_repeat`) so the ledger is read once. The land-replay mode is **not** applied
+    here: replaying a land needs the executor, which this module deliberately does not build
+    — :func:`devsteward.verbs.repeat` owns that branch.
+
+    The working tree is never touched (D6) and neither is the REQ file: a failed attempt's
+    partial edits stay for the resuming skill to assess. The internal ``RECOVER`` status
+    symbol and the ``step_recover`` / ``revalidate`` event names are unchanged (REQ-054 D4,
+    REQ-098 D5); only the operator verb is.
+    """
+    plan = plan or plan_repeat(ledger, req_id)
+    if plan.lands:
+        raise LifecycleError(
+            f"{req_id}'s repeat is a land replay — it needs the executor, so it is applied "
+            f"by `devsteward.verbs.repeat`, not by this function."
+        )
+
+    kinds: list[str] = []
+    moved: list[str] = []
+    evidence: str | None = None
+    brief = ""
+    decision: str | None = None
+    scope: list[str] | None = None
+    carried: list[dict] | None = None
+
+    if plan.failed:
+        for sid in plan.failed:
+            ledger.set_status(sid, StepStatus.RECOVER)
+        kinds.append("recover")
+        moved.extend(plan.failed)
+
+    if plan.mode in ("revalidate", "unhold"):
+        validate = plan.validate
+        assert validate is not None  # plan.mode implies a validate step
+        if plan.mode == "revalidate":
+            latest = ledger.latest_validation(req_id)
+            assert latest is not None  # _red_park proved it
+            evidence = latest.get("evidence")
+            brief = _red_brief(latest)
+            # REQ-075 AC1: scope the re-run to the red/unrecorded ACs, carrying the green
+            # one-offs forward. Degenerate cases (no per-AC results / all red) return None
+            # and the event omits the scope — a full re-run.
+            scope, carried = _scope_revalidation(
+                _load_req(cfg, req_id), latest
+            )
+            answer = (
+                "repeated: the red validation was re-armed — develop stands, "
+                "the validation runs again"
+            )
+        else:
+            brief = "held validation re-armed by the operator — a full re-run"
+            answer = "repeated: the held validation was re-armed for a full re-run"
+        # REQ-074: the transition itself clears the hold note.
+        ledger.set_status(validate, StepStatus.PENDING)
+        decision = _answer_validate_decision(ledger, validate, answer)
+        kinds.append(plan.mode)
+        moved.append(validate)
+
+    ledger.save()
+
+    if plan.failed:
+        ledger.append_event("step_recover", req=req_id, steps=plan.failed)
+    if plan.mode in ("revalidate", "unhold"):
+        event_fields = dict(
+            req=req_id,
+            validate=plan.validate,
+            evidence=evidence,
+            brief=brief[:2000],
+            decision=decision,
+        )
+        if scope is not None:
+            event_fields["scope"] = scope
+            event_fields["carried"] = carried
+        ledger.append_event("revalidate", **event_fields)
+
+    return RepeatResult(
+        req_id, kinds, moved, list(plan.failed),
+        evidence, brief, decision, scope, carried,
+    )
+
+
+# -- rework: go back to the previous step ----------------------------------------------
+
+
+def _resolve_rework_target(cfg: Config, ledger: Ledger, req_id: str) -> tuple[str, str]:
+    """``rework``'s precondition is a **state**, not a red (REQ-098 Decision 2).
+
+    Returns ``(develop_step, validate_step)``. Raises :class:`LifecycleError` (CLI →
+    non-zero, nothing mutated) on the four refusals: an unknown id, a ``done`` REQ (points at
+    supersede — done is never weakened, REQ-001), a REQ with no validate step, a develop step
+    that is not ``DONE`` (there is nothing to go *back* from — that is ``repeat``'s move), and
+    a validate step that is ``RUNNING`` (someone's live session) or ``DONE``.
+
+    This withdraws the "real red" precondition REQ-033 Decision 3 and REQ-055 Decision 2
+    recorded. Those decisions were made with the red case in view and without the
+    never-started / held case in hand; living with them showed the guard cost a validation
+    whose verdict the operator already knew and protected nothing.
+    """
+    req = _load_req(cfg, req_id)
+    if req.status.lower() == "done":
+        raise LifecycleError(
+            f"{req_id} is done — a finished requirement is never returned to develop (done "
+            f"is never weakened). Change direction by superseding it with a new REQ "
+            f"(`supersedes: {req_id}`)."
+        )
+    if not _declares_validation(req):
+        raise LifecycleError(
+            f"{req_id} has no validate step to rework — it declares no artifact/manual "
+            f"acceptance criterion, so there is no validation to return to develop."
+        )
+
+    develop, validate = f"{req_id}:develop", f"{req_id}:validate"
+    dev_status = ledger.status_of(develop)
+    if dev_status is not StepStatus.DONE:
+        raise LifecycleError(
+            f"{develop} is {dev_status.value} — rework returns a *validation* to develop, "
+            f"and this develop step is not closed, so there is nothing to go back from. "
+            f"Work it (`/advance {req_id} develop`), or re-arm it with "
+            f"`steward repeat {req_id}` if it failed."
+        )
+
+    val_status = ledger.status_of(validate)
+    if val_status is StepStatus.RUNNING:
+        raise LifecycleError(
+            f"{validate} is running — a validation in flight is not returned to develop. "
+            f"Record its verdict (`steward validate-record {req_id}`) or let the session "
+            f"finish, then rework."
+        )
+    if val_status is StepStatus.DONE:
+        raise LifecycleError(
+            f"{validate} is done — its validation already landed, and a landed validation "
+            f"is never weakened. Change direction by superseding {req_id} with a new REQ."
+        )
+    return develop, validate
+
+
+def rework(
+    cfg: Config, ledger: Ledger, req_id: str, *, reason: str | None = None
+) -> ReworkResult:
+    """*Go back to the previous step* — return ``req_id``'s validation to develop (REQ-033,
+    widened by REQ-098 Decision 2).
+
+    Flips ``REQ-NNN:develop`` ``DONE → RECOVER`` and ``REQ-NNN:validate`` → ``PENDING``
+    (which clears any hold, REQ-074), answers any decision parked on the validate step, and
+    appends a ``rework`` event. Works from **every unfinished validate state** — never
+    started, blocked on a manual hold, blocked on a red, or failed — because in the fused
+    model (REQ-029) "go back" only ever means validate → develop, and which of those states
+    the step is in changes nothing about what the operator wants. Touches neither git nor the
+    REQ file (D5).
+
+    **What the event carries** (REQ-098 Decision 4). ``brief`` is ``reason`` when given, else
+    the red validation's failure brief when a red exists, else
+    :data:`DEFAULT_REWORK_BRIEF`. ``evidence`` is present only when a red validation recorded
+    one; ``scope``/``carried`` are written only when a red exists. So the resuming
+    ``/advance`` session reads the System Tester's evidence dir when there is one and the
+    operator's line when there is not — it is never sent back knowing only that it was.
 
     **REQ-089 Decision 6 — the carry.** The operator's real workflow is: a red pauses a long
     manual walkthrough, a develop session fixes the cause, and the *same* validation resumes
-    without re-walking what already passed. That fell between the two verbs — ``revalidate``
-    carried green ACs forward but left develop ``DONE`` (no gate for a code fix), while
-    ``rework`` reopened develop but threw every sign-off away. So ``rework`` now runs
-    REQ-075's :func:`_scope_revalidation` too and writes ``scope`` + ``carried`` onto its
-    event; :func:`~devsteward.profiles.req.validate._pending_revalidate` reads a
-    scope-bearing ``rework`` exactly as it reads a ``revalidate``. The carry is
-    **unconditional** (Decision 7) — every AC the red validation recorded green carries, with
-    no per-AC opt-out. Its accepted hazard is a sign-off of code the fix then changed; the
-    defence is provenance (``source_evidence`` + ``source_event`` on each carried AC) and the
+    without re-walking what already passed. So a red rework runs REQ-075's
+    :func:`_scope_revalidation` and writes ``scope`` + ``carried`` onto its event;
+    :func:`~devsteward.profiles.req.validate._pending_revalidate` reads a scope-bearing
+    ``rework`` exactly as it reads a ``revalidate``. The carry is **unconditional**
+    (Decision 7) — every AC the red validation recorded green carries, with no per-AC opt-out.
+    Its accepted hazard is a sign-off of code the fix then changed; the defence is provenance
+    (``source_evidence`` + ``source_event`` on each carried AC) and the
     ``scoped re-run (REQ-075): …`` announcement the resumed session prints *before* the
-    walkthrough, so what is not being re-walked is visible in advance.
-
-    Refuses (:class:`LifecycleError`, mapped to a non-zero exit by the CLI) when there is
-    no red validation to rework: an unknown id, a ``done`` REQ (points at supersede — done
-    is never weakened, D3), a REQ with no validate step, or a validate step that is not
-    blocked on a red.
+    walkthrough. A rework from a hold or a never-started step carries nothing, so it adds no
+    new exposure.
     """
-    validate, brief, evidence = _resolve_red_validation(
-        cfg, ledger, req_id, verb="rework"
-    )
-    develop = f"{req_id}:develop"
+    develop, validate = _resolve_rework_target(cfg, ledger, req_id)
+    from_status = ledger.status_of(validate)
+
+    red = _red_park(ledger, req_id, validate)
+    evidence = red.get("evidence") if red else None
+    if reason:
+        brief = reason
+    elif red:
+        brief = _red_brief(red)
+    else:
+        brief = DEFAULT_REWORK_BRIEF
 
     decision_id = _answer_validate_decision(
         ledger, validate,
-        "reworked: human returned the red validation to develop for a fix",
+        "reworked: operator returned the validation to develop for a fix",
     )
 
-    # REQ-089 Decision 6: carry the green one-offs forward, exactly as ``revalidate`` does.
-    # Degenerate cases (no per-AC results / nothing green) return None and the event omits
-    # the scope — a full re-run, exactly the pre-REQ-089 behavior.
-    req = next((r for r in load_reqs(cfg.req_dir) if r.id == req_id), None)
-    scope, carried = _scope_revalidation(req, ledger.latest_validation(req_id))
+    scope, carried = (
+        _scope_revalidation(_load_req(cfg, req_id), red) if red else (None, None)
+    )
 
     ledger.set_status(develop, StepStatus.RECOVER)
     ledger.set_status(validate, StepStatus.PENDING)
@@ -320,52 +546,6 @@ def rework(cfg: Config, ledger: Ledger, req_id: str) -> ReworkResult:
         event_fields["carried"] = carried
     ledger.append_event("rework", **event_fields)
     return ReworkResult(
-        req_id, develop, validate, evidence, brief, decision_id, scope, carried
+        req_id, develop, validate, evidence, brief, decision_id, scope, carried,
+        from_status.value,
     )
-
-
-def revalidate(cfg: Config, ledger: Ledger, req_id: str) -> RevalidateResult:
-    """Re-arm a red validation without redoing develop (REQ-055) — the **external-cause**
-    mirror of :func:`rework`: a broken lab fixture / missing credential / downed host was
-    fixed, the develop work *stands*, so re-run the validation only.
-
-    Same precondition as ``rework`` (an in-flight REQ parked on a *red* validation),
-    opposite action: flip ``REQ-NNN:validate`` ``BLOCKED → PENDING`` while **leaving
-    ``REQ-NNN:develop`` untouched at ``DONE``**, answer any open decision parked on the
-    validate step, and append a ``revalidate`` event carrying the red validation's evidence
-    path and failure brief. Touches neither git nor the REQ file (D1/D4).
-
-    Refuses (:class:`LifecycleError`) on the identical taxonomy as ``rework`` (D2): an
-    unknown id, a ``done`` REQ (→ supersede), a REQ with no validate step, or a validate
-    step not blocked on a red.
-    """
-    validate, brief, evidence = _resolve_red_validation(
-        cfg, ledger, req_id, verb="revalidate"
-    )
-
-    decision_id = _answer_validate_decision(
-        ledger, validate,
-        "revalidated: external cause fixed, develop stands — re-running validation only",
-    )
-
-    # REQ-075 AC1: scope the re-run to only the red/unrecorded ACs, carrying the green
-    # one-offs forward (Decision 1/2). Degenerate cases (no per-AC results / all red)
-    # return None and the event omits scope — a full re-run, exactly today's behavior.
-    req = next((r for r in load_reqs(cfg.req_dir) if r.id == req_id), None)
-    scope, carried = _scope_revalidation(req, ledger.latest_validation(req_id))
-
-    # The whole point of the mirror: develop is left at DONE (D1). Only validate re-arms.
-    ledger.set_status(validate, StepStatus.PENDING)
-    ledger.save()
-    event_fields = dict(
-        req=req_id,
-        validate=validate,
-        evidence=evidence,
-        brief=brief[:2000],
-        decision=decision_id,
-    )
-    if scope is not None:
-        event_fields["scope"] = scope
-        event_fields["carried"] = carried
-    ledger.append_event("revalidate", **event_fields)
-    return RevalidateResult(req_id, validate, evidence, brief, decision_id, scope, carried)

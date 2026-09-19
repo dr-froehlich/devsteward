@@ -5,8 +5,9 @@ System-Tester session: `start` opens the step and readies the evidence dir from 
 warm session (it spawns nothing — no CLAUDECODE refusal), the guided work and capture
 happen there, and the operator records the verdict from a **second plain shell** with
 `record` — the engine's interactive prompt is the only verdict channel (REQ-034 D2). On a
-red, `steward rework`/`steward revalidate` run from that shell and the still-warm session
-re-runs `start`; the revalidate edge is scoped per REQ-075. Shape A stays intact.
+red, `steward rework`/`steward repeat` run from that shell and the still-warm session
+re-runs `start`; the re-validation edge is scoped per REQ-075 (the ledger event is still
+named `revalidate` — REQ-098 Decision 5). Shape A stays intact.
 
 Wired CLI-first (CliRunner over a real temp git repo + real `Ledger`, like
 `test_validate_recovery.py` / `test_transaction_boundary.py`): the ACs claim command
@@ -247,7 +248,7 @@ def test_record_red_revalidate_also_accepts(tmp_path, monkeypatch):
     _capture(tmp_path)
     assert _invoke(tmp_path, ["validate-record", "REQ-001"], input="d\n").exit_code == 1
 
-    reval = _invoke(tmp_path, ["revalidate", "REQ-001"])
+    reval = _invoke(tmp_path, ["repeat", "REQ-001"])
     assert reval.exit_code == 0, reval.output
     led = Ledger(tmp_path)
     assert led.status_of("REQ-001:develop") is StepStatus.DONE
@@ -329,7 +330,7 @@ def test_full_cycle_revalidate_scoped_carry(tmp_path, monkeypatch):
     res = _invoke(tmp_path, ["validate-record", "REQ-001"])  # no manual → no prompt
     assert res.exit_code == 1  # AC4 red (fixed.marker absent)
 
-    assert _invoke(tmp_path, ["revalidate", "REQ-001"]).exit_code == 0
+    assert _invoke(tmp_path, ["repeat", "REQ-001"]).exit_code == 0
     (tmp_path / "fixed.marker").write_text("external cause fixed\n", encoding="utf-8")
 
     # No sleep: REQ-088 made the evidence-dir mint collision-free, so the carry gets a

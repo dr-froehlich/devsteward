@@ -180,39 +180,34 @@ def project_status(cfg: Config, templates_root: Path | None = None,
 def _offer(view: StepView, led) -> tuple[list[str], str]:
     """Which CLI verbs the page offers on a step, and which command is the operator's own.
 
-    Mirrors the hints ``steward status`` prints: a FAILED step names ``repeat`` (or
-    ``reland`` when a green validation was followed by a land refusal), a validate step
-    blocked on a **red** validation names ``rework``/``revalidate``, a manual hold names the
-    shell-only ``steward validate``. Eligible steps name the session command that runs them —
-    never an action here (Decision 5: no session is ever spawned from the page).
+    Mirrors the hints ``steward status`` prints, which since REQ-098 are two verbs: a stopped
+    step (FAILED, or a validate step held or parked on a red) offers ``repeat`` and — where
+    there is a develop step to go back to — ``rework``; a validate step that has not started
+    offers ``rework`` alone, because ``repeat`` has nothing to re-arm there. A manual hold
+    keeps naming the shell-only ``steward validate`` beside them (Decision 6): the page never
+    replaces the human procedure, it only offers the two moves next to it. Eligible steps name
+    the session command that runs them — never an action here (REQ-097 Decision 5: no session
+    is ever spawned from the page).
+
+    Display hints only. The engine's own preconditions decide, so an offer the ledger does not
+    actually support renders the CLI's refusal rather than a wrong state change.
     """
     req = view.req
+    develop_done = led.status_of(f"{req}:develop") is StepStatus.DONE
+    back = ["rework"] if view.phase == "validate" and develop_done else []
     if view.status == StepStatus.FAILED.value:
-        if view.phase == "validate" and _green_then_refused(led, req):
-            return ["reland", "repeat"], ""
-        return ["repeat"], ""
+        return ["repeat"] + back, ""
     if view.status == StepStatus.BLOCKED.value and view.phase == "validate":
         latest = led.latest_validation(req)
-        if latest is not None and latest.get("ok") is False:
-            return ["rework", "revalidate"], ""
-        return [], f"steward validate {req}"
+        red = latest is not None and latest.get("ok") is False
+        # A `manual`-AC hold (state F) keeps its own forward path — the sign-off itself is
+        # only ever recorded by `steward validate` (Decision 6).
+        return ["repeat"] + back, "" if red else f"steward validate {req}"
     if view.eligible:
         if view.phase == "validate":
-            return [], f"steward validate {req}"
+            return back, f"steward validate {req}"
         return [], f"/advance {req} develop"
     return [], ""
-
-
-def _green_then_refused(led, req: str) -> bool:
-    green_at = refused_at = None
-    for ev in led.events():
-        if ev.get("req") != req and (ev.get("step") or "").split(":", 1)[0] != req:
-            continue
-        if ev.get("event") == "validation" and ev.get("ok") is True:
-            green_at = ev.get("ts")
-        elif ev.get("event") == "land_refused":
-            refused_at = ev.get("ts")
-    return bool(green_at and refused_at and refused_at >= green_at)
 
 
 # -- git facts (Decision 8) --------------------------------------------------------------

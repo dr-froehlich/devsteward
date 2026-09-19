@@ -1,5 +1,8 @@
-"""REQ-065 §2 — ``steward reland``: replay the land of a recorded green without re-running
-the validation session.
+"""REQ-065 §2 — the land replay: re-land a recorded green without re-running the session.
+
+Reached through ``steward repeat`` since REQ-098 folded the ``reland`` verb into it (the
+routine method and the ledger event keep their names — Decision 5). These tests drive the
+routine directly; ``test_req098_two_moves.py`` covers the verb-level entry.
 
 When a validate step is left ``FAILED`` by a land-gate refusal (the missing concept doc /
 plan the pre-flight now catches, or the historical post-session refusals already stuck in a
@@ -147,16 +150,17 @@ def test_reland_refuses_if_gate_still_red(tmp_path):
 
 
 def test_reland_precondition_failures(tmp_path):
-    """``reland`` refuses, with a diagnostic routing to ``revalidate`` / ``repeat``, for any
-    step outside its narrow shape: a regression-only REQ (no validate step), a
-    DONE/PENDING/RUNNING validate, a red validation (BLOCKED), and a FAILED step with no green
-    validation behind it."""
+    """The land replay refuses, with a diagnostic routing to the two moves, for any step
+    outside its narrow shape: a regression-only REQ (no validate step), a DONE/PENDING/RUNNING
+    validate, a red validation (BLOCKED), and a FAILED step with no green validation behind
+    it. (`steward repeat` classifies before it ever gets here — this is the routine's own
+    backstop for a direct caller, REQ-098.)"""
     # 1. regression-only REQ → no validate step → PENDING, refuse with both route hints
     ex = _build(tmp_path / "a", acs=(_REGRESSION,))
     res = ex.validate_runner.reland(ex, "REQ-001")
     assert res.outcome is RunOutcome.REFUSED
-    assert "steward revalidate REQ-001" in res.detail
     assert "steward repeat REQ-001" in res.detail
+    assert "steward rework REQ-001" in res.detail
 
     # 2. DONE validate → refuse
     ex = _build(tmp_path / "b")
@@ -170,7 +174,7 @@ def test_reland_precondition_failures(tmp_path):
     ex.ledger.save()
     assert ex.validate_runner.reland(ex, "REQ-001").outcome is RunOutcome.REFUSED
 
-    # 4. red validation parked (BLOCKED) → refuse, route to revalidate
+    # 4. red validation parked (BLOCKED) → refuse, route to the two moves
     ex = _build(tmp_path / "d")
     ex.ledger.append_event(
         "validation", step="REQ-001:validate", req="REQ-001", ok=False,
@@ -179,7 +183,7 @@ def test_reland_precondition_failures(tmp_path):
     ex.ledger.set_status("REQ-001:validate", StepStatus.BLOCKED)
     ex.ledger.save()
     res = ex.validate_runner.reland(ex, "REQ-001")
-    assert res.outcome is RunOutcome.REFUSED and "revalidate" in res.detail
+    assert res.outcome is RunOutcome.REFUSED and "steward repeat REQ-001" in res.detail
 
     # 5. FAILED but no green validation behind it (only a red + a land_refused) → refuse
     ex = _build(tmp_path / "e")

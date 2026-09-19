@@ -166,10 +166,10 @@ validate-start REQ-NNN` opens the step and prints the evidence dir (it spawns no
 is callable from inside a Claude session); the session does the guided work and captures; then
 the human runs `steward validate-record REQ-NNN` from a **second plain shell** — the engine
 grades the capture and takes the verdict through its own interactive prompt (a Claude session
-can never host or relay it). On a red, run `steward rework`/`steward revalidate` and the repair
-from that same shell while the validation session stays warm and **idle** (one session writes
-at a time); once the step is PENDING again, the warm session re-runs `start` — scoped to the
-red ACs (see red-only revalidation below).
+can never host or relay it). On a red, run `steward rework` (back to develop) or `steward repeat`
+(run the validation again) and the repair from that same shell while the validation session stays
+warm and **idle** (one session writes at a time); once the step is PENDING again, the warm session
+re-runs `start` — scoped to the red ACs (see red-only re-runs below).
 
 **The engine hands each `artifact` grading test its evidence dir.** When the engine runs an
 `artifact` AC's test command it sets **`DEVSTEWARD_EVIDENCE_DIR`** in that command's environment
@@ -178,8 +178,8 @@ the supported way for a grading test to find the artifacts the System Tester cap
 from the environment; never rely on an `export` left by a capture step (a stale one is overridden,
 per run, so it cannot leak into a later grade).
 
-**Red-only revalidation.** `steward revalidate REQ-NNN` re-opens **only the ACs that were red**
-in the last validation; the green one-offs (a passed `artifact` capture, a recorded `manual`
+**Red-only re-runs.** `steward repeat REQ-NNN` on a validate step parked on a red re-opens
+**only the ACs that were red** in the last validation; the green one-offs (a passed `artifact` capture, a recorded `manual`
 sign-off) are **carried forward** into the new run's evidence dir with provenance — not
 re-performed. The System Tester's prompt names only the scoped ACs (`--ac …`). If every AC was
 red (or there were no per-AC results), it degrades to a full re-run. A carried AC whose source
@@ -222,7 +222,7 @@ typed the command. The four lanes:
   depending on how you typed it.
 - **Degrade is reclassification, not a verb.** When a newer live proof subsumes an older one, flip
   the older AC's `check:` from `live → artifact`: it leaves the standing develop gate, stays
-  re-runnable via `steward revalidate`, and you record the superseding test/REQ in the AC text or
+  re-runnable via `steward repeat`, and you record the superseding test/REQ in the AC text or
   Notes. There is no `steward degrade`.
 
 ## Authoring doctrine (REQ-071)
@@ -248,16 +248,27 @@ Pick the verb by **what is actually stuck**. None of these touch a `done` REQ (s
 | **D/H** — a develop step ineligible (e.g. no plan artifact, or a declared concept phase's attended need) | **Not a decision.** A mechanical go-fix-and-retry stop | fix the cause, then `steward repeat REQ-NNN` |
 | A parked **decision** on a `develop` step (a genuine fork) | The session hit a choice it couldn't resolve — the autopilot raised the captain | `steward decide DEC-NNN` (guided, from a plain shell) |
 | A **`manual`-AC** validate hold (state F): "awaits its human oracle" | Async QA — a human must sign off | `steward validate REQ-NNN` (**not** `decision-answer`) |
-| A **red validation** (the lab found a defect, or the validation test is wrong) | A human question — no auto-repair loop | `steward rework` or `steward revalidate` (below) |
-| A **`validate` step FAILED by a land-gate refusal** (a missing plan/concept doc, after a *green* validation) | The formality is missing; the sign-offs are already durable | `steward reland REQ-NNN` |
+| A **red validation** (the lab found a defect, or the validation test is wrong) | A human question — no auto-repair loop | `steward rework` (the develop was hollow) or `steward repeat` (the lab was) |
+| A **`validate` step FAILED by a land-gate refusal** (a missing plan/concept doc, after a *green* validation) | The formality is missing; the sign-offs are already durable | `steward repeat REQ-NNN` — it replays the recorded green |
 | A **`done` REQ still surfacing a parked `:validate` decision** | A diverged ledger — the land already happened; the cursor was rewound behind it | `steward validate REQ-NNN` (reconciles it from the event log; **never** hand-edit `state.yaml`) |
 
-- **`steward repeat REQ-NNN`** — the re-run verb (REQ-054, renamed from `recover`). The common
-  failure is transient (a flaky env, an account swap), so the honest action is to repeat the step:
-  it flips the FAILED step back to eligible, then `steward run` / `steward checkpoint` re-attempts
-  against the partial tree the failed attempt left. It succeeds regardless of which branch is
-  checked out (single ledger). Use it for any FAILED step **and** for a D/H mechanical stop once
-  you've fixed the cause (e.g. added the missing plan file).
+- **`steward repeat REQ-NNN`** — *run the same step again*, the first of the two moves. It
+  re-arms **whatever stopped the REQ**; you never have to recognise a ledger state and pick a verb
+  for it, because the engine reads the state itself:
+  - a **FAILED** step → back to eligible, its partial tree intact, then `steward run` /
+    `steward checkpoint` re-attempts against it. Use it for any FAILED step **and** for a D/H
+    mechanical stop once you've fixed the cause (e.g. added the missing plan file);
+  - a validate step parked on a **red** → re-runs only the red ACs; the green one-offs carry
+    forward with provenance and `develop` stays `done` (see red-only re-runs above);
+  - a validate step on a **`manual`-AC hold** → clears the hold for a full re-run. It is a
+    *reset*, never a sign-off: the verdict is still recorded by `steward validate REQ-NNN`;
+  - a validate step **FAILED by a land-gate refusal after a green validation** → replays that
+    recorded green and lands, with no session and no re-prompting. The sign-offs are durable in
+    the green `validation` event, so once you fix the formality (no plan file, no concept
+    deliverable) this re-certifies the same green. It refuses if the gate is still red.
+
+  It succeeds regardless of which branch is checked out (single ledger), and touches no git
+  except on that last branch, which commits the land it replays. It refuses when nothing stopped.
 - **`steward decide DEC-NNN`** — the guided resolution of a **genuine fork** parked from a
   develop step (REQ-074). From a plain shell (never inside a Claude session) it brings up a
   session that briefs you on the fork (question, context, options, the parked session's
@@ -265,17 +276,25 @@ Pick the verb by **what is actually stuck**. None of these touch a `done` REQ (s
   choice + rationale, unblocks the step, and delivers the decision into the resuming session's
   prompt. `steward decision-answer DEC-NNN "<answer>"` remains as the non-guided plumbing; both
   refuse on a legacy validation hold and redirect you to the right verb — heed that.
-- **`steward rework REQ-NNN`** — the return edge when a **red validation is a real defect**: it
-  sends the validate step back to develop (`develop → recover`, `validate → pending`) so you fix
-  the cause and re-validate. Reads the red evidence dir as your repair context.
-- **`steward revalidate REQ-NNN`** — the validate-layer mirror: when the develop work **stands**
-  and an external lab/setup issue was fixed, re-run the validation only (`develop` stays `done`).
-- **`steward reland REQ-NNN`** — the cheap edge when the *validation was green* and only the land
-  formality failed (no plan file, no concept deliverable). The sign-offs are durable in the green
-  validation event, so once you fix the formality `reland` re-certifies that same green and lands —
-  no re-prompting, no re-run, no paid session. Narrow preconditions: `REQ-NNN:validate` is FAILED
-  and its last events are a green validation followed by a `land_refused`. For a *red* validation
-  use `revalidate`; for a develop step use `repeat`.
+- **`steward rework REQ-NNN [--reason "…"]`** — *go back to the previous step*, the second move.
+  It sends the validate step back to develop (`develop → recover`, `validate → pending`, any hold
+  cleared) so you fix the cause and validate again. It works from **any unfinished validate
+  state** — never started, held on a `manual` AC, parked on a red, or failed — so you never have
+  to produce a red you already know is coming just to unlock the verb. A red additionally carries
+  its evidence dir and the green ACs forward; without one, `--reason` is your line of repair
+  context to the resuming session (optional, and the engine supplies a default).
+
+  It refuses on a `done` REQ (supersede instead), on a REQ with no validate step, on a develop
+  step that is not closed (nothing to go back from — that is `repeat`'s move), and on a validation
+  that is in flight.
+
+**Two moves, not four (REQ-098).** *Again* and *back* are the whole recovery vocabulary. The two
+verbs that used to stand beside them — one re-running a red validation, one replaying a refused
+land — are gone; their bodies live inside `repeat`, reached by reading the ledger instead of by
+making you name a state. If a runbook you are following names either of them, it predates this
+change: `repeat` is the verb. One consequence to know: after a land refusal `repeat` replays the
+land rather than re-running the validation, so to force a fresh full validation, `rework` back to
+develop and come forward again.
 
 `steward decision-list` shows parked forks with their briefs (question, context, options,
 recommendation). Validation and attended waits are **holds**, not decisions (REQ-074): they never
@@ -327,10 +346,8 @@ authoritative flag reference and cannot drift.
 
 | Verb | What it does | Run by / when |
 |---|---|---|
-| `steward repeat` | `repeat REQ-NNN` — re-arms a FAILED step so the next run re-attempts it, with the failed attempt's partial work left intact in the tree. | You or the operator — on any FAILED step, and after fixing a D/H mechanical stop. |
-| `steward rework` | `rework REQ-NNN` — returns a red validation to develop (`develop → recover`, `validate → pending`) for a fix-and-revalidate cycle, carrying the green ACs forward. | The operator — when the red validation found a real defect. |
-| `steward revalidate` | `revalidate REQ-NNN` — re-runs only the ACs that were red; green one-offs are carried forward with provenance. `develop` stays `done`. | The operator — when the develop work stands and an external lab or setup cause was fixed. |
-| `steward reland` | `reland REQ-NNN` — replays the mechanical land after a land-gate *refusal*, re-certifying the durable green validation without re-prompting or re-running it. | The operator — only when `REQ-NNN:validate` is FAILED with a green validation followed by a `land_refused`. |
+| `steward repeat` | `repeat REQ-NNN` — *again*: re-arms whatever stopped the REQ — a FAILED step (partial work left intact), a red or held validate step, or a land refusal after a green (which it replays and lands). | You or the operator — on any stopped step, and after fixing a D/H mechanical stop. |
+| `steward rework` | `rework REQ-NNN [--reason "…"]` — *back*: returns a validation to develop (`develop → recover`, `validate → pending`) from any unfinished state, carrying the green ACs forward when a red recorded them. | The operator — when the develop needs another pass, whatever state the validation is in. |
 | `steward decide` | `decide DECISION_ID` — guided resolution of a parked fork: briefs you on the question, context, options and the parked session's recommendation, and supports live interrogation before the engine records your choice. | The operator, from a plain shell. It spawns a session, so never from inside one. |
 | `steward decision-list` | Shows the forks parked while running unattended, each with its brief. Holds (a validation wait, an attended need) never appear here. | You or the operator — any time. |
 | `steward decision-answer` | `decision-answer DECISION_ID ANSWER` — the non-guided plumbing: records an answer against a parked fork and unblocks its step. | The operator — when the answer is already settled and no guided session is wanted. |

@@ -126,7 +126,7 @@ to `<interpreter> -m pytest …` (repo root importable). Never rely on a bare `p
 
 **Degrade — `live → artifact` (REQ-068).** When a newer live proof subsumes an older one,
 flip the older AC's `check:` from `live` to `artifact`: it drops out of the standing develop
-gate and stays re-runnable via `steward revalidate`. Record the superseding test/REQ in the AC
+gate and stays re-runnable via `steward repeat`. Record the superseding test/REQ in the AC
 text or Notes. Degrade is *reclassification*, not a `steward degrade` verb.
 
 **Writing a `manual` AC for a human oracle (2026-06-12 postmortem):** the human is the

@@ -91,7 +91,7 @@ the string, any more than it runs in a different *lane* depending on a hand-edit
 
 **Degrade — `live → artifact` (REQ-068).** When a newer live proof subsumes an older one,
 flip the older AC's `check:` from `live` to `artifact`: it leaves the standing develop gate
-and stays re-runnable via `steward revalidate`; record the superseding test/REQ in the AC
+and stays re-runnable via `steward repeat`; record the superseding test/REQ in the AC
 text or Notes. Degrade is *reclassification*, not a verb.
 
 **Oracle** (glossary): the part of a test that decides correct vs incorrect — distinct

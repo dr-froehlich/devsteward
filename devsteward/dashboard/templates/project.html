@@ -29,7 +29,7 @@
     <td class="nowrap">
       {% for verb in s.actions %}
       <form class="inline" method="post" action="{{ url_for('step_verb', name=p.name, verb=verb) }}">
-        <input type="hidden" name="req" value="{{ s.req }}"><button>steward {{ verb }}</button>
+        <input type="hidden" name="req" value="{{ s.req }}">{% if verb == 'rework' %}<input type="text" name="reason" size="18" placeholder="reason (optional)">{% endif %}<button>steward {{ verb }}</button>
       </form>
       {% endfor %}
       {% if s.shell %}<span class="small muted">run <code>{{ s.shell }}</code> in a shell</span>{% endif %}
@@ -61,23 +61,6 @@
 <ul class="plain small">{% for name, bucket in p.status.drift %}<li>⚠ <code>{{ name }}</code> {{ bucket }} — run <code>steward sync</code></li>{% endfor %}</ul>
 {% endif %}
 {% endif %}
-
-<h2>Requirements <span class="badge">{{ p.reqs|length }}</span></h2>
-<table>
-  <tr><th>ID</th><th>Title</th><th>Status</th><th>Depends on</th><th>Backlog items</th><th></th></tr>
-  {% for r in p.reqs|reverse %}
-  <tr class="{% if r.is_terminal %}dim{% endif %}">
-    <td class="mono nowrap"><a href="{{ url_for('req_page', name=p.name, req_id=r.id) }}">{{ r.id }}</a></td>
-    <td>{{ r.title }}</td>
-    <td class="nowrap">{{ r.status }}</td>
-    <td class="small mono">{{ r.depends_on|join(', ') }}</td>
-    <td class="small mono">{{ r.backlog_refs|join(', ') }}</td>
-    <td class="nowrap">{% if r.status in ('draft', 'dropped') %}
-      <form class="inline" method="post" action="{{ url_for('step_verb', name=p.name, verb='activate') }}">
-        <input type="hidden" name="req" value="{{ r.id }}"><button>steward activate</button></form>{% endif %}</td>
-  </tr>
-  {% endfor %}
-</table>
 
 <h2>Backlog <span class="muted small mono">{{ p.backlog_file }}</span></h2>
 {% if p.backlog_error %}<div class="flash error">{{ p.backlog_error }}</div>{% endif %}
@@ -128,4 +111,22 @@
   <div style="margin-top:.5rem"><button class="primary">Record need</button></div>
 </form>
 </details>
+
+<h2>Requirements <span class="badge">{{ p.reqs|length }}</span></h2>
+<table>
+  <tr><th>ID</th><th>Title</th><th>Status</th><th>Depends on</th><th>Backlog items</th><th></th></tr>
+  {% for r in p.reqs|reverse %}
+  <tr class="{% if r.is_terminal %}dim{% endif %}">
+    <td class="mono nowrap"><a href="{{ url_for('req_page', name=p.name, req_id=r.id) }}">{{ r.id }}</a></td>
+    <td>{{ r.title }}</td>
+    <td class="nowrap">{{ r.status }}</td>
+    <td class="small mono">{{ r.depends_on|join(', ') }}</td>
+    <td class="small mono">{{ r.backlog_refs|join(', ') }}</td>
+    <td class="nowrap">{% if r.status in ('draft', 'dropped') %}
+      <form class="inline" method="post" action="{{ url_for('step_verb', name=p.name, verb='activate') }}">
+        <input type="hidden" name="req" value="{{ r.id }}"><button>steward activate</button></form>{% endif %}</td>
+  </tr>
+  {% endfor %}
+</table>
+
 {% endblock %}

@@ -256,6 +256,7 @@ def test_repeat_recovers_dirty_fail_with_signal(tmp_path):
     it flips the FAILED develop step to RECOVER, and the next driven run issues the develop
     command with --repeat (step_started recover: true), so the resuming session assesses the
     dirty tree rather than restarting clean."""
+    from devsteward.config import Config
     from devsteward.lifecycle import repeat
 
     # Drive state H: a land-gate refusal leaves REQ-001:develop FAILED with no plan.
@@ -267,7 +268,7 @@ def test_repeat_recovers_dirty_fail_with_signal(tmp_path):
     assert led.status_of("REQ-001:develop") is StepStatus.FAILED
 
     # `steward repeat REQ-001` re-arms the failed step to RECOVER.
-    res = repeat(led, "REQ-001")
+    res = repeat(Config(root=tmp_path), led, "REQ-001")
     assert res.steps == ["REQ-001:develop"]
     reloaded = Ledger(tmp_path)
     assert reloaded.status_of("REQ-001:develop") is StepStatus.RECOVER

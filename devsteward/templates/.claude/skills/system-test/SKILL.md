@@ -49,8 +49,8 @@ place: run **`steward validate-start REQ-NNN`** (it spawns nothing, so it works 
 Claude session), do the guided work and capture into the evidence dir it prints, then the
 **human** records the verdict from a **second plain shell** with **`steward
 validate-record REQ-NNN`** — never from this session (it cannot host the prompt, and must never
-relay the verdict). On a red, the human runs `steward rework`/`steward revalidate` and the
-repair from that same shell while you stay warm and **idle** (one session writes at a
+relay the verdict). On a red, the human runs `steward rework` (back to develop) or
+`steward repeat` (run the validation again) and the repair from that same shell while you stay warm and **idle** (one session writes at a
 time, REQ-079); once the step is back to PENDING, re-run `steward validate-start REQ-NNN`
 here and repeat — scoped to the red ACs (REQ-075). Do **not** spawn a new `claude`;
 `steward validate`'s bring-up refuses inside a Claude session (`CLAUDECODE`) and points at
