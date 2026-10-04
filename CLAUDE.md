@@ -28,6 +28,13 @@ When you design or change anything here, hold to these:
   before building it.
 - **Match the owner's stated references; fill silence with the *simplest* option, not the
   most conventional one.** Unspecified ≠ "do it the impressive way."
+- **Avoid waste.** Everything DevSteward puts into a consumer project sits in one of four
+  quadrants (Lean):
+
+  | | needed | not needed |
+  |---|---|---|
+  | **adds value** | keep | user choice — optional |
+  | **adds no value** | keep — necessary for DevSteward's internal workings; keep the cost to the consumer minimal | remove |
 
 ## House conventions (first-class, enforced)
 
