@@ -102,5 +102,6 @@ commit** as its frontmatter and the code.
 | REQ-096 | Delete the stamped schema copy — one artifact, one file; the duplicate nothing read had drifted two REQ-cycles behind | DONE | [REQ-096](REQ-096.md) | REQ-021, REQ-048, REQ-051, REQ-066, REQ-083, REQ-095 |
 | REQ-097 | A status dashboard over every stamped project — one local browser page that reads each project's ledger, git and backlog, authors and edits backlog items, records verdicts, and applies the CLI's state changes without a Claude session | DONE | [REQ-097](REQ-097.md) | REQ-084, REQ-089, REQ-093, REQ-094 |
 | REQ-098 | Two moves, not four — `rework` returns any unfinished validation to develop and `repeat` re-arms a step from whatever stopped it; `revalidate` and `reland` fold into them, and the dashboard's project page puts the backlog above the requirements | DONE | [REQ-098](REQ-098.md) | REQ-033, REQ-054, REQ-055, REQ-065, REQ-074, REQ-089, REQ-094, REQ-097 |
+| REQ-099 | Technology-agnostic scaffolding, no waste — the initialization check moves into `steward lint`, the gate asks for pytest only when a command runs it, and /bootstrap writes the project's own full-suite command | DRAFT | [REQ-099](REQ-099.md) | REQ-028, REQ-063, REQ-068, REQ-087, REQ-094 |
 
 New requirement template: [`_templates/req.md`](../../devsteward/templates/docs/requirements/_templates/req.md)
