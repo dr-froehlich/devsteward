@@ -13,12 +13,12 @@ import click
 
 from . import __version__, cache as cache_mod, skillsync
 from .build import build_executor
-from .config import Config, ProjectNotFound, load_config
+from .config import JOINT_PROFILE, Config, ProjectNotFound, load_config
 from .core import claude as claude_mod
 from .core.errors import StewardError
 from .core.executor import RunOutcome, StepResult
 from .core.invariants import check_invariants
-from .core.ledger import Ledger
+from .core.ledger import LEDGER_DIRNAME, Ledger
 from .core.stop import StopController
 from .core.model import DecisionStatus, StepStatus
 from .core.transaction import transaction
@@ -31,11 +31,26 @@ def _package_templates() -> Path:
     return Path(str(files("devsteward"))) / "templates"
 
 
-def _load_or_die() -> Config:
+def _load_or_die(*, joint: bool = False) -> Config:
+    """The enclosing project's config — refused on a joint-only participant unless ``joint``.
+
+    A joint-only participant (REQ-102) runs the joint verbs and nothing of the REQ workflow.
+    Refusing is the default, so a verb is joint-capable only where it says so: a REQ verb
+    added later cannot reach into such a repository by forgetting this rule.
+    """
     try:
-        return load_config()
+        cfg = load_config()
     except ProjectNotFound as exc:
         raise click.ClickException(str(exc)) from exc
+    if cfg.joint_only and not joint:
+        ctx = click.get_current_context(silent=True)
+        verb = ctx.info_name if ctx is not None else "this verb"
+        raise click.ClickException(
+            f"{cfg.root.name} is a joint-only participant (profile: {JOINT_PROFILE}): "
+            f"`steward {verb}` belongs to the REQ workflow, which does not run here — "
+            "joint tasks: `steward joint-list`"
+        )
+    return cfg
 
 
 class _StewardCLI(click.Group):
@@ -81,8 +96,16 @@ def main() -> None:
 @click.option("--profile", default="req", show_default=True, help="Ledger profile.")
 @click.option("--force", is_flag=True, help="Stamp into a non-empty directory.")
 def new(target: Path, profile: str, force: bool) -> None:
-    """Stamp the bundled scaffolding into a new (private) consumer project at TARGET."""
+    """Stamp the bundled scaffolding into a new (private) consumer project at TARGET.
+
+    With `--profile joint` it instead declares TARGET a joint-only participant (REQ-102): it
+    writes `.devsteward/config.yaml` and nothing else, into an existing repository as well, so
+    a repository the REQ workflow does not govern can take part in joint tasks.
+    """
     target = target.resolve()
+    if profile == JOINT_PROFILE:
+        _join(target)
+        return
     if target.exists() and any(target.iterdir()) and not force:
         raise click.ClickException(f"{target} is not empty (use --force to stamp anyway)")
     src = _package_templates()
@@ -96,6 +119,30 @@ def new(target: Path, profile: str, force: bool) -> None:
     skillsync.seed_lock(target, src)
     click.echo(f"Stamped {stamped} files into {target}")
     click.echo("Next: cd in, run `/bootstrap` (interview) or edit REQ-001 and `steward lint`.")
+
+
+_JOINT_CONFIG = (
+    "# A joint-only participant (DevSteward REQ-102): this repository takes part in joint\n"
+    "# tasks with the DevSteward projects beside it. It runs no REQ workflow; nothing else of\n"
+    "# the engine's belongs here but this file and its own joint.jsonl.\n"
+    f"profile: {JOINT_PROFILE}\n"
+)
+
+
+def _join(target: Path) -> None:
+    """`steward new --profile joint`: write only the joint-only declaration (REQ-102 Decision 3).
+
+    No `--force` is needed in a non-empty folder — joining is done to an existing repository,
+    and nothing here overwrites a file. An existing `.devsteward/` is refused: the folder is
+    already a participant, governed or not.
+    """
+    ledger_dir = target / LEDGER_DIRNAME
+    if ledger_dir.exists():
+        raise click.ClickException(f"{ledger_dir} already exists — {target.name} already takes part")
+    ledger_dir.mkdir(parents=True)
+    (ledger_dir / "config.yaml").write_text(_JOINT_CONFIG, encoding="utf-8")
+    click.echo(f"Joined {target} as a joint-only participant (profile: {JOINT_PROFILE}).")
+    click.echo("It takes part in joint tasks (`steward joint-list`); the REQ workflow does not run there.")
 
 
 # Placeholders `steward new` resolves itself (not interview-dependent). Everything else
@@ -151,7 +198,10 @@ def _stamp(src: Path, dst: Path) -> int:
 @main.command()
 def lint() -> None:
     """Schema-validate REQs; deps resolve; index↔REQ in sync; every AC has a test id."""
-    cfg = _load_or_die()
+    cfg = _load_or_die(joint=True)
+    if cfg.joint_only:  # REQ-102: no REQ corpus to lint
+        click.echo(click.style("lint: OK (joint-only participant — no REQ corpus to lint)", fg="green"))
+        return
     problems = run_lint(cfg)
     if not problems:
         click.echo(click.style("lint: OK", fg="green"))
@@ -350,7 +400,16 @@ def rework(req_id: str, reason: str | None) -> None:
 @main.command()
 def status() -> None:
     """Show the ledger cursor, eligible/blocked steps, and parked decisions."""
-    cfg = _load_or_die()
+    cfg = _load_or_die(joint=True)
+    if cfg.joint_only:
+        # REQ-102 Decision 2: no ledger, no steps, and above all no drift lines — a `steward
+        # sync` offered here would stamp the REQ workflow into a repository that must not have it.
+        click.echo(f"profile: {cfg.profile}")
+        click.echo(
+            f"{cfg.root.name} is a joint-only participant: it takes part in joint tasks "
+            "(`steward joint-list`) and runs no REQ workflow."
+        )
+        return
     ex = build_executor(cfg)
     # REQ-040 Decision 1: bind the read path too — from another checked-out branch (e.g.
     # `main`) an unbound read returns a stale snapshot, not the live integration-branch cursor.
@@ -499,7 +558,10 @@ def sync(force: bool) -> None:
     unless ``--force`` is given, in which case its current bytes are backed up to
     ``<name>.orig`` before the refresh. ``sync-skills`` is a back-compat alias.
     """
-    cfg = _load_or_die()
+    cfg = _load_or_die(joint=True)
+    if cfg.joint_only:  # REQ-102: nothing of the engine's is stamped here, nor ever will be
+        click.echo("joint-only participant — no engine-owned artifacts are stamped here.")
+        return
     res = skillsync.sync(
         cfg.root, _package_templates(), cfg.requirements_dir, force=force
     )
@@ -1562,7 +1624,7 @@ def joint_send(handle, kind, to, need, reply_to, body, body_file) -> None:
     """
     from .profiles.req import joint
 
-    cfg = _load_or_die()
+    cfg = _load_or_die(joint=True)
     text = _body(body, body_file)
     try:
         if kind == "action":
@@ -1588,23 +1650,31 @@ def joint_send(handle, kind, to, need, reply_to, body, body_file) -> None:
 @main.command("joint-ack")
 @click.argument("handle")
 @click.argument("ref")
-def joint_ack(handle: str, ref: str) -> None:
+@click.option(
+    "--filed-as", default=None,
+    help="On the acknowledgement of a request: what this project filed it as, when it keeps no "
+         "backlog (a joint-only participant, REQ-102) — e.g. an open item's id.",
+)
+def joint_ack(handle: str, ref: str, filed_as: str | None) -> None:
     """Mark a message to this project handled, once read and acted on (REQ-101).
 
     REF is the message's reference, `<project>#<seq>`, as `joint-list` shows it. Answering a
     message with `joint-send --reply-to` handles it too; acknowledging twice writes nothing.
+    A project with no backlog takes a request up by acknowledging it `--filed-as` the
+    reference it filed it under; the asking project's `joint-show` then shows that (REQ-102).
     """
     from .profiles.req import joint
 
-    cfg = _load_or_die()
+    cfg = _load_or_die(joint=True)
     try:
-        entry = joint.ack(cfg, handle, ref)
+        entry = joint.ack(cfg, handle, ref, filed_as=filed_as)
     except joint.JointError as exc:
         raise click.ClickException(str(exc)) from exc
     if entry is None:
         click.echo(f"  {ref} in {handle} was already handled — nothing written.")
         return
-    click.echo(click.style(f"  ✓ {handle}", fg="green") + f" — {entry.ref_id} acknowledges {ref}")
+    filed = f", filed as {entry.filed_as}" if entry.filed_as else ""
+    click.echo(click.style(f"  ✓ {handle}", fg="green") + f" — {entry.ref_id} acknowledges {ref}{filed}")
 
 
 @main.command("joint-list")
@@ -1617,7 +1687,7 @@ def joint_list() -> None:
     """
     from .profiles.req import joint
 
-    cfg = _load_or_die()
+    cfg = _load_or_die(joint=True)
     v = joint.view(cfg)
     open_threads = v.open_threads
     waiting = [(t, m) for t in open_threads for m in t.waiting_for(v.me)]
@@ -1628,7 +1698,11 @@ def joint_list() -> None:
             text = m.need if m.kind == joint.ACTION else _first_line(m.body)
             click.echo(f"  {t.handle:<34} {m.ref_id:<16} {m.kind:<7} {text}")
     if cands:
-        click.echo(click.style("Requests to take up (not yet in this project's backlog):", bold=True))
+        how = (  # REQ-102: a joint-only participant keeps no backlog; it files by acknowledging
+            "not yet filed — take one up with `steward joint-ack <thread> <ref> --filed-as <reference>`"
+            if cfg.joint_only else "not yet in this project's backlog"
+        )
+        click.echo(click.style(f"Requests to take up ({how}):", bold=True))
         for t in cands:
             click.echo(f"  {t.handle:<34} from {t.opener:<16} {t.action.need}")
     if open_threads:
@@ -1654,7 +1728,7 @@ def joint_show(handle: str) -> None:
     """
     from .profiles.req import joint
 
-    cfg = _load_or_die()
+    cfg = _load_or_die(joint=True)
     v = joint.view(cfg)
     try:
         t = v.thread(handle)
@@ -1670,7 +1744,8 @@ def joint_show(handle: str) -> None:
         when = e.at[:19].replace("T", " ")
         if e.kind == joint.ACK:
             mark = "  (dangling: no such message)" if (e.ref_id, e.ref) in dangling else ""
-            click.echo(f"  {when}  {e.ref_id:<16} {e.author} acknowledged {e.ref}{mark}")
+            filed = f", filed as {e.filed_as}" if e.filed_as else ""
+            click.echo(f"  {when}  {e.ref_id:<16} {e.author} acknowledged {e.ref}{filed}{mark}")
             continue
         status = "" if t.closed else ("  handled" if t.handled(e) else "  waiting")
         answer = f" ↳ {e.reply_to}" if e.reply_to else ""

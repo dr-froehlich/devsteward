@@ -304,6 +304,11 @@ class ProjectView:
         return self.ref.name
 
     @property
+    def joint_only(self) -> bool:
+        """A joint-only participant (REQ-102): git facts only — it runs no REQ workflow."""
+        return self.cfg is not None and self.cfg.joint_only
+
+    @property
     def backlog_counts(self) -> dict[str, int]:
         out: dict[str, int] = {}
         for s in self.backlog:
@@ -325,6 +330,10 @@ def load_project(ref: ProjectRef, templates_root: Path | None = None) -> Project
         return view
     view.cfg = cfg
     view.git = git_facts(ref.root, cfg.integration_branch, cfg.production_branch)
+    if cfg.joint_only:
+        # REQ-102 Decision 2: no status, backlog, requirements or attention — and no drift
+        # line inviting a sync that would stamp the REQ workflow into it.
+        return view
     reqs: list[ReqFile] | None = None
     try:
         reqs = load_reqs(cfg.req_dir) if cfg.req_dir.exists() else []

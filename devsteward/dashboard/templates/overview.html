@@ -38,7 +38,8 @@
       <td class="small">{{ p.git.age }} ago <span class="muted mono">{{ p.git.head }}</span> <span class="muted">{{ p.git.subject|truncate(48) }}</span></td>
     {% else %}<td colspan="5" class="muted">not a git repository</td>{% endif %}
     <td class="small">
-      {% if p.status %}
+      {% if p.joint_only %}<span class="badge">joint-only participant</span>
+      {% elif p.status %}
         {% if p.status.terminal %}<span class="muted">{{ p.status.terminal }}</span>{% else %}
           {% for s in p.status.steps %}<span class="s-{{ s.status }} nowrap">{{ s.mark }} {{ s.id }}{% if s.eligible %} <span class="badge">eligible</span>{% endif %}</span><br>{% endfor %}
         {% endif %}
@@ -47,7 +48,8 @@
       {% endif %}
     </td>
     <td class="small">
-      {% if p.backlog_error %}<span class="err">{{ p.backlog_error }}</span>
+      {% if p.joint_only %}<span class="muted">—</span>
+      {% elif p.backlog_error %}<span class="err">{{ p.backlog_error }}</span>
       {% elif p.backlog %}{% for state, n in p.backlog_counts.items() %}<span class="badge b-{{ state }}">{{ n }} {{ state }}</span> {% endfor %}
       {% else %}<span class="muted">none</span>{% endif %}
     </td>

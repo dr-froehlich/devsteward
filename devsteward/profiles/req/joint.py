@@ -81,6 +81,9 @@ class Entry:
     body: str = ""
     reply_to: str | None = None
     ref: str | None = None
+    #: On the receiver's ``ack`` of a request: what it filed the request as, when it keeps no
+    #: backlog to derive the take-up from (REQ-102 Decision 4) — e.g. an open item's id.
+    filed_as: str | None = None
 
     @property
     def ref_id(self) -> str:
@@ -93,7 +96,7 @@ class Entry:
 
     def as_json(self) -> dict:
         out: dict = {"seq": self.seq, "at": self.at, "thread": self.thread, "kind": self.kind}
-        for key in ("to", "need", "body", "reply_to", "ref"):
+        for key in ("to", "need", "body", "reply_to", "ref", "filed_as"):
             value = getattr(self, key)
             if value:
                 out[key] = value
@@ -133,6 +136,15 @@ class Thread:
 
     def other(self, me: str) -> str:
         return self.addressee if me == self.opener else self.opener
+
+    @property
+    def filed_as(self) -> str | None:
+        """What the addressee filed the request as, read from its own acknowledgement."""
+        rid = self.action.ref_id
+        for e in self.entries:
+            if e.author == self.addressee and e.kind == ACK and e.ref == rid and e.filed_as:
+                return e.filed_as
+        return None
 
     def message(self, ref: str) -> Entry | None:
         return next((m for m in self.messages if m.ref_id == ref), None)
@@ -215,7 +227,7 @@ def _entry(author: str, data) -> Entry | str:
         return f"'thread' is not a kebab-case handle: {thread!r}"
     if kind not in KINDS:
         return f"'kind' is not one of {' | '.join(KINDS)}: {kind!r}"
-    strings = {k: data.get(k) for k in ("to", "need", "body", "reply_to", "ref")}
+    strings = {k: data.get(k) for k in ("to", "need", "body", "reply_to", "ref", "filed_as")}
     for key, value in strings.items():
         if value is not None and not isinstance(value, str):
             return f"'{key}' is not a string"
@@ -225,7 +237,7 @@ def _entry(author: str, data) -> Entry | str:
         return "an ack needs 'ref'"
     return Entry(author=author, seq=seq, at=at, thread=thread, kind=kind,
                  to=strings["to"], need=strings["need"], body=strings["body"] or "",
-                 reply_to=strings["reply_to"], ref=strings["ref"])
+                 reply_to=strings["reply_to"], ref=strings["ref"], filed_as=strings["filed_as"])
 
 
 def read_log(root: Path, author: str, *, shown_as: str | None = None) -> tuple[list[Entry], list[str]]:
@@ -316,13 +328,27 @@ def _backlog_handles(root: Path) -> set[str]:
 
 
 def candidates(cfg: Config, v: View) -> list[Thread]:
-    """Requests addressed to this project whose handle is not yet an item in its backlog."""
+    """Requests addressed to this project that it has not taken up yet.
+
+    Taken up means an item with the thread's handle in its backlog (REQ-101), or — for a
+    project that keeps none — its acknowledgement recording what it filed the request as
+    (REQ-102 Decision 4).
+    """
     filed = _backlog_handles(cfg.root)
-    return [t for t in v.open_threads if t.addressee == v.me and t.handle not in filed]
+    return [
+        t for t in v.open_threads
+        if t.addressee == v.me and t.handle not in filed and not t.filed_as
+    ]
 
 
 def take_up(cfg: Config, thread: Thread) -> str:
-    """The addressee's take-up of the request, as its own ``backlog-list`` derives it."""
+    """The addressee's take-up of the request, in REQ-102 Decision 4's order.
+
+    An item with the thread's handle in the addressee's backlog first — what its own
+    ``backlog-list`` derives (REQ-101); else what its acknowledgement says it filed the request
+    as; else not taken up. A governed project's view is unchanged, and a joint-only participant,
+    which keeps no backlog, is read from its own log line.
+    """
     peer = next((r for r in projects(cfg) if r.name == thread.addressee), None)
     if peer is None:
         return f"{thread.addressee} is not a stamped project beside {cfg.root.name}"
@@ -338,7 +364,9 @@ def take_up(cfg: Config, thread: Thread) -> str:
                 reqs = ", ".join(f"{rid} ({status.get(rid, '?')})" for rid in st.taken_up_by)
                 return f"{label} — taken up by {reqs}"
             return f"{label} — filed in {thread.addressee}'s backlog, no REQ yet"
-    return f"not filed in {thread.addressee}'s backlog yet"
+    if thread.filed_as:
+        return f"filed as {thread.filed_as} by {thread.addressee}"
+    return f"not taken up by {thread.addressee} yet"
 
 
 # -- writing -------------------------------------------------------------------------
@@ -436,8 +464,13 @@ def send(cfg: Config, handle: str, kind: str, *, body: str = "",
     return _append(cfg, entry)
 
 
-def ack(cfg: Config, handle: str, ref: str) -> Entry | None:
-    """``steward joint-ack`` — mark a message to this project handled; ``None`` if it already was."""
+def ack(cfg: Config, handle: str, ref: str, *, filed_as: str | None = None) -> Entry | None:
+    """``steward joint-ack`` — mark a message to this project handled; ``None`` if it already was.
+
+    ``filed_as`` records what the request was filed as (REQ-102 Decision 4). It belongs on the
+    acknowledgement of the thread's ``action`` only, and since an acknowledgement is never
+    changed, it must come with the first one. A reply sent before filing does not count.
+    """
     v = view(cfg)
     t = v.thread(handle)
     if t.closed:
@@ -448,7 +481,25 @@ def ack(cfg: Config, handle: str, ref: str) -> Entry | None:
         raise JointError(
             f"'{ref}' is no message to {v.me} in thread '{handle}'\n  messages to {v.me}: {incoming}"
         )
-    if t.handled(msg):
+    if filed_as is not None:
+        filed_as = bl.one_line(filed_as)
+        if not filed_as:
+            raise JointError("--filed-as needs the reference the request was filed as")
+        if msg.kind != ACTION:
+            raise JointError(
+                f"--filed-as belongs on the acknowledgement of the request ({t.action.ref_id}), "
+                f"not of a {msg.kind}"
+            )
+        earlier = [e for e in t.entries if e.author == v.me and e.kind == ACK and e.ref == ref]
+        if earlier:
+            if any(e.filed_as == filed_as for e in earlier):
+                return None
+            raise JointError(
+                f"{ref} was already acknowledged by {earlier[0].ref_id}"
+                + (f" as filed as {earlier[0].filed_as}" if earlier[0].filed_as else " without --filed-as")
+                + " — an acknowledgement is never changed"
+            )
+    elif t.handled(msg):
         return None
-    entry = Entry(author=v.me, seq=0, at="", thread=handle, kind=ACK, ref=ref)
+    entry = Entry(author=v.me, seq=0, at="", thread=handle, kind=ACK, ref=ref, filed_as=filed_as)
     return _append(cfg, entry)

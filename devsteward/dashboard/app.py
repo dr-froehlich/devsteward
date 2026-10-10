@@ -82,7 +82,10 @@ def create_app(root: Path, *, templates_root: Path | None = None,
     def _cfg(name: str):
         from ..config import load_config
 
-        return load_config(_ref(name).root)
+        cfg = load_config(_ref(name).root)
+        if cfg.joint_only:  # REQ-102: no action of the REQ workflow exists for it
+            abort(404)
+        return cfg
 
     # -- pages -------------------------------------------------------------------------
 

@@ -230,6 +230,21 @@ The same two rules as the backlog hold:
 | `steward joint-list` | What waits for this project, and the requests it can take up. |
 | `steward joint-show <handle>` | One thread, both halves merged, with the addressee's take-up. |
 
+**A repository the REQ workflow does not govern can take part too (REQ-102).** The case is a
+repository with its own way of recording work, such as an operations record that keeps open
+items in its documents. `steward new <folder> --profile joint` joins it as a **joint-only
+participant**: it writes only `.devsteward/config.yaml` with `profile: joint`.
+
+- **Inside it,** the joint verbs, `status`, `lint` and `sync` run. Every other verb refuses, and
+  nothing of the REQ workflow is stamped there.
+- **Seen from the governed projects,** it is a sibling like any other, and nothing in how they use
+  the verbs changes.
+- **Take-up.** It keeps no backlog, so it takes a request up by acknowledging it
+  `--filed-as` its own reference (an open item's id, say). The asking project's `joint-show`
+  shows that.
+- **Its sessions** need their own stand-in for `/intake` and `/advance`, written by the
+  repository under its own rules.
+
 ## What is *not* in the REQ
 
 Checkpoint and cursor state. **REQ = spec, ledger = cursor.** The ledger lives in

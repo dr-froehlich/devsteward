@@ -141,13 +141,16 @@ def _run_cli(monkeypatch, tmp_path, args):
     only shows when each command binds the ledger itself, not via a shared in-memory one)."""
     # cfg needs root/req_dir/requirements_dir: `steward status` reads cfg.root and (REQ-086)
     # cfg.requirements_dir for the REQ-036 stamped-artifact drift signal, and other read
-    # commands read cfg.req_dir — a bare SimpleNamespace AttributeErrors.
+    # commands read cfg.req_dir — a bare SimpleNamespace AttributeErrors. REQ-102: the
+    # joint-capable verbs (`status` among them) load with `joint=True` and read
+    # `cfg.joint_only`, so the stand-in takes the keyword and says this is no joint-only folder.
     monkeypatch.setattr(
         cli, "_load_or_die",
-        lambda: SimpleNamespace(
+        lambda **_: SimpleNamespace(
             root=tmp_path,
             req_dir=tmp_path / "docs" / "requirements",
             requirements_dir="docs/requirements",
+            joint_only=False,
         ),
     )
     monkeypatch.setattr(cli, "build_executor", lambda cfg, **kw: _executor(tmp_path))

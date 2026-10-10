@@ -15,6 +15,11 @@
 {% else %}<span class="muted">not a git repository</span>{% endif %}
 </div>
 
+{% if p.joint_only %}
+<p><span class="badge">joint-only participant</span> {{ p.name }} takes part in joint tasks with the
+projects beside it (<code>steward joint-list</code> in it) and runs no REQ workflow, so there is no
+steward status, backlog or requirements to show here.</p>
+{% else %}
 <h2>Steward status</h2>
 {% if p.status %}
 <p class="small muted">profile: {{ p.status.profile }}{% if p.status.cursor %} · cursor: <code>{{ p.status.cursor }}</code>{% endif %}</p>
@@ -128,5 +133,6 @@
   </tr>
   {% endfor %}
 </table>
+{% endif %}
 
 {% endblock %}

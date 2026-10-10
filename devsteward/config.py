@@ -41,6 +41,12 @@ def find_root(start: Path | None = None) -> Path:
     )
 
 
+#: The profile of a **joint-only participant** (REQ-102): a repository the REQ workflow does
+#: not govern that takes part in joint tasks (REQ-101) with the governed projects beside it.
+#: Its ``.devsteward/`` holds this declaration and its own ``joint.jsonl``, nothing else.
+JOINT_PROFILE = "joint"
+
+
 @dataclass
 class Config:
     root: Path
@@ -65,6 +71,11 @@ class Config:
     )
     verify: dict = field(default_factory=dict)
     raw: dict = field(default_factory=dict)
+
+    @property
+    def joint_only(self) -> bool:
+        """A joint-only participant: the joint verbs run here, the REQ workflow does not."""
+        return self.profile == JOINT_PROFILE
 
     @property
     def req_dir(self) -> Path:

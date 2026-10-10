@@ -176,6 +176,16 @@ steward joint-send HANDLE --kind done [--body "…"]       # your half of the fi
 - **A neighbour's damaged log never blocks you.** An unreadable line in another project's log is
   reported by file and line and skipped. A reference to a message that no longer exists is shown
   as dangling.
+- **A peer may be a joint-only participant (REQ-102).** That is a repository the REQ workflow
+  does not govern, joined with `steward new <folder> --profile joint`, which writes only
+  `.devsteward/config.yaml` (`profile: joint`). You address it, ask it, answer it and wait for its
+  `done` exactly as with any other project. Nothing in how you use these verbs changes. It keeps
+  no backlog, so it takes your request up by acknowledging it with
+  `joint-ack <thread> <ref> --filed-as <its reference>`, and your `joint-show` then reads
+  *filed as …*. `joint-show` gives the take-up in this order: an item in the addressee's backlog,
+  else what its acknowledgement says it filed the request as, else *not taken up yet*. In a
+  joint-only participant itself, only the joint verbs, `status`, `lint` and `sync` run. Every other
+  verb refuses, and nothing of the REQ workflow is ever stamped there.
 
 ## The batch lane (headless queues)
 
@@ -417,7 +427,7 @@ authoritative flag reference and cannot drift.
 | Verb | What it does | Run by / when |
 |---|---|---|
 | `steward joint-send` | `joint-send --to PROJECT --need "…" [HANDLE]` opens a thread with a request for action; a handle is minted as `<this project>-<slug>` unless you give one. `joint-send HANDLE --kind ask\|tell\|done [--reply-to REF] [--body "…" \| --body-file F]` says something into it. The message is appended to this project's own log only; the verb does not commit. Refused: an unknown, unstamped or ambiguous project, this project itself, a thread you are not a party of, a closed thread, a `--reply-to` naming no message of the thread. | You, in an attended session. Send `done` only when the owner agrees the job is finished on this side. |
-| `steward joint-ack` | `joint-ack HANDLE REF` — records that this project handled a message addressed to it. Acknowledging twice writes nothing. | You, once you have read the message and acted on it. |
+| `steward joint-ack` | `joint-ack HANDLE REF [--filed-as REFERENCE]` — records that this project handled a message addressed to it. Acknowledging twice writes nothing. `--filed-as` goes only on the first acknowledgement of a request, and records what a project with no backlog filed it as (REQ-102). | You, once you have read the message and acted on it. `--filed-as` is for a joint-only participant; a governed project files a request with `backlog-add --handle` instead. |
 | `steward joint-list` | Every open thread this project is a party of: what waits for it, the requests it can take up (not yet in its backlog), and who has said done. A neighbour's unreadable line is reported, never fatal. | You — at `/advance` orientation (attended only) and when the owner asks `/intake` to take up another project's request. |
 | `steward joint-show` | `joint-show HANDLE` — one thread with both projects' messages and acknowledgements merged in time order, open or closed, plus the addressee's take-up as its own `backlog-list` derives it. | You — before answering or taking up a request. |
 
@@ -425,7 +435,7 @@ authoritative flag reference and cannot drift.
 
 | Verb | What it does | Run by / when |
 |---|---|---|
-| `steward new` | `new TARGET` — stamps the bundled scaffolding (the skills, this manual, the REQ template, the docs layout, a seed backlog) into a new project at TARGET. | The operator, from outside the project — once. There is no agent in a project that does not exist yet. |
+| `steward new` | `new TARGET` — stamps the bundled scaffolding (the skills, this manual, the REQ template, the docs layout, a seed backlog) into a new project at TARGET. `new TARGET --profile joint` instead joins an existing repository the REQ workflow does not govern as a joint-only participant: it writes only `.devsteward/config.yaml` (REQ-102). | The operator, from outside the project — once. There is no agent in a project that does not exist yet, and joining a repository is the owner's decision. |
 | `steward init` | Initializes a ledger in the current directory without stamping any templates. | The operator — once, in an existing directory being brought under the engine. |
 | `steward seed-ledger` | Marks every terminal REQ's phase-step(s) done, seeding a ledger for a corpus that was built before the engine arrived. | The `/onboard` skill, during a migration. That skill is operator-only and is never stamped into a consumer, so you will not have it. |
 | `steward dashboard` | `dashboard [--root DIR] [--port N]` — serves a local web page over every stamped project under the root: steward status and git facts per project, what waits on the operator, each backlog with derived states, and the REQs read-only. Its state changes call the same functions as the CLI verbs; it never spawns a session. Needs the `dashboard` extra. | The **operator**, from a plain shell on the development box — it runs until stopped. Not yours: a session has no browser. |
