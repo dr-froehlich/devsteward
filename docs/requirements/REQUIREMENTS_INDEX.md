@@ -72,7 +72,7 @@ commit** as its frontmatter and the code.
 | REQ-066 | sync covers STEWARD.md — track every engine-owned stamped artifact, not just skills | DONE | [REQ-066](REQ-066.md) | REQ-024, REQ-036, REQ-057 |
 | REQ-067 | Concept phase may keep a committed prototype; the concept gate accepts a docs/concepts/REQ-NNN/ bundle directory | DONE | [REQ-067](REQ-067.md) | REQ-039, REQ-057 |
 | REQ-068 | Deterministic acceptance-test execution — a `check: live` standing-regression lane, develop-gate routing by check:, fail-hard on a missing declared resource, one test flavor | DONE | [REQ-068](REQ-068.md) | REQ-027, REQ-028, REQ-063, REQ-064 |
-| REQ-069 | Build delivers the validation fixtures it owes — close the REQ-051 pincer so a missing seeded fixture can't deadlock validation | DRAFT | [REQ-069](REQ-069.md) | REQ-051, REQ-030 |
+| REQ-069 | Build delivers the validation fixtures it owes — close the REQ-051 pincer so a missing seeded fixture can't deadlock validation | OPEN | [REQ-069](REQ-069.md) | REQ-051, REQ-030 |
 | REQ-070 | Full-suite deselection must use only real node-ids — a manual/artifact AC's prose can't poison the develop gate into deselecting the whole suite | DONE | [REQ-070](REQ-070.md) | REQ-068 |
 | REQ-071 | Concept-phase & wiring-gap doctrine — concept-phase-as-functional-spec, wire-through-the-live-entrypoint, don't-scope-a-known-defect-out, concept-phase-iterates-until-frozen, phase-model-placement | DONE | [REQ-071](REQ-071.md) | REQ-018, REQ-027, REQ-039, REQ-064, REQ-067, REQ-068 |
 | REQ-072 | Capture gate runs in the operator's declared environment — carry the env-file into the extract, and diagnose an env gap honestly | DONE | [REQ-072](REQ-072.md) | REQ-063, REQ-068 |

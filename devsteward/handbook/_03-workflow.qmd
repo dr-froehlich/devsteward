@@ -169,6 +169,13 @@ FlowSteward's IMAP lab):
   question — commit it upstream — never something the Tester fills in. This is the same
   single-source-of-truth discipline as trunk-based commits: an uncommitted improvised
   fixture is precisely the divergence the model forbids.
+- **The Develop phase delivers the fixtures its validation rests on (REQ-069).** This is the
+  other half of the rule above. When a REQ carries `artifact` or `manual` acceptance
+  criteria, its Develop phase builds and commits on `dev` every fixture, seeded sample
+  project and lab starting-state those validations rest on. The System Tester may not
+  create them (REQ-051), so a fixture the builder does not deliver leaves the validation
+  with no one allowed to supply it: a deadlock that only the Build phase can prevent, while
+  the builder is present and the tree is open.
 
 ## Sequencing whole requirements
 

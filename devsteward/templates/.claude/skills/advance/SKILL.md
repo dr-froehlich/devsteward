@@ -133,6 +133,12 @@ The fused **Develop** checkpoint, in order, in one session:
   anything (REQ-030), so a deploy proof routed there has **no repair loop** and every red
   bounces back as rework a whole session later. Keep a synthetic-fixture `regression`
   alongside to prove the mechanism disconfirmably in the gate.
+- **Deliver the fixtures your validation rests on (REQ-069).** If the REQ carries `artifact`
+  or `manual` acceptance criteria, build **and commit on `dev`**, in this session, every
+  fixture, seeded sample project and lab starting-state their validation procedures rest on.
+  The System Tester may **not** create them (REQ-051): a missing fixture is a hard red it is
+  forbidden to fill in. A fixture this session does not deliver deadlocks the validation, and
+  only the Build phase can prevent that.
 - **Plan first.** Turn the REQ into a concrete approach and capture it in the project's
   **plans dir** — `plans_dir` in `.devsteward/config.yaml`, default `docs/plans/` (data
   shapes, interfaces, the files you'll touch, the tests you'll write). The plan artifact is
