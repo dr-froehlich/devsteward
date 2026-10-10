@@ -1391,7 +1391,7 @@ def backlog_add(need: str, handle: str | None, origin: str) -> None:
         raise click.ClickException(str(exc)) from exc
     if created:
         click.echo(f"Created {cfg.backlog_file}")
-    click.echo(click.style(f"  + {handle}", fg="green") + f" — {need}")
+    click.echo(click.style(f"  + {handle}", fg="green") + f" — {bl.one_line(need)}")
 
 
 @main.command("backlog-edit")

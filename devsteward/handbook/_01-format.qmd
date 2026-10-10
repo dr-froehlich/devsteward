@@ -131,8 +131,10 @@ half-follow it and stay green.
 ## The backlog — the level above the REQ {#sec-backlog}
 
 A REQ is a **system** requirement: solution-shaped, with criteria naming runnable tests. A
-project may also keep the level above it — the need in the *user's* words, which a REQ is
-translated from at intake. In ISO/IEC/IEEE 29148 terms the backlog is the stakeholder
+project may also keep the level above it — the need in the *user's* words, which a REQ may be
+translated from at intake. A REQ does not require a backlog item: an item may drive one or more
+REQs, and a REQ the owner intakes directly, such as a defect repair or a change no recorded need
+asked for, is complete without one. In ISO/IEC/IEEE 29148 terms the backlog is the stakeholder
 requirements and a REQ is the system requirements; `/intake` performs the transformation.
 
 The artifact lives at `backlog_file` (default `docs/BACKLOG.md`) and is **honor-when-present**
@@ -157,9 +159,9 @@ its own requirements and then satisfying them.
 
 | Command | What it does |
 |---|---|
-| `steward backlog-add "<need>"` | Record a need. No interview, no schema, no id — the cheap way in. Creates the file if the project has none. |
+| `steward backlog-add "<need>"` | Record a need. No interview, no schema, no id — the cheap way in. Creates the file if the project has none. Line breaks fold to one space (REQ-100). |
 | `steward backlog-list` | Every item with its **derived** state and attempt record. |
-| `steward backlog-edit <handle> [--need …] [--origin …] [--criterion …]` | Reword a need, its origin or its criteria in place; the handle never changes (REQ-097). |
+| `steward backlog-edit <handle> [--need …] [--origin …] [--criterion …]` | Reword a need, its origin or its criteria in place; the handle never changes (REQ-097). Line breaks fold to one space (REQ-100). |
 | `steward backlog-accept <handle>` | The owner's verdict: this satisfies the need. |
 | `steward backlog-deny <handle> --reason "…"` | It does not. The reason is mandatory. |
 | `steward backlog-hold <handle> --reason "…"` | The need stands but is deliberately not being worked. Taking it up lifts the hold. |

@@ -18,9 +18,11 @@ seed here is what every later step inherits.
   The defaults are `docs/requirements/`, `docs/plans/`, `docs/concepts/`, `docs/BACKLOG.md`.
   Read it first and use *those* paths throughout — a project whose `docs/` belongs to a docs
   generator keeps them elsewhere.
-- **Run `steward backlog-list` (REQ-093).** If the project keeps a backlog, this intake
-  probably starts from it — see §2d. A project with no backlog file simply reports so; that
-  is a valid state, not a missing artifact.
+- **Read `steward backlog-list` (REQ-093) and show the operator only the items related to
+  the idea**, or say that none are — see §2d. A REQ does not require a backlog item. An item
+  may drive one or more REQs, and a REQ the owner intakes directly, such as a defect repair
+  or a change no recorded need asked for, is complete without one. A project with no backlog
+  file simply reports so; that is a valid state, not a missing artifact.
 - Read `CLAUDE.md`, the north star and `REQUIREMENTS_INDEX.md` in the requirements dir.
   The new REQ must advance the north star or be explicitly scoped against it.
 - **The north star is a role, not an id (REQ-092).** It starts at `REQ-001.md`, but a
@@ -232,10 +234,11 @@ and no lab is needed):
 ### 2d. Taking up backlog items (REQ-093)
 
 A backlog item is a **user need in the user's words** — the stakeholder-level requirement a
-REQ is *translated from*. When this intake serves one or more items, do this in **exactly
+REQ may be *translated from*. When this intake serves one or more items, do this in **exactly
 this order**:
 
-1. **Choose the items with the operator.** Show `steward backlog-list` and let them pick.
+1. **Choose the items with the operator.** Show the related items you found in
+   `steward backlog-list` and let them pick.
    Several items may feed one REQ; one item may need several REQs over time.
 2. **Author each item's acceptance criteria first — in the user's language, before you
    design anything.** They go in the backlog file's `## Acceptance criteria` section, one

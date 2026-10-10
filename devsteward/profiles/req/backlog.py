@@ -77,6 +77,10 @@ _HEADER_RE = re.compile(
 )
 _DIVIDER_RE = re.compile(r"^\|[\s:|-]+\|$")
 _ROW_RE = re.compile(r"^\|(?P<handle>[^|]*)\|(?P<need>.*)\|(?P<origin>[^|]*)\|\s*$")
+#: A run of whitespace holding at least one line boundary — every character
+#: ``str.splitlines()`` splits on, because that is how the reader cuts the file into lines.
+#: Left in a value, any of them splits its row or bullet in two (REQ-100).
+_BREAK_RUN_RE = re.compile(r"\s*[\n\r\x0b\x0c\x1c\x1d\x1e\x85\u2028\u2029]\s*")
 
 #: Words too generic to carry a minted handle's meaning on their own.
 _STOPWORDS = frozenset(
@@ -92,6 +96,11 @@ def _live_lines(text: str):
     template ships a worked example that way, and reading it as live content would red a
     fresh project on its first lint. Indices are preserved so callers can still splice by
     line number.
+
+    A comment opens only on a line that *starts* with ``<!--`` (CommonMark's HTML-block
+    start) and closes on the first line holding ``-->``. A marker anywhere else is text: the
+    writer starts every row with ``|`` and every bullet with ``-``, so a need or criterion
+    that merely mentions ``<!--`` can never hide itself or what follows it (REQ-100).
     """
     in_comment = False
     for idx, raw in enumerate(text.splitlines()):
@@ -100,13 +109,9 @@ def _live_lines(text: str):
             if _COMMENT_CLOSE in line:
                 in_comment = False
             continue
-        if _COMMENT_OPEN in line:
-            before = line.split(_COMMENT_OPEN, 1)[0].strip()
-            if _COMMENT_CLOSE not in line.split(_COMMENT_OPEN, 1)[1]:
-                in_comment = True
-            if not before:
-                continue
-            line = before
+        if line.startswith(_COMMENT_OPEN):
+            in_comment = _COMMENT_CLOSE not in line[len(_COMMENT_OPEN):]
+            continue
         yield idx, line
 
 
@@ -192,7 +197,7 @@ def parse(text: str) -> list[Item]:
         if not m:
             raise BacklogError(f"line {idx + 1}: not a well-formed item row: {stripped!r}")
         handle = m.group("handle").strip().strip("`")
-        need = m.group("need").strip()
+        need = _uncell(m.group("need").strip())
         origin = (m.group("origin").strip() or OPERATOR).lower()
         if not _HANDLE_RE.match(handle):
             raise BacklogError(
@@ -262,9 +267,53 @@ def load(path: Path) -> list[Item]:
     return parse(p.read_text(encoding="utf-8"))
 
 
+def one_line(value: str) -> str:
+    """``value`` as the backlog file stores it: one line (REQ-100 Decision 1).
+
+    Each run of whitespace that holds a line boundary becomes a single space — an item is
+    one table row and a criterion one bullet, so a need typed over several lines keeps every
+    word and loses only its paragraph breaks.
+    """
+    return _BREAK_RUN_RE.sub(" ", value).strip()
+
+
 def _cell(value: str) -> str:
-    """Escape a value for a markdown table cell (a literal ``|`` would split the row)."""
-    return value.replace("|", "\\|").strip()
+    """Encode a value for a markdown table cell: folded to one line, every ``|`` escaped.
+
+    :func:`_uncell` is its exact inverse — the writer puts one backslash before each ``|``
+    and the reader takes exactly that one away, so a need survives any number of rewrites.
+    """
+    return one_line(value).replace("|", "\\|")
+
+
+def _uncell(value: str) -> str:
+    """Decode a need cell: the inverse of :func:`_cell`'s ``|`` escape."""
+    return value.replace("\\|", "|")
+
+
+def _read_back(text: str, item: Item, criteria: list[str] | None, backlog_file: str) -> None:
+    """Refuse to write ``text`` unless it reads back with ``item`` exactly as stored.
+
+    The check runs *before* the write (REQ-100 Decision 4): a gap in the encoding then costs
+    one refused write and an intact file, never a file that nothing can read.
+    """
+    try:
+        found = {i.handle: i for i in parse(text)}.get(item.handle)
+        got_criteria = parse_criteria(text).get(item.handle, [])
+    except BacklogError as exc:
+        raise BacklogError(
+            f"refused to write {backlog_file}: the result would not read back ({exc}); "
+            "the file is unchanged"
+        ) from exc
+    if (
+        found is None
+        or (found.need, found.origin) != (item.need, item.origin)
+        or (criteria is not None and got_criteria != criteria)
+    ):
+        raise BacklogError(
+            f"refused to write {backlog_file}: item '{item.handle}' would not read back as "
+            "written; the file is unchanged"
+        )
 
 
 def append_item(text: str, item: Item) -> str:
@@ -509,9 +558,10 @@ def add(cfg, need: str, *, handle: str | None = None, origin: str = OPERATOR,
         raise BacklogError(f"handle '{handle}' is already used")
     elif not _HANDLE_RE.match(handle):
         raise BacklogError(f"handle {handle!r} is not lowercase kebab-case")
-    path.write_text(
-        append_item(text, Item(handle=handle, need=need, origin=origin)), encoding="utf-8"
-    )
+    new_text = append_item(text, Item(handle=handle, need=need, origin=origin))
+    _read_back(new_text, Item(handle=handle, need=one_line(need), origin=origin), None,
+               cfg.backlog_file)
+    path.write_text(new_text, encoding="utf-8")
     return handle, created
 
 
@@ -548,7 +598,7 @@ def set_criteria(text: str, handle: str, bullets: list[str]) -> str:
     if block_start is not None and block_end is None:
         block_end = section_end
 
-    body = [f"- {b.strip()}\n" for b in bullets if b.strip()]
+    body = [f"- {one_line(b)}\n" for b in bullets if b.strip()]
     block = [f"### {handle}\n", *body, "\n"] if body else []
 
     if block_start is not None:
@@ -591,7 +641,7 @@ def edit(cfg, handle: str, *, need: str | None = None, origin: str | None = None
     if need is not None or origin is not None:
         new_item = Item(
             handle=handle,
-            need=need.strip() if need is not None else item.need,
+            need=one_line(need) if need is not None else item.need,
             origin=origin if origin is not None else item.origin,
         )
         lines = text.splitlines(keepends=True)
@@ -602,8 +652,9 @@ def edit(cfg, handle: str, *, need: str | None = None, origin: str | None = None
         item = new_item
     if criteria is not None:
         text = set_criteria(text, handle, criteria)
+    stored = [one_line(c) for c in criteria if c.strip()] if criteria is not None else None
+    _read_back(text, item, stored, cfg.backlog_file)
     path.write_text(text, encoding="utf-8")
-    parse(text)  # must still round-trip
     return item
 
 

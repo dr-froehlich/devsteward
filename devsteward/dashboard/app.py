@@ -180,7 +180,7 @@ def create_app(root: Path, *, templates_root: Path | None = None,
         def fn():
             h, created = bl.add(cfg, need, handle=handle, origin=origin,
                                 template=app.config["BACKLOG_TEMPLATE"])
-            return f"+ {h} — {need}" + (f" (created {cfg.backlog_file})" if created else "")
+            return f"+ {h} — {bl.one_line(need)}" + (f" (created {cfg.backlog_file})" if created else "")
 
         return _run(name, "backlog-add", fn)
 

@@ -98,8 +98,12 @@ deliverable is frozen, or a **named downstream REQ** owns the modeling — and t
 ## The backlog — user needs above the REQ
 
 A **backlog item** is a user need **in the user's words** — the stakeholder-level requirement a
-REQ is *translated from*. It sits one level above the REQ and answers a different question: a REQ
-asks *did we build what was specified*, an item asks *was what we specified worth building*.
+REQ may be *translated from*. It sits one level above the REQ and answers a different question: a
+REQ asks *did we build what was specified*, an item asks *was what we specified worth building*.
+
+**A REQ does not require a backlog item.** An item may drive one or more REQs, and a REQ the owner
+intakes directly, such as a defect repair or a change no recorded need asked for, is complete
+without one.
 
 ```sh
 steward backlog-add "<the need, in the owner's words>"   # the cheap way in: no interview, no id
@@ -110,9 +114,9 @@ steward backlog-hold HANDLE --reason "<what it waits on>"
 steward backlog-retire HANDLE --reason "<why dropped>"
 ```
 
-- **Run `steward backlog-list` at the start of every `/intake`.** If the project keeps a backlog,
-  the intake probably starts from an item. A project with no backlog file simply reports so — that
-  is a valid state, not a missing artifact, and `backlog-add` creates the file when one is wanted.
+- **At `/intake`, read `steward backlog-list` yourself and show the owner only the items related to
+  the idea, or say that none are.** A project with no backlog file simply reports so — that is a
+  valid state, not a missing artifact, and `backlog-add` creates the file when one is wanted.
 - **Take-up is recorded in the REQ's `backlog_refs:` frontmatter, and nowhere else.** That list is
   the **only** stored record. There is no status column in the backlog file and no "taken up by"
   column — `backlog-list` *derives* each item's state from `backlog_refs` across the corpus plus
@@ -356,9 +360,9 @@ authoritative flag reference and cannot drift.
 
 | Verb | What it does | Run by / when |
 |---|---|---|
-| `steward backlog-add` | `backlog-add "<need>"` — records a user need in the owner's words. Creates the backlog file from the bundled template when the project has none. | The owner's words; you type them. Never invent a need — record one you proposed with `--origin proposed`, and only when the owner chose it. |
-| `steward backlog-list` | Every item with its **derived** state and attempt record. Nothing is stored: state comes from `backlog_refs` plus the append-only verdict log. | You — at the start of every `/intake`. |
-| `steward backlog-edit` | `backlog-edit HANDLE [--need "…"] [--origin operator\|proposed] [--criterion "…"]…` — rewords one item's need, origin and/or acceptance criteria in place; the handle never changes. A `--criterion` list replaces the item's criteria. | The owner's words again; you type them when the owner rewords a need. Never rewrite a need on your own. |
+| `steward backlog-add` | `backlog-add "<need>"` — records a user need in the owner's words. Creates the backlog file from the bundled template when the project has none. Line breaks in the need are folded to one space: an item is one table row. | The owner's words; you type them. Never invent a need — record one you proposed with `--origin proposed`, and only when the owner chose it. |
+| `steward backlog-list` | Every item with its **derived** state and attempt record. Nothing is stored: state comes from `backlog_refs` plus the append-only verdict log. | You — at `/intake`, to find the items related to the idea. |
+| `steward backlog-edit` | `backlog-edit HANDLE [--need "…"] [--origin operator\|proposed] [--criterion "…"]…` — rewords one item's need, origin and/or acceptance criteria in place; the handle never changes. A `--criterion` list replaces the item's criteria. Line breaks in a need or criterion are folded to one space. | The owner's words again; you type them when the owner rewords a need. Never rewrite a need on your own. |
 | `steward backlog-accept` | `backlog-accept HANDLE` — the owner's verdict that a delivered result satisfies the need. | The **owner**, any time after the REQ lands — the honest answer to "is this actually usable" often arrives only after living with it. |
 | `steward backlog-deny` | `backlog-deny HANDLE --reason "<why>"` — the owner's verdict that it does not. The reason is mandatory. | The **owner**. It is advisory to the REQ and blocking to the item: it never fails the REQ. |
 | `steward backlog-hold` | `backlog-hold HANDLE --reason "<what it waits on>"` — the need stands but is deliberately not being worked. Taking it up in a REQ lifts the hold. | The **owner**. |
