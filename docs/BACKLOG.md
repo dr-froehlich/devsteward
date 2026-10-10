@@ -98,3 +98,11 @@ as handles.
 ### simpler-state-changes
 - I can go back from a pending validation to develop without first running a validation I know will fail.
 - The moves are the two I actually use: repeat the same step, or go back to the previous step.
+
+### joint-project-tasks
+- A project creates a demand which requires another project to act on.
+- When I tell the target project to "intake the other project's request", it finds it, presents me with the possible candidates and picks up the handover.
+- Both projects' Claude Code sessions find the feedback and questions the other has issued to them, and process those automatically.
+- What travels between them: requests for action; requests for feedback, information or a decision; information pushed to the other; and the finished-job handshake.
+- The communication is kept up until both acknowledge that the activity is finished. Each session determines with me how it judges the job finished: in a develop session, by a successful validation, or something else.
+- system-admin can participate if it obeys the rules; the main scope is DevSteward projects.
