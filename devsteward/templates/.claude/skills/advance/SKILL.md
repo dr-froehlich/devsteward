@@ -38,6 +38,21 @@ Everything tagged *(batch)* or *(interactive)* below applies to that mode only.
   statuses — never hand-read `.devsteward/state.yaml`. `steward status` is the one sanctioned
   read of the live ledger (there is a single ledger on `dev`). If invoked as
   `/advance REQ-NNN develop`, that is your target.
+- **Joint tasks with other projects (interactive) (REQ-101).** Run `steward joint-list` right
+  after `steward status`, before choosing a target, so that a project with no eligible step
+  still hears from its peers. When something waits for this project, work through it **with
+  the operator** before the step:
+  - Answer an `ask` with `steward joint-send <thread> --kind tell --reply-to <ref> --body
+    "…"`. A decision in it is the operator's to make, not yours.
+  - Read a `tell`, act on it, then run `steward joint-ack <thread> <ref>`.
+  - Point an incoming request (`action`) to `/intake`, which takes it up.
+
+  Send `--kind done` only when the operator agrees the job is finished on this side, for
+  example after the develop step that delivered it or after a green validation. The thread
+  stays open until both projects have said done.
+
+  *(batch)* skip this entirely: an `ask` may need a decision only the operator can make, so
+  a headless session never consumes joint messages.
 - **Choosing the target when none is named (interactive) (REQ-078).** Batch is always
   launched with an explicit `REQ-NNN develop` target — this whole bullet is *interactive-only*
   and does not touch the batch path. When a person runs `/advance` with **no** `REQ-NNN develop`

@@ -15,51 +15,13 @@ from pathlib import Path
 
 from .. import skillsync
 from ..build import build_executor
-from ..config import Config, ProjectNotFound, find_root, load_config
-from ..core.ledger import LEDGER_DIRNAME
+from ..config import Config, load_config
 from ..core.model import Decision, StepStatus
 from ..profiles.req import backlog as bl
 from ..profiles.req.reqfile import ReqFile, load_reqs
-
-# -- discovery (Decision 7) ------------------------------------------------------------
-
-
-@dataclass(frozen=True)
-class ProjectRef:
-    """A child folder of the root: stamped (holds a ledger) or listed for information."""
-
-    name: str
-    root: Path
-    stamped: bool
-
-
-def resolve_root(explicit: Path | None = None) -> Path:
-    """The directory whose children are the projects.
-
-    ``--root`` when given; else the **parent of the enclosing project** (the walk-up the
-    other verbs use), so running from inside any stamped project finds its siblings; else
-    the current directory. Never a hardcoded path.
-    """
-    if explicit is not None:
-        return Path(explicit).resolve()
-    try:
-        return find_root().parent
-    except ProjectNotFound:
-        return Path.cwd().resolve()
-
-
-def scan_root(root: Path) -> list[ProjectRef]:
-    """Every child directory of ``root``: stamped when it holds a ``.devsteward/`` ledger."""
-    root = Path(root)
-    out: list[ProjectRef] = []
-    if not root.is_dir():
-        return out
-    for child in sorted(root.iterdir(), key=lambda p: p.name.lower()):
-        if not child.is_dir() or child.name.startswith("."):
-            continue
-        out.append(ProjectRef(child.name, child, (child / LEDGER_DIRNAME).is_dir()))
-    return out
-
+# Discovery (Decision 7) lives in :mod:`devsteward.projects` since REQ-101, shared with the
+# joint-task verbs; re-exported here, where the app and the tests read it.
+from ..projects import ProjectRef, resolve_root, scan_root  # noqa: F401
 
 # -- steward status (the model behind the CLI's report) ------------------------------
 

@@ -465,7 +465,7 @@ def dashboard(root: Path | None, port: int) -> None:
     import importlib.util
 
     from .dashboard import INSTALL_HINT
-    from .dashboard.model import resolve_root
+    from .projects import resolve_root
 
     if importlib.util.find_spec("flask") is None:
         raise click.ClickException(INSTALL_HINT)
@@ -1521,6 +1521,168 @@ def backlog_retire(handle: str, reason: str) -> None:
     to have the same idea can read why it was dropped.
     """
     _record_verdict(handle, "retired", reason, None)
+
+
+# -- joint tasks between projects (REQ-101) ------------------------------------------
+
+
+def _body(body: str | None, body_file) -> str:
+    if body is not None and body_file is not None:
+        raise click.ClickException("give --body or --body-file, not both")
+    return body_file.read() if body_file is not None else (body or "")
+
+
+def _first_line(text: str, width: int = 70) -> str:
+    line = next((s.strip() for s in text.splitlines() if s.strip()), "")
+    return line if len(line) <= width else line[: width - 1] + "…"
+
+
+@main.command("joint-send")
+@click.argument("handle", required=False)
+@click.option(
+    "--kind", type=click.Choice(["action", "ask", "tell", "done"]), default="action",
+    show_default=True,
+    help="action opens a thread; ask = a request for feedback, information or a decision; "
+         "tell = information pushed to the other side; done = your half of the finished-job handshake.",
+)
+@click.option("--to", "to", default=None, help="action only: the project to ask, by its folder name.")
+@click.option("--need", default=None, help="action only: the need, one line; the receiver files it verbatim.")
+@click.option("--reply-to", default=None, help="The message this answers, as <project>#<seq>.")
+@click.option("--body", default=None, help="The message text (Markdown).")
+@click.option("--body-file", type=click.File("r", encoding="utf-8"), default=None,
+              help="Read the message text from a file; '-' reads stdin.")
+def joint_send(handle, kind, to, need, reply_to, body, body_file) -> None:
+    """Open a joint task with another project, or say something into one (REQ-101).
+
+    `--to P --need "…"` opens a thread with a request for action; HANDLE is then an optional
+    handle of your choosing, else one is minted as `<this project>-<slug>`. With `--kind ask |
+    tell | done`, HANDLE names the thread. The line goes into this project's own
+    `.devsteward/joint.jsonl` — never into the other project — and is not committed: the
+    session's next commit carries it.
+    """
+    from .profiles.req import joint
+
+    cfg = _load_or_die()
+    text = _body(body, body_file)
+    try:
+        if kind == "action":
+            if not to or not need:
+                raise click.ClickException("a request needs --to PROJECT and --need \"…\"")
+            if reply_to:
+                raise click.ClickException("a request opens a thread; it replies to nothing")
+            entry = joint.open_thread(cfg, to, need, handle=handle, body=text)
+            click.echo(click.style(f"  + {entry.thread}", fg="green")
+                       + f" — {entry.ref_id} asks {entry.to}: {entry.need}")
+            return
+        if to or need:
+            raise click.ClickException("--to and --need open a thread; they go with --kind action only")
+        if not handle:
+            raise click.ClickException(f"an {kind} needs the thread's HANDLE")
+        entry = joint.send(cfg, handle, kind, body=text, reply_to=reply_to)
+    except joint.JointError as exc:
+        raise click.ClickException(str(exc)) from exc
+    answer = f" (replying to {entry.reply_to})" if entry.reply_to else ""
+    click.echo(click.style(f"  + {entry.thread}", fg="green") + f" — {entry.ref_id} {kind}{answer}")
+
+
+@main.command("joint-ack")
+@click.argument("handle")
+@click.argument("ref")
+def joint_ack(handle: str, ref: str) -> None:
+    """Mark a message to this project handled, once read and acted on (REQ-101).
+
+    REF is the message's reference, `<project>#<seq>`, as `joint-list` shows it. Answering a
+    message with `joint-send --reply-to` handles it too; acknowledging twice writes nothing.
+    """
+    from .profiles.req import joint
+
+    cfg = _load_or_die()
+    try:
+        entry = joint.ack(cfg, handle, ref)
+    except joint.JointError as exc:
+        raise click.ClickException(str(exc)) from exc
+    if entry is None:
+        click.echo(f"  {ref} in {handle} was already handled — nothing written.")
+        return
+    click.echo(click.style(f"  ✓ {handle}", fg="green") + f" — {entry.ref_id} acknowledges {ref}")
+
+
+@main.command("joint-list")
+def joint_list() -> None:
+    """What waits for this project in its joint tasks, and the requests it can take up (REQ-101).
+
+    Reads every stamped sibling's log for threads this project is a party of — nobody has to
+    say where the other project lives. Nothing here is stored: handled, closed and taken-up
+    are derived on every read. A sibling's unreadable line is reported and skipped.
+    """
+    from .profiles.req import joint
+
+    cfg = _load_or_die()
+    v = joint.view(cfg)
+    open_threads = v.open_threads
+    waiting = [(t, m) for t in open_threads for m in t.waiting_for(v.me)]
+    cands = joint.candidates(cfg, v)
+    if waiting:
+        click.echo(click.style(f"Waiting for {v.me}:", bold=True))
+        for t, m in waiting:
+            text = m.need if m.kind == joint.ACTION else _first_line(m.body)
+            click.echo(f"  {t.handle:<34} {m.ref_id:<16} {m.kind:<7} {text}")
+    if cands:
+        click.echo(click.style("Requests to take up (not yet in this project's backlog):", bold=True))
+        for t in cands:
+            click.echo(f"  {t.handle:<34} from {t.opener:<16} {t.action.need}")
+    if open_threads:
+        click.echo(click.style("Open joint threads:", bold=True))
+        for t in open_threads:
+            done = f"done: {', '.join(t.done_by)}" if t.done_by else "done: nobody yet"
+            click.echo(f"  {t.handle:<34} with {t.other(v.me):<16} opened by {t.opener} · "
+                       f"{len(t.messages)} messages · {done}")
+    else:
+        click.echo(f"no open joint threads for {v.me}.")
+    for p in v.problems:
+        click.echo(click.style(f"  ! {p}", fg="yellow"))
+
+
+@main.command("joint-show")
+@click.argument("handle")
+def joint_show(handle: str) -> None:
+    """One joint task with both projects' halves merged in time order (REQ-101).
+
+    Shows who opened it and who was asked, whether it is open or closed and who said done, the
+    addressee's take-up as its own `backlog-list` derives it, then every message and
+    acknowledgement. A reference to a message that no longer exists is marked dangling.
+    """
+    from .profiles.req import joint
+
+    cfg = _load_or_die()
+    v = joint.view(cfg)
+    try:
+        t = v.thread(handle)
+    except joint.JointError as exc:
+        raise click.ClickException(str(exc)) from exc
+    state = "closed" if t.closed else "open"
+    done = ", ".join(t.done_by) or "nobody yet"
+    click.echo(click.style(f"{t.handle}", bold=True) + f" — {t.opener} → {t.addressee} · {state} · done: {done}")
+    click.echo(f"  need:    {t.action.need}")
+    click.echo(f"  take-up: {joint.take_up(cfg, t)}")
+    dangling = {(e.ref_id, ref) for e, ref in t.dangling()}
+    for e in t.entries:
+        when = e.at[:19].replace("T", " ")
+        if e.kind == joint.ACK:
+            mark = "  (dangling: no such message)" if (e.ref_id, e.ref) in dangling else ""
+            click.echo(f"  {when}  {e.ref_id:<16} {e.author} acknowledged {e.ref}{mark}")
+            continue
+        status = "" if t.closed else ("  handled" if t.handled(e) else "  waiting")
+        answer = f" ↳ {e.reply_to}" if e.reply_to else ""
+        if e.reply_to and (e.ref_id, e.reply_to) in dangling:
+            answer += " (dangling: no such message)"
+        click.echo(click.style(f"  {when}  {e.ref_id:<16} {e.kind}{answer}{status}", bold=True))
+        if e.kind == joint.ACTION:
+            click.echo(f"      to {e.to}: {e.need}")
+        for line in e.body.splitlines():
+            click.echo(f"      {line}")
+    for p in v.problems:
+        click.echo(click.style(f"  ! {p}", fg="yellow"))
 
 
 if __name__ == "__main__":

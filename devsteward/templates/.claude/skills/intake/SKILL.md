@@ -23,6 +23,18 @@ seed here is what every later step inherits.
   may drive one or more REQs, and a REQ the owner intakes directly, such as a defect repair
   or a change no recorded need asked for, is complete without one. A project with no backlog
   file simply reports so; that is a valid state, not a missing artifact.
+- **When the operator asks you to take up another project's request (REQ-101)**, run
+  `steward joint-list` and present its *Requests to take up*: each one names the thread
+  handle, the project that asked, and the need. You never need to be told where that project
+  lives, and you never read its files yourself. When the operator picks one:
+  1. File it under the thread's handle: `steward backlog-add --handle <thread> --origin
+     proposed "<need>"`. One string then names the job in both repos.
+  2. Acknowledge the request: `steward joint-ack <thread> <ref>`.
+  3. Read the requester's reasoning with `steward joint-show <thread>`, and continue at §2d
+     with that item.
+
+  A question for the requester goes back as `steward joint-send <thread> --kind ask --body
+  "…"`. Its answer reaches a later `/advance` or `/intake`.
 - Read `CLAUDE.md`, the north star and `REQUIREMENTS_INDEX.md` in the requirements dir.
   The new REQ must advance the north star or be explicitly scoped against it.
 - **The north star is a role, not an id (REQ-092).** It starts at `REQ-001.md`, but a

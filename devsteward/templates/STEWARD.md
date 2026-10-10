@@ -133,6 +133,50 @@ steward backlog-retire HANDLE --reason "<why dropped>"
   and ask what it is for. Record anything you proposed yourself with `--origin proposed`, and only
   when the owner chose it from alternatives.
 
+## Joint tasks — when another project has to act (REQ-101)
+
+A **joint task** is a job one project needs another to do. The asking project opens a
+**thread** with a request for action. The two projects then exchange messages until **both**
+have said the job is finished. It works between stamped projects that sit side by side in one
+parent folder. A project's name is its folder name (any case), and nobody has to say where the
+other project lives.
+
+```sh
+steward joint-send --to PROJECT --need "<the need, one line>" [--body "<why>"]   # open a thread
+steward joint-list                                       # what waits for this project; requests to take up
+steward joint-show HANDLE                                # one thread, both sides merged, with the take-up
+steward joint-send HANDLE --kind ask  --body "…"         # ask for feedback, information or a decision
+steward joint-send HANDLE --kind tell --body "…" [--reply-to REF]   # push information, or answer
+steward joint-ack HANDLE REF                             # you read and acted on a message to you
+steward joint-send HANDLE --kind done [--body "…"]       # your half of the finished-job handshake
+```
+
+- **Each project writes only into its own `.devsteward/joint.jsonl`, and only by appending.**
+  A message is never written into the other project. That project's sessions read it where it is,
+  so a write can never land in a session running over there. Each repo's history holds only what
+  that project said. `joint-show` merges both halves when you read a thread. The verbs do not
+  commit; your next commit carries the log.
+- **The thread handle is the backlog handle.** The receiving project files a request with
+  `steward backlog-add --handle <thread> --origin proposed "<need>"`. The asking project then
+  reads the take-up (filed, taken up by REQ-NNN, its status) from the receiver's backlog through
+  `joint-show`. Nothing has to be sent back to say where it was filed.
+- **A message is referenced as `<project>#<seq>`** and never changes. To correct a message,
+  send a new one. A message counts as **handled** once its receiver acknowledged it
+  (`joint-ack`) or answered it (`--reply-to`). Handled, closed and taken-up are all derived on
+  read and stored nowhere.
+- **One `done` is not enough.** The thread stays open, and keeps showing in both projects'
+  `joint-list`, until both have sent `done`. After that nothing more can be sent into it.
+  `joint-show` still reads it. When to send `done` is decided with the owner on each side; the
+  engine never sends it.
+- **Where sessions look.** `/intake` lists the requests to take up when the owner asks it to
+  take one up. `/advance` runs `joint-list` at orientation in an attended session and works
+  through what waits, with the owner. A batch session never consumes joint messages, because an
+  `ask` may need a decision only the owner can make. Nothing starts a session when a message
+  arrives.
+- **A neighbour's damaged log never blocks you.** An unreadable line in another project's log is
+  reported by file and line and skipped. A reference to a message that no longer exists is shown
+  as dangling.
+
 ## The batch lane (headless queues)
 
 ```sh
@@ -367,6 +411,15 @@ authoritative flag reference and cannot drift.
 | `steward backlog-deny` | `backlog-deny HANDLE --reason "<why>"` — the owner's verdict that it does not. The reason is mandatory. | The **owner**. It is advisory to the REQ and blocking to the item: it never fails the REQ. |
 | `steward backlog-hold` | `backlog-hold HANDLE --reason "<what it waits on>"` — the need stands but is deliberately not being worked. Taking it up in a REQ lifts the hold. | The **owner**. |
 | `steward backlog-retire` | `backlog-retire HANDLE --reason "<why>"` — the need is no longer wanted. Nothing is deleted; the item and its reason stay readable. | The **owner** — the only way an item leaves the backlog unsatisfied. |
+
+### Joint tasks
+
+| Verb | What it does | Run by / when |
+|---|---|---|
+| `steward joint-send` | `joint-send --to PROJECT --need "…" [HANDLE]` opens a thread with a request for action; a handle is minted as `<this project>-<slug>` unless you give one. `joint-send HANDLE --kind ask\|tell\|done [--reply-to REF] [--body "…" \| --body-file F]` says something into it. The message is appended to this project's own log only; the verb does not commit. Refused: an unknown, unstamped or ambiguous project, this project itself, a thread you are not a party of, a closed thread, a `--reply-to` naming no message of the thread. | You, in an attended session. Send `done` only when the owner agrees the job is finished on this side. |
+| `steward joint-ack` | `joint-ack HANDLE REF` — records that this project handled a message addressed to it. Acknowledging twice writes nothing. | You, once you have read the message and acted on it. |
+| `steward joint-list` | Every open thread this project is a party of: what waits for it, the requests it can take up (not yet in its backlog), and who has said done. A neighbour's unreadable line is reported, never fatal. | You — at `/advance` orientation (attended only) and when the owner asks `/intake` to take up another project's request. |
+| `steward joint-show` | `joint-show HANDLE` — one thread with both projects' messages and acknowledgements merged in time order, open or closed, plus the addressee's take-up as its own `backlog-list` derives it. | You — before answering or taking up a request. |
 
 ### Project setup
 

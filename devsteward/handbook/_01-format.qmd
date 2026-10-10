@@ -198,6 +198,38 @@ two at display time — so there is no second copy to fall out of step, and no w
 forget. `steward lint` checks only that the claims resolve: it never demands that an item be
 taken up, ordered, prioritized or ever accepted.
 
+### Joint tasks: a need another project files (REQ-101)
+
+Sometimes one project needs another one to act. Without help the owner becomes the courier,
+carrying handover files and "filed as" references between sessions. A **joint task** removes
+that. The asking project opens a thread with `steward joint-send --to <project> --need "…"`.
+The project is named by its folder, and the stamped siblings in the same parent folder are found
+the way the dashboard finds them. The receiving project's `/intake` lists the request among its
+*requests to take up* and files it with `backlog-add --handle <thread>`. **The thread handle is
+the backlog handle**, so one string names the job in both repos. The asker reads the take-up
+from the receiver's backlog, and nothing is sent back to say where the request was filed.
+
+From then on the two projects exchange `ask`s (feedback, information, a decision) and `tell`s
+(information, answers). Each project's `/advance` finds what waits for it at orientation and
+works through it with the owner, in attended sessions only. The thread stays open until
+**both** projects have sent `done`.
+
+The same two rules as the backlog hold:
+
+- **Each project writes only into its own `.devsteward/joint.jsonl`, by appending.** A message
+  is never written into the other project, where it would be swept into whatever session runs
+  there. So each repo's history holds what that project said.
+- **Nothing stores status.** Handled, closed and taken-up are derived from both logs and the
+  receiver's backlog on every read.
+
+| Command | What it does |
+|---|---|
+| `steward joint-send --to <project> --need "…"` | Open a thread with a request for action. |
+| `steward joint-send <handle> --kind ask\|tell\|done [--reply-to <ref>]` | Say something into a thread. |
+| `steward joint-ack <handle> <ref>` | This project handled a message addressed to it. |
+| `steward joint-list` | What waits for this project, and the requests it can take up. |
+| `steward joint-show <handle>` | One thread, both halves merged, with the addressee's take-up. |
+
 ## What is *not* in the REQ
 
 Checkpoint and cursor state. **REQ = spec, ledger = cursor.** The ledger lives in
