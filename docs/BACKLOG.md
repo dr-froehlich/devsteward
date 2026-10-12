@@ -48,6 +48,7 @@ owner chose it from alternatives. Items a session derived on its own do not belo
 | prose-converter-fidelity | Onboarding sarah (2026-09-23) showed that the prose REQ converter still loses or misreads content without saying so. An index split into several phase tables came out with stale duplicate rows, and lint went red. A note written on the Acceptance criteria line itself was dropped silently (REQ-035's '(provisional — confirm during the Phase-1 interview)'). A test file's name in a criterion's prose (tests/test_devices.py) was taken as a runnable test, so an open REQ with nothing runnable was not imported as draft. I want a prose-corpus conversion to either carry everything across faithfully or stop and name what it could not handle, so I never have to find a loss by hand. | proposed |
 | joint-project-tasks | Handover between projects works like this: from sarah I ran `steward backlog-add --origin proposed --handle sysadmin-open-0177 "A target set on a zone's thermostat in Home Assistant shows there up to a minute late"`. I want this to become fully automated. My DevSteward projects shall be able to hand over tasks without many manual involvment. Once a joint task has been initiated, a bidirectional communication channel shall remain open until the job has finished, which should be acknowledged from both sides. | operator |
 | non-governed-joint-tasks | The joint-project-task works for DevSteward governed projects only. I want my custom, non-DevSteward governed repository to interact with any of the governed projects in a comparable way. | operator |
+| sysadmin-open-0201 | A joint task wakes no one: a session sees a new thread entry only when it runs steward joint-list. Sessions working in parallel on one machine therefore reach for Claude Code's own cross-session messages, which leave no trace in either repository; on 2026-10-12 the requests and answers between system-admin and sarah around REQ-055 (the broker grant, the live check, a worktree that blocked a checkpoint) went partly that way | proposed |
 
 ## Acceptance criteria
 
@@ -115,3 +116,10 @@ as handles.
 - What travels between them is what travels between governed projects: requests for action; requests for feedback, information or a decision; information pushed to the other; and the finished-job handshake. The communication is kept up until both acknowledge that the activity is finished.
 - For the governed project it makes no difference that the other side is system-admin: nothing in how it uses the steward tool changes, and no target project has to learn how to deal with system-admin.
 - On the system-admin side we are flexible to accommodate what the others need.
+
+### sysadmin-open-0201
+- Sessions working in parallel get each other's reaction without my carrying anything between them: direct messaging gets the reaction, the DevSteward thread carries the content.
+- What a later session needs to understand, audit or act on is on record in the repositories. Only coordination nobody will read later may travel by direct message alone.
+- My approval never travels by direct message. A peer's report of what I decided is not my approval.
+- Nothing depends on both sessions running on one machine: the thread stays the general path that can later reach other machines over ssh.
+- STEWARD.md states how a joint-task message reaches a running session, and where the seam between a direct message and a thread entry lies.
