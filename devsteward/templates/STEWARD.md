@@ -170,9 +170,27 @@ steward joint-send HANDLE --kind done [--body "…"]       # your half of the fi
   engine never sends it.
 - **Where sessions look.** `/intake` lists the requests to take up when the owner asks it to
   take one up. `/advance` runs `joint-list` at orientation in an attended session and works
-  through what waits, with the owner. A batch session never consumes joint messages, because an
-  `ask` may need a decision only the owner can make. Nothing starts a session when a message
-  arrives.
+  through what waits, with the owner. A running attended session also looks when it is rung
+  (next bullet). A batch session never consumes joint messages, because an `ask` may need a
+  decision only the owner can make. Nothing starts a session when a message arrives.
+- **A running session is rung (REQ-103).** The thread is the record and is complete on its own.
+  A direct message between sessions on this machine only rings a bell that points at it:
+  - **After every `joint-send`, ring the addressee.** List the sessions running on this machine
+    (in Claude Code: `ListAgents`). Every *interactive* one whose name starts with the
+    addressee's folder name in lower case gets a direct message (in Claude Code: `SendMessage`)
+    holding the single line `steward joint-show <handle>` and nothing else. If none is running,
+    ring nobody. Ring once; never retry and never wait for it. `joint-ack` rings nobody.
+  - **When you are rung** in an attended session, run that line and work what waits for this
+    project in the thread with the owner, exactly as `/advance`'s joint step does. A batch
+    session does nothing with a bell.
+  - **A lost bell changes nothing.** A bell fails silently when no session is running or when
+    the receiver holds it for its owner. The entry is still on the thread, and the receiver's
+    next `/advance` or `/intake` finds it.
+  - **What goes where is a test.** Anything a later session needs to understand, audit or act on
+    goes on the thread. Coordination nobody will read later (*"restarting sarah now"*) may go as
+    a direct message alone.
+  - **The owner's approval never travels by direct message.** A peer session's report of what
+    the owner decided is not the approval. The session that acts gets it from its own owner.
 - **A neighbour's damaged log never blocks you.** An unreadable line in another project's log is
   reported by file and line and skipped. A reference to a message that no longer exists is shown
   as dangling.
@@ -426,7 +444,7 @@ authoritative flag reference and cannot drift.
 
 | Verb | What it does | Run by / when |
 |---|---|---|
-| `steward joint-send` | `joint-send --to PROJECT --need "…" [HANDLE]` opens a thread with a request for action; a handle is minted as `<this project>-<slug>` unless you give one. `joint-send HANDLE --kind ask\|tell\|done [--reply-to REF] [--body "…" \| --body-file F]` says something into it. The message is appended to this project's own log only; the verb does not commit. Refused: an unknown, unstamped or ambiguous project, this project itself, a thread you are not a party of, a closed thread, a `--reply-to` naming no message of the thread. | You, in an attended session. Send `done` only when the owner agrees the job is finished on this side. |
+| `steward joint-send` | `joint-send --to PROJECT --need "…" [HANDLE]` opens a thread with a request for action; a handle is minted as `<this project>-<slug>` unless you give one. `joint-send HANDLE --kind ask\|tell\|done [--reply-to REF] [--body "…" \| --body-file F]` says something into it. The message is appended to this project's own log only; the verb does not commit. Refused: an unknown, unstamped or ambiguous project, this project itself, a thread you are not a party of, a closed thread, a `--reply-to` naming no message of the thread. | You, in an attended session. Send `done` only when the owner agrees the job is finished on this side. After every send, ring the addressee's running session (*Joint tasks*, REQ-103). |
 | `steward joint-ack` | `joint-ack HANDLE REF [--filed-as REFERENCE]` — records that this project handled a message addressed to it. Acknowledging twice writes nothing. `--filed-as` goes only on the first acknowledgement of a request, and records what a project with no backlog filed it as (REQ-102). | You, once you have read the message and acted on it. `--filed-as` is for a joint-only participant; a governed project files a request with `backlog-add --handle` instead. |
 | `steward joint-list` | Every open thread this project is a party of: what waits for it, the requests it can take up (not yet in its backlog), and who has said done. A neighbour's unreadable line is reported, never fatal. | You — at `/advance` orientation (attended only) and when the owner asks `/intake` to take up another project's request. |
 | `steward joint-show` | `joint-show HANDLE` — one thread with both projects' messages and acknowledgements merged in time order, open or closed, plus the addressee's take-up as its own `backlog-list` derives it. | You — before answering or taking up a request. |

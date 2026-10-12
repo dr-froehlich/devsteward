@@ -34,7 +34,8 @@ seed here is what every later step inherits.
      with that item.
 
   A question for the requester goes back as `steward joint-send <thread> --kind ask --body
-  "…"`. Its answer reaches a later `/advance` or `/intake`.
+  "…"`, followed by the ring STEWARD.md's *Joint tasks* describes (REQ-103). Its answer
+  reaches a later `/advance` or `/intake`, or this session when the requester rings back.
 - Read `CLAUDE.md`, the north star and `REQUIREMENTS_INDEX.md` in the requirements dir.
   The new REQ must advance the north star or be explicitly scoped against it.
 - **The north star is a role, not an id (REQ-092).** It starts at `REQ-001.md`, but a

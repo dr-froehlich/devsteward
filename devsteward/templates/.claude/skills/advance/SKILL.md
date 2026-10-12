@@ -51,8 +51,13 @@ Everything tagged *(batch)* or *(interactive)* below applies to that mode only.
   example after the develop step that delivered it or after a green validation. The thread
   stays open until both projects have said done.
 
-  *(batch)* skip this entirely: an `ask` may need a decision only the operator can make, so
-  a headless session never consumes joint messages.
+  **Ring after every `joint-send` (REQ-103):** send the other project's running interactive
+  session the single line `steward joint-show <handle>`, as STEWARD.md's *Joint tasks*
+  describes. If you are rung that way later in the session, work that thread through the same
+  way, with the operator.
+
+  *(batch)* skip this entirely and do nothing with a bell: an `ask` may need a decision only
+  the operator can make, so a headless session never consumes joint messages.
 - **Choosing the target when none is named (interactive) (REQ-078).** Batch is always
   launched with an explicit `REQ-NNN develop` target — this whole bullet is *interactive-only*
   and does not touch the batch path. When a person runs `/advance` with **no** `REQ-NNN develop`

@@ -214,6 +214,14 @@ From then on the two projects exchange `ask`s (feedback, information, a decision
 works through it with the owner, in attended sessions only. The thread stays open until
 **both** projects have sent `done`.
 
+**A running session hears at once (REQ-103).** Sessions working in parallel on one machine
+would otherwise reach for the harness's direct messages, which leave no trace in either repo.
+So after every `joint-send` the sender rings the addressee's running attended session with a
+direct message holding only `steward joint-show <handle>`. The direct message gets the
+reaction, and the thread carries the content. A lost bell changes nothing, because the next
+`/advance` finds the entry. What a later session needs goes on the thread; coordination nobody
+will read later may go directly. The owner's approval never travels by direct message.
+
 The same two rules as the backlog hold:
 
 - **Each project writes only into its own `.devsteward/joint.jsonl`, by appending.** A message
