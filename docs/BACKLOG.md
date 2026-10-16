@@ -124,3 +124,10 @@ as handles.
 - My approval never travels by direct message. A peer's report of what I decided is not my approval.
 - Nothing depends on both sessions running on one machine: the thread stays the general path that can later reach other machines over ssh.
 - STEWARD.md states how a joint-task message reaches a running session, and where the seam between a direct message and a thread entry lies.
+
+### backlog-commit-ui-changes
+- A backlog change I make, in the dashboard or with the CLI, gets a commit of its own instead of riding in the commit of whatever REQ is being developed.
+- Reverting a REQ's develop or land commit leaves my backlog changes and verdicts in place.
+- Committing my backlog changes does not disturb a running session. If it cannot be done, my changes stay as they were.
+- A session no longer stops to warn me about my uncommitted backlog changes.
+
