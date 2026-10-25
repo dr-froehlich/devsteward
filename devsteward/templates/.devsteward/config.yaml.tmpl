@@ -43,16 +43,16 @@ accounts:
 # Each REQ is one `develop` Claude session; a red gate spawns up to two `repair` sessions,
 # then parks; a REQ with artifact/manual acceptance criteria adds one `validate` System
 # Tester session. `claude.steps.<kind>` overrides the flat default for one kind — the
-# shipped overrides spend less where the top model buys nothing: a `repair` is a cheap cold
-# restart, and the System Tester follows a validation procedure rather than solving novel
-# problems (REQ-030 D2).
+# shipped overrides spend less where the full budget buys nothing: a `repair` is a cheap cold
+# restart (a cheaper model), and the System Tester follows a validation procedure rather than
+# solving novel problems (REQ-030 D2), so it keeps the top model at lower effort.
 claude:
   permission_mode: dangerously-skip
-  model: claude-opus-5
-  effort: high
+  model: claude-opus-5-5
+  effort: xhigh
   steps:
-    repair:   {model: claude-sonnet-5}
-    validate: {model: claude-sonnet-5}
+    repair:   {model: claude-sonnet-5, effort: high}
+    validate: {model: claude-opus-5-5, effort: medium}
 
 # Attribution on the commits the engine makes (REQ-091). A commit the engine stamps carries
 # a *disclosure* trailer — `Assisted-by: Claude:<model-id>`, naming the model it actually
