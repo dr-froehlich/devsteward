@@ -1,0 +1,18 @@
+# Finding-60 before-condition: where the REQ-024 validation park is recorded
+
+## dev ledger cursor:
+cursor:
+  step: REQ-016:validate
+steps:
+
+## feature-branch ledger cursor:
+cursor:
+  step: REQ-024:validate
+steps:
+
+## REQ-024:validate events on dev:    0
+## REQ-024:validate events on feature: 4
+
+=> The existing park (made by the PRE-rework engine) is stranded on the FEATURE
+   branch; dev's ledger does not know REQ-024:validate exists. This is exactly the
+   finding-60 condition REQ-034 Decision 8 reworks. It is the 'before' picture.

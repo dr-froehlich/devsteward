@@ -1,0 +1,3 @@
+=== steward lint ===
+lint: OK
+exit: 0

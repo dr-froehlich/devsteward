@@ -1,0 +1,4 @@
+$ CLAUDECODE=1 steward validate REQ-024   (run from FlowSteward, inside this Claude session)
+--- output ---
+Error: refusing to bring up a guided validation session from inside a Claude session (CLAUDECODE set) — Claude is never spawned from within Claude. Open a plain terminal tab and run `steward validate REQ-024` there, or drive the validation in this session via the /system-test skill's start/record steps.
+--- exit code: 1 (124 = timeout) ---

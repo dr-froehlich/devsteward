@@ -32,11 +32,23 @@ _ACCEPTANCE_RE = re.compile(
     r"(?:^|\n)(`{3,}|~{3,})yaml acceptance[^\n]*\n(.*?)\n\1", re.DOTALL
 )
 
-# REQ-NNN derived step phases, in order. The land step carries the acceptance tests.
-PHASES = ("design", "build", "land")
+# REQ-NNN derived step phases (REQ-029). One fused ``develop`` step per REQ replaces the
+# old design→build→land triple: develop is the single Claude session (plan-first + code +
+# acceptance tests), it carries the acceptance tests as its gate, and on green the engine
+# lands it mechanically — there is no separate ``land`` Claude step.
+PHASES = ("develop",)
 # REQ statuses that produce work. draft = not yet ready; terminal statuses = no work.
 ACTIVE_STATUSES = {"open", "in-progress", "blocked"}
 TERMINAL_STATUSES = {"done", "dropped", "superseded"}
+
+# REQ-027: defaults for the optional `process:` frontmatter block — the intake-time
+# declarations (concept phase, lab assets). An absent block means exactly these values;
+# REQ-029/030 read them through :attr:`ReqFile.process`.
+#
+# REQ-095 retired `develop:`. It is not defaulted here, so nothing in the engine can read
+# a develop mode; a legacy REQ still carrying the key merges it through untouched (the
+# schema keeps accepting it) and no reader ever sees it.
+PROCESS_DEFAULTS = {"concept": False, "lab": [], "fixtures": []}
 
 
 @dataclass
@@ -61,6 +73,41 @@ class ReqFile:
         return list(self.frontmatter.get("depends_on") or [])
 
     @property
+    def concept_refs(self) -> list[str]:
+        """The ``concept_refs:`` frontmatter list (REQ-039 — links a concept REQ to its
+        ``docs/concepts/REQ-NNN.md`` deliverable that the develop land gate requires)."""
+        return list(self.frontmatter.get("concept_refs") or [])
+
+    @property
+    def backlog_refs(self) -> list[str]:
+        """The ``backlog_refs:`` frontmatter list (REQ-093) — the backlog item handles this
+        REQ takes up, translating each user need into this system requirement.
+
+        This is the **only** stored record of take-up, and intake is its only writer, in the
+        same commit as the REQ and its index row. The backlog file deliberately carries no
+        "taken up by" column: a second copy would need a second writer at land and would
+        drift the moment one was forgotten."""
+        return list(self.frontmatter.get("backlog_refs") or [])
+
+    @property
+    def supersedes(self) -> list[str]:
+        """The ``supersedes:`` frontmatter field, normalized to a list.
+
+        The schema allows a single id, a list of ids or ``null`` (REQ-048); every reader
+        wants the list, so the union is resolved once, here.
+        """
+        raw = self.frontmatter.get("supersedes")
+        if isinstance(raw, str):
+            return [raw]
+        return list(raw or [])
+
+    @property
+    def tags(self) -> list[str]:
+        """The ``tags:`` frontmatter list — free-form labels; ``north-star`` is the one
+        the engine reads (REQ-092: it marks the REQ that claims the compass)."""
+        return list(self.frontmatter.get("tags") or [])
+
+    @property
     def title(self) -> str:
         return str(self.frontmatter.get("title", ""))
 
@@ -71,6 +118,24 @@ class ReqFile:
     @property
     def is_terminal(self) -> bool:
         return self.status in TERMINAL_STATUSES
+
+    @property
+    def process(self) -> dict:
+        """The optional ``process:`` block merged over :data:`PROCESS_DEFAULTS` (REQ-027).
+
+        Always returns all keys; an absent or partial block yields the defaults
+        (``concept: False``, ``lab: []``, ``fixtures: []``).
+
+        A legacy ``develop:`` (retired by REQ-095) passes through unchanged when a REQ
+        still declares one — it is defaulted nowhere and read by nothing.
+        """
+        raw = self.frontmatter.get("process")
+        merged = dict(PROCESS_DEFAULTS)
+        if isinstance(raw, dict):
+            merged.update(raw)
+        merged["lab"] = list(merged.get("lab") or [])
+        merged["fixtures"] = list(merged.get("fixtures") or [])
+        return merged
 
 
 def _parse_acceptance(body: str) -> list[AcceptanceCheck]:
@@ -88,6 +153,7 @@ def _parse_acceptance(body: str) -> list[AcceptanceCheck]:
                 text=str(item.get("text", "")),
                 test=str(item.get("test", "")),
                 status=str(item.get("status", "pending")),
+                check=str(item.get("check", "")),
             )
         )
     return checks
@@ -136,6 +202,76 @@ def load_reqs(req_dir: Path) -> list[ReqFile]:
             continue
         reqs.append(parse_req(p))
     return reqs
+
+
+# The trailing ``([ \t]*(?:#.*)?)`` group tolerates — and preserves — an inline comment,
+# because the intake template stamps ``status: draft   # draft | open | …`` on every REQ.
+# The YAML parser strips that comment, so a regex that anchored ``$`` to the value would
+# silently fail to match any normally-intaken REQ at land/validate time.
+_STATUS_LINE_RE = re.compile(
+    r"^(status:[ \t]*)(['\"]?)([A-Za-z-]+)(['\"]?)([ \t]*(?:#.*)?)$", re.MULTILINE
+)
+
+
+def status_from_text(text: str) -> str | None:
+    """The frontmatter ``status:`` value (lowercased) parsed from raw REQ text — REQ-077 reads
+    a committed HEAD blob rather than a file on disk. ``None`` when there is no status line."""
+    m = _STATUS_LINE_RE.search(text)
+    return m.group(3).strip().lower() if m else None
+
+
+def set_frontmatter_status(path: Path, new_status: str) -> str:
+    """Rewrite the ``status:`` line inside the ``--- … ---`` frontmatter (REQ-026 D1).
+
+    Edits only that line so surrounding frontmatter and prose are preserved (mirrors the
+    surgical :func:`update_acceptance_status`). Returns the old status. Raises ValueError
+    if there is no frontmatter or no ``status:`` line within it.
+    """
+    p = Path(path)
+    text = p.read_text(encoding="utf-8")
+    fm = _FRONTMATTER_RE.match(text)
+    if not fm:
+        raise ValueError(f"{path}: missing YAML frontmatter")
+    span_start, span_end = fm.start(1), fm.end(1)
+    block = text[span_start:span_end]
+    old: list[str] = []
+
+    def repl(m: re.Match) -> str:
+        old.append(m.group(3))
+        return f"{m.group(1)}{m.group(2)}{new_status}{m.group(4)}{m.group(5)}"
+
+    new_block, n = _STATUS_LINE_RE.subn(repl, block, count=1)
+    if n == 0:
+        raise ValueError(f"{path}: no 'status:' line in frontmatter")
+    p.write_text(text[:span_start] + new_block + text[span_end:], encoding="utf-8")
+    return old[0]
+
+
+_VERIFIED_BY_LINE_RE = re.compile(r"^(verified_by:)[ \t]*.*$", re.MULTILINE)
+
+
+def set_frontmatter_verified_by(path: Path, summary: str) -> None:
+    """Rewrite the ``verified_by:`` line inside the frontmatter (REQ-030 Decision 3).
+
+    The engine composes the dated validation summary mechanically (the human supplies
+    only the verdict + scope — REQ-030's sign-off-authorship note), so this is the one
+    writer. Surgical like :func:`set_frontmatter_status`. Raises ValueError if there is
+    no frontmatter or no ``verified_by:`` line within it.
+    """
+    p = Path(path)
+    text = p.read_text(encoding="utf-8")
+    fm = _FRONTMATTER_RE.match(text)
+    if not fm:
+        raise ValueError(f"{path}: missing YAML frontmatter")
+    span_start, span_end = fm.start(1), fm.end(1)
+    block = text[span_start:span_end]
+    quoted = '"' + summary.replace("\\", "\\\\").replace('"', '\\"') + '"'
+    new_block, n = _VERIFIED_BY_LINE_RE.subn(
+        lambda m: f"{m.group(1)} {quoted}", block, count=1
+    )
+    if n == 0:
+        raise ValueError(f"{path}: no 'verified_by:' line in frontmatter")
+    p.write_text(text[:span_start] + new_block + text[span_end:], encoding="utf-8")
 
 
 def update_acceptance_status(path: Path, statuses: dict[str, str]) -> None:

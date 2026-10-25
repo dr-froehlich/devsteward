@@ -1,0 +1,103 @@
+# The method {#sec-method}
+
+DevSteward captures one developer's proven, evolved house style for running software
+projects with Claude Code and makes it reproducible. It exists because the alternative —
+copying the most recent project as a reference — lets the method drift and good ideas
+fail to propagate. DevSteward is the single controlled baseline.
+
+## The shape of the method
+
+1. **Requirements are the unit of work.** Each is one file with a machine-readable
+   contract (YAML frontmatter + an acceptance block) and rich prose (Context, Decisions,
+   Notes). See @sec-format.
+2. **REQ-001 is a frozen north star.** Direction changes by *superseding* it with a new
+   REQ, never by quietly weakening it.
+3. **A dependency DAG orders the work.** `depends_on` makes a REQ eligible only once its
+   prerequisites are done. Status is the single `REQUIREMENTS_INDEX.md` ↔ frontmatter pair
+   (run `steward status` for live state).
+4. **An engine walks the work — and certifies it, whoever drives.** The default is
+   **interactive**: a human drives `/advance` in a live session (the interview stays
+   live at forks) and closes with `steward checkpoint`, which verifies and lands through
+   the same gate as batch. `steward advance` / `steward run` are the batch lane for
+   queues of well-specified, low-fork REQs — headless, parking forks. The guarantees are
+   the engine's in both modes. See @sec-engine.
+5. **Verification is mechanical.** Acceptance criteria name runnable tests; a step is
+   done only when they are green — checked by the engine, not asserted by a model.
+
+## Earning the acceptance criteria (the V-model left arm) {#sec-earning-acs}
+
+Intake and the concept phase divide the left arm of the V-model between them, and five
+doctrine rules (REQ-071) govern that split — each one a codified consumer postmortem:
+
+1. **Concept-phase-as-functional-spec.** Intake captures the solution-free *user*
+   requirement. When the acceptance criteria **cannot be honestly written at intake** —
+   the causes / stuck-paths / seams are unknown, or the deliverable is empirical — set
+   `process.concept: true`: *the concept phase is where you earn the ACs you can't yet
+   write*. The attended session derives them (the functional spec — where solution
+   knowledge legitimately enters); the deliverable is whatever earns them, a
+   cause/path-analysis doc or a committed prototype (the bundle-directory form).
+2. **Wire through the live entrypoint.** A system-scoped criterion must exercise the
+   feature through its **real running entrypoint** (the cadence, the served surface), so
+   present-but-unwired *fails* it. **Tests passing ≠ wired** — "the unit is correct" and
+   "the system invokes the unit" are different claims.
+3. **Don't scope a known defect out.** A known defect is fixed in the current REQ or homed
+   in a **named follow-on REQ** — never silently deferred; non-goals may be out-of-scope,
+   defects may not.
+4. **Work that needs the real world iterates — attended (REQ-089).** When a deliverable or
+   a proof requires a **round-trip through external infrastructure** — pushing so CI builds
+   an image, deploying to a remote host, gathering live data from a running system — the
+   session may legitimately commit, push and deploy repeatedly while it iterates, because
+   the push is the precondition for the code existing anywhere it can be run. The grant is
+   keyed on **attended** (`DEVSTEWARD_UNATTENDED` unset), not on a flag: an *empirical*
+   concept phase (frozen live data, a committed prototype) is one instance, deploy-shaped
+   develop work is another. The mechanism is **plain git commits by the session**; a batch
+   session never commits (the engine is the committer). **`steward checkpoint` is the
+   terminal act**, sanctioned even over an already-clean tree (it records the step over an
+   effectively no-op commit). One checkpoint bounds the bookkeeping, not the round-trips.
+   A proof that needs a deploy therefore belongs *in the develop session*, fixable in
+   place — never deferred to the fixless System-Test phase, which has no repair loop.
+5. **Phase-model placement.** When `concept: true` is set *because the target ACs depend
+   on the concept deliverable*, intake also decides where the post-freeze work lives:
+   either **the concept session itself authors the target ACs** once the deliverable is
+   frozen, or a **named downstream REQ** owns the modeling — and the upstream REQ must
+   **never carry the downstream REQ's acceptance bar**. Intake asks which; an unexamined
+   answer is the defect.
+
+## First-class conventions
+
+These are not style preferences; the linter and the engine enforce them.
+
+- **English everywhere** in code and technical docs. Localized UI strings are allowed but
+  isolated and translatable — never inline in logic.
+- **Same-commit discipline.** A REQ's frontmatter, its `REQUIREMENTS_INDEX.md` row, and
+  the code that satisfies it move together, in one commit.
+- **Branching model — trunk-based (REQ-047).** `main` is production (release tags are cut
+  here); `dev` is the integration branch and the **single working branch**. *All* work lands
+  on `dev` — intake, plans, the ledger, **and** implementation (code + tests + the flip to
+  `done`) — in linear history. No feature branches, no worktrees, no engine-initiated branch
+  switching. The engine enforces this: it refuses to autocommit on the production branch
+  (config-driven via `git.production_branch`, default `main`). Never commit directly to
+  `main`; the one branch operation is the human-gated `dev → main` release PR.
+- **Attribution trailer** on every commit — a *disclosure*, not an authorship claim:
+  `Assisted-by: Claude:<model-id>`, no email, the human the sole `Author:` (REQ-091). Engine
+  commits name the model the engine resolved for that spawn, or `Claude:unknown`; an attended
+  session exports `DEVSTEWARD_ASSISTED_BY`. Neither adds `Signed-off-by:` — only a human can
+  certify the DCO. `attribution_trailer: false` turns it off for a project that bans AI
+  trailers. (This replaces the retired co-authorship form, which asserted an authorship a
+  model cannot hold and needed an email for an account that does not exist — see REQ-091.)
+- **Sanitized public artifacts.** No real local paths, emails, or credentials in shared
+  files; templates use placeholders.
+
+## The two-repo pattern
+
+DevSteward ships as one public, pipx-installable package (the `material-core` pattern):
+the **engine** (`steward` CLI) and the bundled **scaffolding** ride in the same wheel.
+**Consumer projects** are private, pin a `devsteward` tag, and hold the real data. A
+consumer is created by `steward new` (or the `/bootstrap` skill, which wraps it with an
+interview).
+
+A standing rule closes the loop between the two: **engine REQs originate from consumer
+postmortems**. When real consumer work hits friction — a false done, a hand-edit the
+engine should own, a gate without teeth — the postmortem becomes a requirement on the
+engine, not a local workaround in the consumer. That is how the controlled baseline
+improves instead of forking.

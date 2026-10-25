@@ -1,0 +1,12 @@
+# REQ-058 AC3 — live environment manifest
+captured: 2026-06-20T21:42:44Z
+
+## tools on PATH
+clauder: /home/peter/.local/bin/clauder  (clauder, version 0.1.0)
+cswap:   /home/peter/.local/bin/cswap  (cswap 0.13.2)
+steward: /home/peter/.local/bin/steward
+CLAUDECODE=1  (engine refuses claude -p spawn inside a Claude session)
+
+## clauder prerequisite: cswap access lock (REQ-005)
+clauder REQ-005 status: status: done
+=> race-free serialization of cswap switch is DONE (REQ-058 survey-time caveat is stale)

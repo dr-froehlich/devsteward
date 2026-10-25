@@ -20,21 +20,55 @@ Use `AskUserQuestion`. Establish:
 
 Interrogate like `/intake` does — a vague north star poisons everything downstream.
 
+**Mid-turn explanations are swallowed — put context inside the question (2026-07-17
+marker test).** Text emitted *after a tool result and followed by another tool call* is
+never rendered — exactly where an interview's between-question explanations land. Anything
+the operator must read to answer goes **inside the `question` field / option descriptions /
+previews**; when the context is longer than a question can carry, **end the turn** with the
+explanation as final text and ask in plain prose, waiting for the reply.
+
 ## 2. Fill the scaffolding
 
-- Replace every `{{…}}` placeholder in `CLAUDE.md` and `docs/requirements/REQ-001.md`
+- Replace every `{{…}}` placeholder in `CLAUDE.md` and `REQ-001.md` (in the requirements
+  dir — `requirements_dir` in `.devsteward/config.yaml`, default `docs/requirements/`)
   (set `{{TODAY}}` to today's date; `{{TEST_COMMAND}}` must be the real test command, so
   REQ-001's acceptance test actually runs).
-- Confirm `.devsteward/config.yaml` matches the chosen layout and account provider.
+- Confirm `.devsteward/config.yaml` matches the chosen layout and account provider — in
+  particular the four doc-path keys (`requirements_dir`, `index_file`, `plans_dir`,
+  `concepts_dir`). If this project's `docs/` belongs to a docs generator, point them
+  somewhere else **now** and move the stamped scaffolding to match.
 - Co-author **REQ-001** properly: a tight, frozen north star — a compass, not a spec.
-- Update `REQUIREMENTS_INDEX.md` and `ROADMAP.md` to match.
+  Give it `north-star` in its `tags:` — the compass is a **role** the engine reads from
+  that tag (REQ-092), so that when this project's direction changes years from now, the
+  successor can inherit it: the heir declares `supersedes:` the current compass and
+  carries the same tag, and `steward lint` refuses only when retiring the old compass
+  would leave no **live compass** behind. Frozen means never weakened in place — not
+  that REQ-001 holds the role forever.
+- Update `REQUIREMENTS_INDEX.md` to match.
 
 ## 3. Bring it to life
 
-- `git init` if needed; make the **first commit** on a branch (not `main` directly),
-  co-author trailer.
+- `git init` if needed. `main` is production and `dev` is the integration branch (the
+  default working branch) — create `dev` and make the **first commit** there (not on `main`,
+  which the engine refuses to autocommit onto), attribution trailer. All work — declaration
+  and implementation alike — lands on `dev`; the engine never branches.
 - Ensure the ledger exists (`steward init` if `.devsteward/state.yaml` is absent).
 - Run `steward lint` — leave it green.
+- **Land REQ-001 with `steward checkpoint`.** This bootstrap session *is* REQ-001's develop
+  session: the north star is declared, the skeleton stands, and the shipped
+  `tests/test_project_initialized.py` is its acceptance criterion. Run `steward checkpoint`
+  as the closing act, after the first commit. The engine verifies that test, capture-checks
+  it, flips REQ-001 + its index row to `done` in one commit, and advances the ledger.
+  - Use **`steward checkpoint`**, never `steward run` — `run` launches Claude, and a Claude
+    session must never spawn Claude. `checkpoint` is the non-spawning verb.
+  - Do **not** hand-write `status: done` and do **not** edit the index row yourself. The
+    engine owns the flip; a status you assert is a status nobody verified.
+  - On red, read what the test reports (an unfilled placeholder, an index row disagreeing
+    with the frontmatter, a missing ledger), fix that, and re-run `steward checkpoint`. A
+    red here means bootstrap genuinely is not finished.
+- Confirm with `steward status` that REQ-001 is `done` and **nothing is eligible** — that
+  empty board is the sign bootstrap succeeded. If REQ-001 still shows as an eligible
+  develop step, the checkpoint did not land.
 - Tell the user the next move: `/intake "<first real idea>"`, then `steward run`.
 
 This skill should not be needed again; day-to-day work is `/intake` + `/advance`.

@@ -1,0 +1,39 @@
+REQ-034 AC6 — guided procedure for Peter (run in a PLAIN terminal tab)
+=====================================================================
+Why a plain terminal: the bring-up refuses inside a Claude session by design
+(see 10-nesting-refusal.txt). Open a fresh terminal, NOT a `claude` session.
+
+SURFACES PREPARED (already mapped for you — see 20-flowsteward-parked-state.txt)
+  repo : /home/peter/projects/flowsteward
+  REQ  : REQ-024 production cutover, parked at :validate (DEC-017 open,
+         AC6 declined 2026-06-13), branch req-024-production-cutover unmerged.
+  AC6 of REQ-024 itself is the live homelab sign-off; AC4/AC5 are artifact gates
+  that already passed on the prior run.
+
+STEP 1 — drive the guided validation (observe Decisions 1,2,6,7)
+  $ cd /home/peter/projects/flowsteward
+  $ steward validate REQ-024
+  EXPECT: a guided interactive session that PREPARES the cutover surfaces and the
+  operator entrypoint (not a bare y/N), WALKS you through the procedure, and ANSWERS
+  questions. The verdict at the end is yours; the engine records it (Decisions 1-2).
+
+STEP 2 — DEFER it (pending) and prove the pipeline is not frozen (Decision 3)
+  Choose the pending/defer verdict at the prompt.
+  EXPECT after exit: clean working tree, HEAD back on the integration branch,
+  req-024-production-cutover intact + UNMERGED (Decision 4 — no merge on park).
+  Then confirm other work proceeds:
+  $ git status            # clean tree, on dev
+  $ steward status        # REQ-024 shows parked/pending, other eligible steps listed
+  $ steward run           # advances OTHER eligible REQs; does NOT trip over REQ-024
+
+STEP 3 — clean re-entry + land on green (Decisions 5,7) — when ready/deployed
+  $ steward validate REQ-024
+  EXPECT: it RESUMES the parked validation, RECONCILES req-024 from current dev
+  (no "diverged branch" refusal — Finding 1 fixed), guides you again. On an APPROVE
+  verdict it fires the deferred mechanical land (flip to done, index sync, commit,
+  merge). Declined instead → red park pointing at `steward rework` (Decision 7).
+
+SIGN-OFF (AC6): against Decisions 1-7, was the human GUIDED (surfaces prepared,
+questions answered) rather than handed a bare y/N? Was the verdict engine-recorded?
+Did pending NOT freeze the project? Did a later run resume cleanly and land on green?
+That judgement is yours — the engine records it after this session ends.

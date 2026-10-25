@@ -1,0 +1,56 @@
+# The skills {#sec-skills}
+
+Three skills carry the cognitive work the engine orchestrates. They ship in
+`templates/.claude/skills/` and are stamped into every consumer. The engine invokes them
+headless; a human can also invoke them directly in an interactive session.
+
+## `/intake` — interview an idea into a draft REQ
+
+The interrogation skill, and the one to protect. Takes a raw idea and interrogates it —
+problem, scope boundaries, alternatives, risks, dependencies, the acceptance tests, the
+English-code/localized-UI split — then emits a **schema-valid draft REQ** (`status:
+draft`), its index row, and any `SCN` scenarios. Leaves `steward lint`
+green. A sharp `/intake` is the highest-leverage moment in the method; never rush it.
+
+## `/advance` — one checkpoint
+
+The generalized `/scaleup`. Orients from the ledger, does **exactly one** checkpoint — the
+fused **Develop** checkpoint (plan-first → code → acceptance tests) — stops at forks, and
+ends with the fixed report. It runs two ways under **one bookkeeper**: directly in a live
+session (the default — forks ask; the close is `steward checkpoint`, which verifies and
+lands through the same gate as batch) or headless under `steward advance` / `steward run`
+(the batch lane — forks park; the executor verifies and lands, repairing then parking on
+red). See the two-driver contract in @sec-workflow.
+
+## `/bootstrap` — bring a new project to life
+
+Run once, right after `steward new`, while the scaffolding still has `{{placeholders}}`.
+Interviews for stack + build/test commands, co-authors the frozen **REQ-001** north star,
+fills the placeholders, writes `.devsteward/config.yaml`, makes the first commit, and
+initializes the ledger.
+
+## `/system-test` — the System Tester (REQ-030)
+
+The independent validation session the engine spawns for a `validate` step (`steward
+validate` / `steward run`). Deliberately **decoupled**: it never reads the develop diff —
+it orients from the REQ alone, brings the lab up, drives the validation procedure, and
+captures artifacts into the evidence dir the engine names. It does no bookkeeping and
+carries no gate weight: the engine runs the `artifact` acceptance tests itself afterwards
+and consumes only their pass/fail signal; `manual` criteria stay a human decision stop.
+
+## The park-and-surface contract
+
+The interviewing skills obey the same rule when `DEVSTEWARD_UNATTENDED=1` is set (batch
+mode): do
+**not** block on `AskUserQuestion`. Instead append a decision request to
+`.devsteward/state.yaml` under `decisions:` (`{id, step, question, status: open}`) and stop.
+The engine surfaces it and advances to the next independent step. Without the env var
+(interactive mode) the skills *do* ask via `AskUserQuestion` and continue — and the work
+still lands through the engine's gate (`steward checkpoint`), so the certification is the
+same either way. **The interview stays sacred** — a fork is recorded or asked, never
+guessed.
+
+## Renaming
+
+Skill names (`/intake`, `/advance`, `/bootstrap`) are conventions, not hard-coded. The
+REQ profile invokes `/advance`; if you rename it, update the profile's command string.

@@ -1,0 +1,13 @@
+# AC1 verification transcript — production skills re-grepped after edits (2026-06-19)
+
+## gone-topology vocabulary in production skills (expect: none)
+(no matches)
+
+## surviving 'trunk-based' mentions (expect: only system-test live-rule rationale = S4)
+devsteward/templates/.claude/skills/system-test/SKILL.md:64:   divergence the trunk-based model forbids, and the engine will refuse the validation and
+
+## hardlink inode identity (repo skill == shipped template)
+advance: SAME inode (886903)
+bootstrap: SAME inode (886839)
+intake: SAME inode (886883)
+system-test: SAME inode (792139)

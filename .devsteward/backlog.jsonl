@@ -1,0 +1,10 @@
+{"ts": "2026-09-17T09:23:00+00:00", "handle": "all-projects-one-view", "event": "accepted", "req": "REQ-097"}
+{"ts": "2026-09-17T09:23:14+00:00", "handle": "needs-me", "event": "accepted", "req": "REQ-097"}
+{"ts": "2026-10-10T10:27:10+00:00", "handle": "joint-project-tasks", "event": "accepted", "req": "REQ-101", "note": "observed full dialog with test project."}
+{"ts": "2026-10-10T10:29:37+00:00", "handle": "browse-reqs", "event": "accepted", "req": "REQ-097"}
+{"ts": "2026-10-10T10:29:48+00:00", "handle": "backlog-review-author", "event": "accepted", "req": "REQ-100"}
+{"ts": "2026-10-10T10:30:02+00:00", "handle": "backlog-req-trace", "event": "accepted", "req": "REQ-097"}
+{"ts": "2026-10-10T10:30:10+00:00", "handle": "error-resolution", "event": "accepted", "req": "REQ-097"}
+{"ts": "2026-10-10T10:31:03+00:00", "handle": "up-when-wanted", "event": "accepted", "req": "REQ-097"}
+{"ts": "2026-10-10T10:31:10+00:00", "handle": "simpler-state-changes", "event": "accepted", "req": "REQ-098"}
+{"ts": "2026-10-10T13:32:51+00:00", "handle": "non-governed-joint-tasks", "event": "accepted", "req": "REQ-102"}

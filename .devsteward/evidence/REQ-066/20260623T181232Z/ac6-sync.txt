@@ -1,0 +1,5 @@
+## steward sync (the fix) — clauder
+captured: 2026-06-23T18:15:24Z
+
+  ✓ onboard: refreshed (was stale)
+  ✓ STEWARD.md: refreshed (was stale)

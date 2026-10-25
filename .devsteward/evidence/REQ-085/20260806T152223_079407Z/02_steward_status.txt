@@ -1,0 +1,9 @@
+profile: req
+all requirements done — nothing to do; add the next with `/intake`.
+
+stamped artifacts:
+  ⚠ advance        stale  — run `steward sync`
+  ⚠ bootstrap      stale  — run `steward sync`
+  ⚠ intake         stale  — run `steward sync`
+  ⚠ system-test    stale  — run `steward sync`
+  ⚠ STEWARD.md     stale  — run `steward sync`

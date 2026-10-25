@@ -1,7 +1,27 @@
 # DevSteward dogfoods itself: this is its own per-project config.
 profile: req
+# Doc paths (REQ-084) — all four are per-project; DevSteward uses the conventional layout.
 requirements_dir: docs/requirements
 index_file: docs/requirements/REQUIREMENTS_INDEX.md
-roadmap_file: docs/requirements/ROADMAP.md
+plans_dir: docs/plans
+concepts_dir: docs/concepts
 accounts:
-  provider: cswap
+  # clauder provider delegates the per-step budget gate to the external `clauder` CLI
+  # (REQ-058): `clauder gate` decides proceed/switch/wait against the combined budget and
+  # tells cswap when to switch — the engine never drives cswap directly and never runs
+  # `clauder monitor` (operator-started, out-of-band). Degrades to single when clauder is absent.
+  provider: clauder
+
+# Headless runs need a permission mode or every edit stalls (see REQ-014). Default
+# `dangerously-skip` = autonomous edits; this is a trusted repo.
+# REQ-090: every model identifier lives here, visible and editable — never in engine Python.
+# `model` is the global default for all step kinds; `steps.<kind>` overrides one kind (repair
+# is a cheap cold restart — the cheaper model; validate follows a procedure — the top model at
+# lower effort).
+claude:
+  permission_mode: dangerously-skip
+  model: claude-opus-5-5
+  effort: xhigh
+  steps:
+    repair:   {model: claude-sonnet-5, effort: high}
+    validate: {model: claude-opus-5-5, effort: medium}

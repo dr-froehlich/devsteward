@@ -1,0 +1,12 @@
+# Spot-check: report 'fixed inline' claims vs current tree — REQ-052 System Tester
+# 2026-06-19T14:17:49Z
+
+## C3 dead data (Step.slug/_slugify) should be GONE:
+(exit 1 — 1 = gone, confirmed)
+
+## F2 dead feature_branch key should be GONE from config template:
+(exit 1 — 1 = gone, confirmed)
+
+## F1 CLAUDE.md.tmpl residue (only the trunk-based NEGATION should remain):
+32:  directly on `dev` — no feature branches, no worktrees, no engine-initiated branch
+(exit 0 — line 32 is 'no feature branches, no worktrees', current-state)

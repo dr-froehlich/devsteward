@@ -1,0 +1,328 @@
+# The REQ workflow {#sec-workflow}
+
+The shipped profile turns every active requirement into a single develop checkpoint and
+sequences requirements by their dependencies.
+
+## One develop step per requirement (REQ-029)
+
+For each active REQ (`open` / `in-progress` / `blocked`) the REQ profile derives **one**
+step:
+
+| Step | What happens | Verified? |
+|------|--------------|-----------|
+| `REQ-NNN:develop` | Plan-first → implement → write & green the acceptance tests | **yes** |
+
+`develop` is the single Claude session — the fused successor to the old `design → build →
+land` triple (which paid three cold sessions where two verified nothing). It carries the
+REQ's acceptance `test:` commands as its verification, so the engine re-runs them before
+marking the requirement done.
+
+On a **green** develop gate the engine performs the **mechanical land** itself — status
+flip, index sync, the single commit on `dev`, ledger advance — with **no
+Claude** (and it refuses unless a file in the plans dir names the REQ; for a `concept: true`
+REQ it also refuses unless a concept deliverable — `<concepts_dir>/REQ-NNN.md` **or** a non-empty
+`<concepts_dir>/REQ-NNN/` bundle directory (REQ-067) — exists and `concept_refs:` names it).
+On a **red** gate it spawns up to **two** fresh repair sessions (failure brief, on the model
+configured for the `repair` kind), then parks. A REQ that declared `concept: true` is parked
+in batch, naming the attended need, rather than driven headless — and the attended develop
+session *is* the concept phase. (See @sec-engine for the gate's teeth.)
+
+## The V-model mapping: `check:` steers the phases
+
+Each acceptance criterion's `check:` classification (see @sec-format) is a **routing
+key** that maps it onto the V-model:
+
+| `check:` | V-model side | Phase | Oracle |
+|----------|--------------|-------|--------|
+| `regression` | verification (left) | **Build** (inside `develop`) | coupled / mock, headless |
+| `live` | verification (standing) | **Build** (inside `develop`) — runs *as* regression | decoupled, but a **standing** gate member (continuous e2e proof, not one-time) |
+| `artifact` | validation (right) | **System-Test** (one-time) | decoupled, durable (lab-produced; engine reads only the pass/fail signal) |
+| `manual` | validation (right) | **System-Test** (one-time) | human — a decision stop |
+
+A `live` criterion (REQ-068) fills the missing cell: system scope with a decoupled oracle,
+yet a **standing** develop-gate member that runs in every gate forever (like `regression`),
+not a one-time `artifact`/`manual` validation. The develop gate runs the REQ's `regression`
++ `live` lane tests as named tests (a skip in a declared lane is a **hard red**) and excludes
+every one-time `artifact`/`manual` node-id from the hermetic full suite, so a one-time
+validation of a done REQ never gates a later REQ's develop.
+
+The phase names here are V-model *stages*, not step ids: the `develop` step does the
+Build-side **verification** of every `regression` criterion (that is its gate). The
+classification steers **phase existence**: a REQ with only `regression` criteria
+runs no System-Test phase; any `artifact` *or* `manual` criterion makes the System-Test
+(validation) phase apply. A human review *is* validation — system-level by definition —
+which is why `manual` lives inside the System-Test phase rather than as a stray
+module-level stop.
+
+## The System-Test phase (REQ-030)
+
+A REQ that declares at least one `artifact` or `manual` criterion gets exactly one extra
+step, **`REQ-NNN:validate`**, between develop and the mechanical land; a REQ with only
+`regression` criteria gets none. The step order is **develop → validate → land**: the
+green develop gate then only *commits* the work on `dev` (a `develop_committed` event — no
+status flip yet), and the land fires when validation is green — `done` keeps meaning
+*verified and validated*, and dependents wait on the dep's final step.
+
+The phase decouples the oracle. It runs as a **fresh System Tester session**
+(`/system-test`, model per `claude.steps.validate`) that never sees
+the builder's diff: it orients from the REQ, brings the lab up, drives the validation
+procedure, and captures artifacts into `.devsteward/evidence/REQ-NNN/<timestamp>/`. Then
+the **engine** runs each `artifact` criterion's named `test:` command itself — the same
+skip-is-red / zero-collected-is-red teeth as the develop gate — and consumes only that
+pass/fail signal; the session's report carries zero gate weight.
+
+Validation is a **recorded evidence event**, not a regression-suite member: the
+`validation` event in `events.jsonl` carries per-AC results, each artifact's relative
+path + sha256, and any sign-offs; `verified_by` gets the engine-composed dated summary
+(the human supplies only the verdict + an optional one-line scope). A lab skip or a
+missing artifact is a hard red, never a pass.
+
+Mechanics around the gate:
+
+- **`manual` criteria are a guided human validation (REQ-034).** Unattended, the step
+  parks naming the pending human oracle. Attended, `steward validate REQ-NNN` from a plain
+  shell runs a **two-phase bookkeeping around a guided interactive session**: it preps
+  (evidence dir, branch ready), brings up an interactive System Tester *attached to the
+  terminal* (the editor pattern — TTY inherited, not `claude -p`, never detached) that
+  prepares the surfaces and operator entrypoint, walks the human through the procedure, and
+  answers questions; then the engine takes the verdict and records the sign-off (date,
+  reviewer, scope) as the evidence event. The human got the *beginning* of validation
+  (preparation, guidance), not just the `y/N` at the end. **Claude is never spawned from
+  within Claude:** the bring-up refuses inside a Claude session (`CLAUDECODE`) and points at
+  a plain terminal tab or the warm cycle (below). The engine-run gate + engine-recorded
+  verdict are what keep the guided session from self-certifying, whatever it reports.
+- **The warm cycle (REQ-081) — a red does not cost the session.** The two REQ-034 halves
+  are first-class verbs, so a validation can run inside an already-warm session instead of
+  through the shape-A bring-up: `steward validate-start REQ-NNN` opens the step and readies
+  the evidence dir (it spawns nothing, so it is callable inside a Claude session); the warm
+  session does the guided work and captures; the human then runs `steward validate-record
+  REQ-NNN` from a **second plain shell** — the engine grades the capture and takes the
+  verdict through its own interactive prompt (a Claude session can neither host nor relay
+  it; `record` refuses there when a manual verdict is due). On a red, the return move
+  (`steward rework` or `steward repeat`) and the repair run from that same shell while the validation session stays warm and
+  **idle** (one session writes at a time, REQ-079); once the step is back to `PENDING`, the
+  warm session re-runs `start`, scoped to the red ACs (REQ-075). Shape A remains the
+  cold-start path; the halves are the same flow, not a second one — same pre-flight, same
+  gate, same three outcomes, and the verdict prompt is the only verdict channel in both.
+- **A pending validation is async QA, not a project freeze (REQ-034).** When the human
+  defers, the validation parks cleanly — a clean working tree on `dev`, the work already
+  committed there (`develop_committed`) but not yet flipped to `done` — and `steward run`
+  advances other eligible REQs; the waiting human is a standing work-item, not a blocked
+  pipeline. `steward validate REQ-NNN` resumes it at any later time, and a green verdict
+  fires the deferred land. A declined verdict is a red validation that routes to `steward
+  rework` (below). The clear verb here is `steward validate`, **not** `steward decision-answer` — answering the parked QA ticket as if it were a fork is refused and redirected
+  (REQ-057), because flipping the validate step back to pending only re-parks it.
+- **A red validation parks immediately — no repair loop.** A red here means the develop
+  was hollow or the lab is broken; both are human questions, so the engine never auto-loops
+  on red (REQ-030 Decision 8).
+- **A red validation takes one of the operator's two moves, keyed on the root cause
+  (REQ-033, REQ-055, REQ-098).** When the red is a real defect — the lab found one, or the
+  validation test itself is wrong — **`steward rework REQ-NNN`** flips `REQ-NNN:develop` back
+  to `RECOVER` and `REQ-NNN:validate` to `PENDING`, answers any parked decision, and records a
+  `rework` event naming the red evidence dir (the `/advance` repair session reads it as
+  context); the fix runs on `dev` and validates again. When instead the develop work **stands**
+  and an external lab/setup issue was fixed, **`steward repeat REQ-NNN`** re-runs the
+  validation only — it leaves `REQ-NNN:develop` at `DONE`, flips `REQ-NNN:validate` to
+  `PENDING`, and records a `revalidate` event (the event vocabulary is unchanged, REQ-098
+  Decision 5). One explicit verb per fix-and-validate cycle is the bound (it amends Decision 8
+  without repealing it). Both refuse on a `done` REQ (supersede instead — done is never
+  weakened) and touch no REQ file.
+- **Lab availability is an eligibility dependency.** While any `process.lab` REQ is not
+  `done` the validate step is simply ineligible — `steward status` names the lab REQ
+  being waited on; no red event, no parked decision.
+- **`steward validate REQ-NNN` is the single entry point.** On an in-flight REQ it
+  executes the pending validate step (green → the mechanical land proceeds); on a
+  `done` REQ it appends a fresh evidence event and leaves the REQ file untouched — status
+  *and* `verified_by` stay the frozen landing provenance (REQ-035). At the
+  release gate (`dev → main` PR) a human decides which `artifact` REQs to re-run — there
+  is deliberately no auto-staleness detection.
+
+## Labs — owned fixtures with reality-derived provenance
+
+A **lab** is the decoupled oracle an `artifact` criterion runs against: an owned,
+versioned fixture with documented provenance, built by its own REQ — never a double
+authored in the same step as the code it certifies. The pattern (set by the first lab,
+FlowSteward's IMAP lab):
+
+- **Labs live in the consumer repo.** The consumer owns the domain, the test accounts,
+  and the credentials; and `process.lab` references are **registry-local**, so only a
+  lab REQ in the same registry can gate that repo's validate steps. DevSteward documents
+  the pattern; it does not ship domain fixtures.
+- **Prefer real systems over doubles.** A lab that targets a real server (a dedicated
+  test account, never production) over a live socket has the strongest provenance there
+  is. Containerized doubles are a fallback, not the default.
+- **Self-contained and dependency-free.** A lab tool shares no code with the package it
+  validates (stdlib-only, invoked by path), so the oracle stays decoupled and any
+  caller — including another repo's System Tester — can run it with its own interpreter.
+- **Configuration is a hard failure, never a skip.** Credentials are injected via an
+  env/path seam (no real paths or secrets committed); a lab that cannot come up exits
+  non-zero. A skipping lab is the false-green hole labs exist to close.
+- **The corpus is reality-derived and versioned.** Seed data is captured from real
+  traffic and sanitized (provenance notes document source and transformations), with a
+  manifest recording the golden expectation; version, manifest, and docs move together.
+- **Fixtures are committed upstream; the System Tester never improvises (REQ-051).** A REQ
+  names the fixtures its validation needs in `process.fixtures` (repo-relative paths). The
+  oracle is git cleanliness: before certifying, the engine refuses if a declared fixture is
+  **missing** (not committed — a hard red naming the gap) or if **untracked** files sit
+  under a declared fixtures path (the tester improvised — refused, and the improvised file
+  is discarded so no uncommitted fixture is left in the tree). A missing fixture is a human
+  question — commit it upstream — never something the Tester fills in. This is the same
+  single-source-of-truth discipline as trunk-based commits: an uncommitted improvised
+  fixture is precisely the divergence the model forbids.
+- **The Develop phase delivers the fixtures its validation rests on (REQ-069).** This is the
+  other half of the rule above. When a REQ carries `artifact` or `manual` acceptance
+  criteria, its Develop phase builds and commits on `dev` every fixture, seeded sample
+  project and lab starting-state those validations rest on. The System Tester may not
+  create them (REQ-051), so a fixture the builder does not deliver leaves the validation
+  with no one allowed to supply it: a deadlock that only the Build phase can prevent, while
+  the builder is present and the tree is open.
+
+## Sequencing whole requirements
+
+`REQ-B:develop` depends on `REQ-A:develop` for each `REQ-A` in `REQ-B.depends_on`. So a
+requirement only starts once its prerequisites have fully landed, while **independent
+requirements interleave freely**. A dependency that is already `done` is satisfied and
+dropped; a dependency that is draft, dropped, or missing leaves the dependent correctly
+blocked (and `steward lint` flags it).
+
+## Branching model — trunk-based (REQ-047)
+
+DevSteward uses a two-line model. `main` is **production** — release tags are cut here and
+consumers pin them. `dev` is the **integration** branch and the **single working branch**.
+*Everything* lands on `dev` in linear history: intake (REQ frontmatter, index row),
+plans, the ledger, **and** implementation (code + acceptance tests + the flip to `done`) are
+all committed directly on `dev`. There are **no feature branches, no worktrees, and no
+engine-initiated branch switching** — the engine never creates, switches, or merges a branch.
+`dev` is promoted to `main` only by a human-gated PR; beta tags (`vX.Y.Z-beta.N`) may be cut
+on `dev`, stable tags on `main`.
+
+This is the **REQ-047 pivot**: an earlier model gave each implementation phase its own feature
+branch that the engine created, switched to, and merged back. That team-scale git topology was
+never asked for and could not be audited by a single owner; a string of firefighting fixes
+traced to it. The trunk-based model deletes the machinery — one co-located ledger that cannot
+diverge from itself, and information-flow constraints (e.g. the System Tester not seeing the
+builder's diff) are enforced in the layer that owns them, never with a branch.
+
+The model is **engine-enforced**, not just convention: before any step runs, the executor
+checks the current branch, and if it is the production branch it **refuses** — it invokes no
+`claude`, commits nothing, leaves the step pending, and prints a guard message naming the
+branch and the fix. On `dev` it proceeds normally and commits there. The branch names are
+configurable in `.devsteward/config.yaml`:
+
+```yaml
+git:
+  production_branch: main          # repos using `master`/`release` set it here
+  integration_branch: dev          # the single working branch
+```
+
+The production guard has no opt-out — strictness is the point — and it never opens PRs
+(`dev → main` stays a human PR). If `main` is ever hotfixed directly, merge it back into `dev`.
+
+## Two drivers, one bookkeeper
+
+`/advance` is one skill run two ways. The **engine is the verifying bookkeeper in both** —
+the REQ-028 gate and the mechanical land are identical whoever drove the cognition (the
+`checkpoint` event records which: `driver: interactive` or `headless`). What differs is only
+the driver and what happens at a fork. The switch is the `DEVSTEWARD_UNATTENDED` environment
+variable, which the engine sets when it shells out.
+
+- **Interactive — `/advance` in a live session, closed by `steward checkpoint`.** The
+  **default driving mode** for a single developer. A person runs the skill directly in
+  Claude Code; at a fork it asks via `AskUserQuestion` and continues — the interview
+  stays live. The session does the cognition and leaves the tree dirty; the close is
+  **`steward checkpoint`**, which re-runs the named acceptance tests through the same
+  land-grade gate as batch and, on green, performs the same mechanical bookkeeping on `dev` —
+  status flip, index sync, the one authoritative commit, ledger advance, and the trailing
+  ledger follow-up. On red nothing lands: the red verify event and the `FAILED` step are the
+  honest trail; fix and re-run `steward checkpoint` (no `repeat` needed — that verb re-arms a
+  *failed batch* step, and a red interactive checkpoint left none). The gate cannot be talked
+  into green — that property does not depend on who drove.
+- **Batch lane — `steward advance` / `steward run`.** The overnight lane for queues of
+  **well-specified, low-fork REQs**. Both drive `claude -p` headless
+  (`DEVSTEWARD_UNATTENDED=1`); there is no human channel, so a fork is never asked — it is
+  **parked** and surfaced. The engine re-runs the acceptance tests itself, lands the REQ
+  mechanically on green (repairing up to twice on red, then parking), and advances the
+  ledger. `steward advance` does one checkpoint; `steward run` marches every eligible
+  step, parking on forks and stopping on a usage limit or hard failure so a human can look.
+
+**One commit, one owner.** The engine commits in both modes — the skill never does. In
+batch the executor makes the checkpoint commit; interactively `steward checkpoint` makes
+it. (Earlier the skill committed its own work, which double-committed under the engine and
+left the interactive ledger to a hand-edit; both holes are closed by the shared tail.)
+
+## Recovery — the forward path out of every red or parked state
+
+Recovery is one model, not a grab-bag of verbs (REQ-053…056). Pick by **what is actually
+stuck** — and note that a *mechanical* go-fix-and-retry stop is never a "decision": decisions
+are reserved for genuine human forks.
+
+- **A FAILED step → `steward repeat REQ-NNN`** (REQ-026, renamed from `recover` by REQ-054).
+  The common failure is transient — a flaky environment, an account swap — so the honest
+  action is to *re-run the step*. `repeat` flips the FAILED step back to eligible; the next
+  `steward run` (or `steward checkpoint`) re-attempts it **against the partial tree the failed
+  attempt left** (the engine only commits on success, so the prior edits are still there —
+  assess and reconcile them, don't start clean). It succeeds regardless of which branch is
+  checked out (single ledger; no branch or tree gate) and never weakens a `done` REQ.
+- **An ineligible develop step (the old states D/H) → fix the cause, then `steward repeat`.**
+  A develop step held because no file in the plans dir names the REQ, or because it declared
+  `concept: true` (an attended need), is a **mechanical stop, not a
+  decision** (REQ-056 took these off the decision list — parking them only generated a
+  stalemate). `steward status` names the real cause; add the plan / drive it attended, then
+  `steward repeat REQ-NNN` to re-arm it. No `decision answer` is involved.
+- **A genuine fork → `steward decide DEC-NNN` (guided, from a plain shell).** When a session
+  hits a real human choice it can't resolve from the REQ + repo, it parks a decision **with a
+  brief** — context, options, its recommendation (batch) — or asks (interactive). `decide`
+  (REQ-074) brings up a guided session that briefs you and supports live interrogation; after
+  it exits the engine records your choice + rationale, unblocks the step, and **delivers the
+  decision into the resuming session's prompt** — the next `steward run` continues with the
+  fork cleared. (`steward decision-answer DEC-NNN "<answer>"` remains as non-guided plumbing.)
+- **A pending `manual`-AC validation (state F) → `steward validate REQ-NNN`, not a
+  decision.** An open validation is an open validation (REQ-074): the wait is a ledger
+  **hold** shown by `steward status` with its verb, never a decision record — running
+  `steward validate` attended records the sign-off and fires the deferred land. The same
+  holds for the attended-step wait in batch (run the step attended) — holds keep the
+  decisions list an alarm panel for genuine forks only, closing the circular
+  answer→re-run→re-park trap REQ-056/057 fought.
+- **A red validation → `steward rework` or `steward repeat`, keyed on the root cause.**
+  `rework` when the develop was hollow (internal cause — send it back to develop and fix it);
+  `repeat` when the develop stands and an external lab/setup issue was fixed (run the
+  validation again, only the red ACs re-opening). See the System-Test bullets above for the
+  full mechanics.
+
+**Two moves, not four (REQ-098).** The operator's recovery vocabulary is *again*
+(`steward repeat`) and *back* (`steward rework`), and the **engine** reads the ledger to
+decide which body each one runs — a failed step, a red or held validation, a refused land.
+Two verbs that used to sit beside them were deleted, not aliased; `rework` also lost its
+"a real red must exist" precondition, because it made the operator pay for a validation whose
+verdict they already knew in order to type the verb they wanted (REQ-098 Decision 2 amends
+REQ-033 Decision 3 and REQ-055 Decision 2).
+
+Across all of these the engine never switches a branch and the operator never hand-edits the
+ledger or writes `status: done` — the verbs are the only sanctioned mutations.
+
+## The fixed report
+
+Every checkpoint ends the same way, so orientation is instant:
+
+```
+Did:       what this checkpoint produced
+Cursor:    new ledger position
+Review:    one line — what to look at
+Decisions: parked forks, or "none"
+Next:      the next eligible step
+```
+
+## A day in the life
+
+```sh
+steward status                       # where are we?
+/intake "let users export to CSV"    # interview → draft REQ-014
+steward lint                         # green?
+/advance                             # interactive: plan + code + tests, asking at forks
+steward checkpoint REQ-014           # engine verifies and lands on `dev` — one transaction
+# or, the batch lane for a queue of well-specified REQs:
+steward run                          # march everything eligible; park on forks
+steward decision-list                # any genuine fork parked? (holds live in `status`)
+steward decide DEC-001               # guided: brief → interrogate → your choice recorded
+steward run                          # resume — the choice travels into the session
+```

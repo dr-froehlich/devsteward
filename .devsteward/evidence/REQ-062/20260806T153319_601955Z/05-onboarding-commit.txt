@@ -1,0 +1,96 @@
+=== onboarding commit on memzy dev ===
+a00444e Onboard memzy under the DevSteward steward engine
+66e073a Use gender-neutral sender label on the student message screen
+2929327 Complete REQ-039: teacher-manual chapter, message screenshots, home.html fix
+804b34f Implement REQ-039 student messaging (code complete; manual pending)
+c787643 Add REQ-039 requirement doc (student messaging)
+
+dev
+
+commit a00444efe10b1088c81f8f382a90fdab08aaedcf
+Author: Peter Froehlich <git@pfroehlich.de>
+Date:   Sat Aug 1 10:00:20 2026 +0200
+
+    Onboard memzy under the DevSteward steward engine
+    
+    Retrofit memzy onto the engine via the shipped /onboard skill (DevSteward
+    REQ-062, the first live onboarding proof run).
+    
+    Corpus (31 REQs) normalized into the hybrid schema by DevSteward's
+    converter (REQ-010/REQ-023): `kind` injected, `## Acceptance criteria`
+    checkboxes transcoded into `yaml acceptance` blocks with every verdict
+    preserved, `supersedes` normalized, index rows rewritten to the linter's
+    row shape. The converter is an archivist, not a judge: memzy's own
+    verdicts are recorded, never re-adjudicated. The index's surrounding
+    prose — the Planned table and the Scenarios (SCN-001..005) section — is
+    spliced through untouched, and a second conversion run is a byte-for-byte
+    no-op.
+    
+    Ledger seeded (.devsteward/): 30 terminal REQs marked done so the engine
+    reads memzy as built history with an empty work queue; REQ-001, the
+    permanently-draft north star, correctly produces no step. Config carries
+    memzy's real branch names (main/dev), the doc paths, and a Django-shaped
+    verify block (.venv interpreter, .env, `python -m pytest`).
+    
+    Scaffold stamped by merge, never overwrite: the four consumer skills and
+    STEWARD.md via `steward sync` plus the REQ/plan/scenario templates, with
+    .claude/settings.local.json left byte-identical. The operator-only
+    onboard skill is deliberately not stamped.
+    
+    CLAUDE.md reconciled: memzy's domain guidance (FSRS service boundary,
+    owner-FK invariant, the no-PII GDPR constraint, the Quarto teacher
+    manual) stands as written; the three passages the migration made false
+    are corrected — the frontmatter example now shows the hybrid schema, the
+    "set status: done yourself" step is replaced by the engine's verifying
+    bookkeeper, and "branch before committing on main" by the trunk-based
+    model.
+    
+    Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+
+ .claude/skills/advance/SKILL.md         | 169 +++++++++++++++++++++++
+ .claude/skills/bootstrap/SKILL.md       |  62 +++++++++
+ .claude/skills/intake/SKILL.md          | 238 ++++++++++++++++++++++++++++++++
+ .claude/skills/system-test/SKILL.md     | 101 ++++++++++++++
+ .devsteward/config.yaml                 |  41 ++++++
+ .devsteward/events.jsonl                |  31 +++++
+ .devsteward/stamped.lock                |   7 +
+ .devsteward/state.yaml                  |  97 +++++++++++++
+ .gitignore                              |  10 ++
+ CLAUDE.md                               |  95 +++++++++----
+ STEWARD.md                              | 238 ++++++++++++++++++++++++++++++++
+ docs/requirements/REQ-001.md            |  82 ++++++-----
+ docs/requirements/REQ-002.md            |  73 ++++++----
+ docs/requirements/REQ-003.md            |  91 +++++++-----
+ docs/requirements/REQ-004.md            |  96 +++++++------
+ docs/requirements/REQ-005.md            |  98 +++++++------
+ docs/requirements/REQ-006.md            | 127 +++++++++--------
+ docs/requirements/REQ-007.md            | 117 +++++++++-------
+ docs/requirements/REQ-008.md            |  88 +++++++-----
+ docs/requirements/REQ-009.md            | 103 ++++++++------
+ docs/requirements/REQ-013.md            | 116 ++++++++++------
+ docs/requirements/REQ-016.md            |  75 +++++-----
+ docs/requirements/REQ-017.md            |  67 +++++----
+ docs/requirements/REQ-018.md            |  64 +++++----
+ docs/requirements/REQ-019.md            |  67 +++++----
+ docs/requirements/REQ-020.md            |  78 ++++++-----
+ docs/requirements/REQ-021.md            |  70 +++++-----
+ docs/requirements/REQ-023.md            |  48 ++++---
+ docs/requirements/REQ-024.md            |  72 +++++-----
+ docs/requirements/REQ-025.md            |  81 ++++++-----
+ docs/requirements/REQ-027.md            |  86 ++++++------
+ docs/requirements/REQ-028p.md           |  69 ++++-----
+ docs/requirements/REQ-029.md            |  68 +++++----
+ docs/requirements/REQ-030.md            |  86 ++++++------
+ docs/requirements/REQ-031.md            |  65 +++++----
+ docs/requirements/REQ-032.md            |  56 ++++----
+ docs/requirements/REQ-034.md            |  68 +++++----
+ docs/requirements/REQ-035.md            |  84 ++++++-----
+ docs/requirements/REQ-036.md            |  69 +++++----
+ docs/requirements/REQ-037.md            |  45 +++---
+ docs/requirements/REQ-038.md            |  63 +++++----
+ docs/requirements/REQ-039.md            | 138 +++++++++---------
+ docs/requirements/REQUIREMENTS_INDEX.md |  36 ++---
+ docs/requirements/_templates/plan.md    |  21 +++
+ docs/requirements/_templates/req.md     |  47 +++++++
+ docs/requirements/_templates/scn.md     |  20 +++
+ 46 files changed, 2594 insertions(+), 1129 deletions(-)

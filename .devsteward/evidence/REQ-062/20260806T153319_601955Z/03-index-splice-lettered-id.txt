@@ -1,0 +1,13 @@
+=== REQUIREMENTS_INDEX.md section headers (Planned/Scenarios preserved) ===
+1:# Requirements Index — Memzy
+42:## Planned (spawned by REQ-001 roadmap, not yet written)
+64:## Scenarios
+
+=== REQ-028p lettered id present + referenced ===
+docs/requirements/REQ-028p.md
+29:| REQ-027 | Per-teacher Anki export — write a .apkg of a selected Korb (lemma/translation, own tags, no structure) | done | [REQ-027](REQ-027.md) | REQ-001, REQ-008, REQ-016, REQ-019, REQ-020, REQ-028p, REQ-029, REQ-031 |
+30:| REQ-028p | Persistent cart (the "Korb") — promote the ephemeral selection to a named, server-side, owner-scoped surface | done | [REQ-028p](REQ-028p.md) | REQ-001, REQ-021 |
+34:| REQ-032 | Teacher console workflows — user-story catalogue (drives the UI-concept REQ) | done | [REQ-032](REQ-032.md) | REQ-001, REQ-007, REQ-021, REQ-028p |
+59:| REQ-028 | Persistent, shareable cart (the "Korb") — **umbrella, split into 028p / 028s.** Promote REQ-021's ephemeral cart to a named, server-side, owner-scoped surface (upstream of VocabSet; sinks = tag / assign / share); teacher-to-teacher share link/message (optionally email) with a free-text note that materialises the selection into the recipient's own cart as a copy; enforces references-only (the sharer's tags **and** overlays never travel) (SCN-005). |
+60:| REQ-028p | **Cart persistence (Wave A — authored, see table above).** The named, server-side, owner-scoped `SavedCart` + save/load/manage; sinks unchanged (tag / assign). Needs REQ-021. Substrate for REQ-028s. |
+61:| REQ-028s | **Cart sharing (Wave B).** Teacher-to-teacher share link/message/(email) + free-text note, materialise-into-recipient's-cart as a copy, references-only strip (tags **and** overlays never travel). Needs REQ-028p, REQ-014d, REQ-031 (SCN-005). |

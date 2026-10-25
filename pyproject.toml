@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "devsteward"
-version = "0.1.0"
+version = "0.2.0"
 description = "DevSteward — a controlled baseline + automation engine for Claude Code projects"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -17,6 +17,8 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0"]
+# REQ-097: the status dashboard is opt-in — a headless engine has no use for a web framework.
+dashboard = ["flask>=3,<4", "markdown>=3.5"]
 
 [project.scripts]
 steward = "devsteward.cli:main"
@@ -35,6 +37,7 @@ devsteward = [
     "templates/.devsteward/**/*",
     "handbook/**/*",
     "schema/**/*",
+    "dashboard/templates/*",
 ]
 
 [tool.pytest.ini_options]

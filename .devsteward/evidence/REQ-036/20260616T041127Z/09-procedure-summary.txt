@@ -1,0 +1,32 @@
+## REQ-036 AC5 — live-consumer (FlowSteward) validation procedure summary
+## captured 2026-06-16T04:39:59Z by /system-test --guided
+
+### Precondition deviations from AC5 text (for human verdict)
+- AC5 names the *system-test* skill as the stale one. In reality system-test was
+  already hand-refreshed (REQ-034 AC6 note) and is IDENTICAL to template.
+  The live drifted skill is *advance* (tpl 5670a7e2 vs stamped 189202c1).
+- FlowSteward has NO skills.lock at stamp time (predates REQ-036 lock-seeding),
+  so with no provenance baseline status bucketed advance as *customized*, not *stale*.
+
+### Procedure run
+1. steward status (BEFORE) -> '⚠ advance customized — run steward sync-skills' (non-blocking). drift SURFACED, not silent.
+2. steward sync-skills (no --force) -> '⚠ advance: customized — left untouched (use --force to overwrite)'. refusal honored.
+3. steward sync-skills --force -> '✓ advance: refreshed (--force; backup .../SKILL.md.orig)'.
+4. steward status (AFTER) -> no skills drift line. advance now in-sync.
+
+### Outcome facts
+- advance stamped hash AFTER  = 5670a7e2...a73728  (== installed template) -> BYTE-MATCH ✓
+- backup .claude/skills/advance/SKILL.md.orig (7599 B, old customized bytes) created ✓
+- .devsteward/skills.lock created and records advance's template hash ✓
+
+### ANOMALY (capture, not repair)
+- skills.lock contains ONLY {"advance": ...}. bootstrap/intake/system-test (present, in-sync)
+  got NO lock entry. So their provenance baseline is still absent: if the template later
+  advances those three, status will again bucket them *customized* (no lock) rather than *stale*.
+  sync-skills on a lock-less legacy consumer recorded only the skill it touched; it did not
+  backfill provenance for the already-in-sync skills. Decision 2/5 imply a fully-populated lock.
+
+### git working-tree state of FlowSteward after procedure
+ M .claude/skills/advance/SKILL.md
+?? .claude/skills/advance/SKILL.md.orig
+?? .devsteward/skills.lock

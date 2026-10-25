@@ -1,0 +1,60 @@
+===== DriveSteward (a69c4ff) =====
+a69c4ffafa2f0f5ec36d61cb2792bdcc499a8b3d REQ-091: restore the per-step model policy REQ-090's refactor deleted
+
+ .devsteward/config.yaml | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+===== ai-service (7eca76f) =====
+7eca76fbe0018de1cab45eb858ea6745b11bfd1d REQ-091: restore the per-step model policy REQ-090's refactor deleted
+
+ .devsteward/config.yaml | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+===== clauder (42431dd) =====
+42431ddb191f41a84dd39317180b6a95b33a5171 REQ-091: restore the per-step model policy REQ-090's refactor deleted
+
+ .devsteward/config.yaml | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+===== Wandthermostat (f0ea9ab) =====
+f0ea9ab2ea7044ec7d47de87d3b553be972c51e4 REQ-091: restore the per-step model policy REQ-090's refactor deleted
+
+ .devsteward/config.yaml | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+===== hausverwaltung (acabc75) =====
+acabc756e2ff210506edc5038ee17fdaddff5e56 REQ-091: restore the per-step model policy REQ-090's refactor deleted
+
+ .devsteward/config.yaml | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+===== memzy (52c3a52) =====
+52c3a528442bc1053a6455567346ded53d66159f REQ-091: restore the per-step model policy REQ-090's refactor deleted
+
+ .devsteward/config.yaml | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+===== devsteward-test-lab (e1bc16e) =====
+e1bc16e886af93baff2780b3d520b85f8254bc32 REQ-091: restore the per-step model policy REQ-090's refactor deleted
+
+ .devsteward/config.yaml | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+===== docsteward (b28d1ae) =====
+b28d1aeca78e173adee2dc17a164d7b6d46e72ba REQ-091: restore the per-step model policy REQ-090's refactor deleted
+
+ .devsteward/config.yaml | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+===== THermo (d8a0a9f) =====
+d8a0a9f1970b91c6f19c12277a2de31d19cffbcf REQ-091: restore the per-step model policy REQ-090's refactor deleted
+
+ .devsteward/config.yaml | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+===== flowsteward (936a1c0) =====
+936a1c09978d0d49066b6d274e27db4badb83a4a REQ-091: pin the flat model and give repair its cheap tier back
+
+ .devsteward/config.yaml | 13 ++++++++++---
+ 1 file changed, 10 insertions(+), 3 deletions(-)
+

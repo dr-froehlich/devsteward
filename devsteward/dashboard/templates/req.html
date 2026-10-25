@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}{{ req.id }} — {{ p.name }}{% endblock %}
+{% block crumbs %}<span class="muted">›</span> <a href="{{ url_for('project', name=p.name) }}">{{ p.name }}</a> <span class="muted">›</span> <span class="mono">{{ req.id }}</span>{% endblock %}
+{% block body %}
+<h1 class="mono">{{ req.id }}</h1>
+<p><strong>{{ req.title }}</strong></p>
+<table style="max-width:980px">
+  {% for key, value in req.frontmatter.items() if key not in ('id', 'title') %}
+  <tr><th class="nowrap" style="width:11rem">{{ key }}</th><td class="mono small">{{ value }}</td></tr>
+  {% endfor %}
+</table>
+{% if req.acceptance %}
+<h2>Acceptance criteria</h2>
+<table style="max-width:980px">
+  <tr><th>ID</th><th>Check</th><th>Status</th><th>Criterion</th></tr>
+  {% for ac in req.acceptance %}
+  <tr><td class="mono nowrap">{{ ac.id }}</td><td class="nowrap">{{ ac.check }}</td><td class="nowrap">{{ ac.status }}</td>
+      <td>{{ ac.text }}<div class="small muted mono" style="margin-top:.2rem">{{ ac.test }}</div></td></tr>
+  {% endfor %}
+</table>
+{% endif %}
+<h2>Text <span class="muted small">(read-only — a REQ moves only with its code, in one commit)</span></h2>
+<div class="prose">{{ body|safe }}</div>
+{% endblock %}

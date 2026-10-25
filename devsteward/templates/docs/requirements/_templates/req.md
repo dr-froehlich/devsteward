@@ -11,6 +11,9 @@ concept_refs: []
 scenario_refs: []        # [SCN-001, ...]
 supersedes: null
 tags: []
+# process:               # optional (REQ-027) — omit when every value is the default
+#   concept: false       # concept phase (risk buy-down / spike) before develop?
+#   lab: []              # REQs owning lab assets the System-Test phase requires
 ---
 
 ## Context
@@ -34,6 +37,7 @@ notes. Sub-sections as needed.
 - id: AC1
   text: A human-readable statement of one acceptance criterion.
   test: "pytest tests/test_thing.py::test_specific_behaviour"
+  check: regression      # regression | artifact | manual — the V-model routing key
   status: pending        # pending | pass | fail  (engine-owned — do not hand-edit)
 ```
 

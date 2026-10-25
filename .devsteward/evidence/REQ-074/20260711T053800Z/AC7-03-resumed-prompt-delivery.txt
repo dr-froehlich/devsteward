@@ -1,0 +1,20 @@
+=== base command ===
+/advance REQ-999 develop
+
+=== appended fork-delivery brief (what the resumed session's prompt carries) ===
+
+
+A fork parked on this step was decided by the operator (DEC-001):
+Question: Retry policy for the flaky webhook call in the gate-demo lab — exponential backoff or fixed-interval retry?
+Choice: exponential backoff (5 retries max, cap 30s)
+Rationale: exponential backoff (5 retries max, cap 30s)
+Honor this decision; do not re-open the fork.
+
+=== full resumed command ===
+/advance REQ-999 develop
+
+A fork parked on this step was decided by the operator (DEC-001):
+Question: Retry policy for the flaky webhook call in the gate-demo lab — exponential backoff or fixed-interval retry?
+Choice: exponential backoff (5 retries max, cap 30s)
+Rationale: exponential backoff (5 retries max, cap 30s)
+Honor this decision; do not re-open the fork.

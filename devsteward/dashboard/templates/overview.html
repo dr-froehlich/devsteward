@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}DevSteward — projects{% endblock %}
+{% block crumbs %}<span class="root">{{ root }}</span>{% endblock %}
+{% block body %}
+<h1>Projects</h1>
+
+<h2>Needs me <span class="badge">{{ needs|length }}</span></h2>
+{% if needs %}
+<table>
+  <tr><th>Project</th><th>What</th><th>Where</th><th>Waiting on</th><th>Your move</th></tr>
+  {% for a in needs %}
+  <tr>
+    <td><a href="{{ url_for('project', name=a.project) }}">{{ a.project }}</a></td>
+    <td class="k-{{ a.kind }} nowrap">{{ a.kind }}</td>
+    <td class="mono">{{ a.ref }}</td>
+    <td>{{ a.text }}</td>
+    <td>{% if a.hint %}<code>{{ a.hint }}</code>{% endif %}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% else %}<p class="muted">Nothing waits on you.</p>{% endif %}
+
+<h2>Stamped projects <span class="badge">{{ projects|length }}</span></h2>
+<table>
+  <tr>
+    <th>Project</th><th>Branch</th><th class="right">Dirty</th><th class="right">Unpushed</th><th class="right">dev → main</th><th>Last commit</th>
+    <th>Steward</th><th>Backlog</th>
+  </tr>
+  {% for p in projects %}
+  <tr>
+    <td><a href="{{ url_for('project', name=p.name) }}"><strong>{{ p.name }}</strong></a>
+        {% if p.error %}<div class="err small">{{ p.error }}</div>{% endif %}</td>
+    {% if p.git %}
+      <td class="mono">{{ p.git.branch }}{% if p.git.remote is none %} <span class="badge">no remote</span>{% endif %}</td>
+      <td class="right">{% if p.git.dirty %}<span class="warn">{{ p.git.dirty }}</span>{% else %}<span class="muted">0</span>{% endif %}</td>
+      <td class="right">{% if p.git.unpushed is none %}<span class="muted">—</span>{% elif p.git.unpushed %}<span class="warn">{{ p.git.unpushed }}</span>{% else %}0{% endif %}</td>
+      <td class="right">{% if p.git.gap is none %}<span class="muted">—</span>{% else %}{{ p.git.gap }}{% endif %}</td>
+      <td class="small">{{ p.git.age }} ago <span class="muted mono">{{ p.git.head }}</span> <span class="muted">{{ p.git.subject|truncate(48) }}</span></td>
+    {% else %}<td colspan="5" class="muted">not a git repository</td>{% endif %}
+    <td class="small">
+      {% if p.joint_only %}<span class="badge">joint-only participant</span>
+      {% elif p.status %}
+        {% if p.status.terminal %}<span class="muted">{{ p.status.terminal }}</span>{% else %}
+          {% for s in p.status.steps %}<span class="s-{{ s.status }} nowrap">{{ s.mark }} {{ s.id }}{% if s.eligible %} <span class="badge">eligible</span>{% endif %}</span><br>{% endfor %}
+        {% endif %}
+        {% if p.status.decisions %}<span class="warn">⏸ {{ p.status.decisions|length }} parked fork(s)</span><br>{% endif %}
+        {% if p.status.drift %}<span class="warn">⚠ {{ p.status.drift|length }} stamped artifact(s) drifted</span>{% endif %}
+      {% endif %}
+    </td>
+    <td class="small">
+      {% if p.joint_only %}<span class="muted">—</span>
+      {% elif p.backlog_error %}<span class="err">{{ p.backlog_error }}</span>
+      {% elif p.backlog %}{% for state, n in p.backlog_counts.items() %}<span class="badge b-{{ state }}">{{ n }} {{ state }}</span> {% endfor %}
+      {% else %}<span class="muted">none</span>{% endif %}
+    </td>
+  </tr>
+  {% endfor %}
+</table>
+
+{% if unstamped %}
+<h2>Not stamped <span class="badge">{{ unstamped|length }}</span></h2>
+<p class="muted small">Folders under the root without a <code>.devsteward/</code> ledger — listed for information only.</p>
+<ul class="plain small">{% for r in unstamped %}<li class="mono muted">{{ r.name }}</li>{% endfor %}</ul>
+{% endif %}
+{% endblock %}

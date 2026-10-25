@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 from datetime import date
@@ -10,12 +11,19 @@ from pathlib import Path
 
 import click
 
-from . import __version__
+from . import __version__, cache as cache_mod, skillsync
 from .build import build_executor
-from .config import Config, ProjectNotFound, load_config
+from .config import JOINT_PROFILE, Config, ProjectNotFound, load_config
+from .core import claude as claude_mod
+from .core.errors import StewardError
 from .core.executor import RunOutcome, StepResult
-from .core.ledger import Ledger
-from .core.model import StepStatus
+from .core.invariants import check_invariants
+from .core.ledger import LEDGER_DIRNAME, Ledger
+from .core.stop import StopController
+from .core.model import DecisionStatus, StepStatus
+from .core.transaction import transaction
+from . import verbs
+from .lifecycle import LifecycleError
 from .lint import lint as run_lint
 
 
@@ -23,14 +31,58 @@ def _package_templates() -> Path:
     return Path(str(files("devsteward"))) / "templates"
 
 
-def _load_or_die() -> Config:
+def _load_or_die(*, joint: bool = False) -> Config:
+    """The enclosing project's config — refused on a joint-only participant unless ``joint``.
+
+    A joint-only participant (REQ-102) runs the joint verbs and nothing of the REQ workflow.
+    Refusing is the default, so a verb is joint-capable only where it says so: a REQ verb
+    added later cannot reach into such a repository by forgetting this rule.
+    """
     try:
-        return load_config()
+        cfg = load_config()
     except ProjectNotFound as exc:
         raise click.ClickException(str(exc)) from exc
+    if cfg.joint_only and not joint:
+        ctx = click.get_current_context(silent=True)
+        verb = ctx.info_name if ctx is not None else "this verb"
+        raise click.ClickException(
+            f"{cfg.root.name} is a joint-only participant (profile: {JOINT_PROFILE}): "
+            f"`steward {verb}` belongs to the REQ workflow, which does not run here — "
+            "joint tasks: `steward joint-list`"
+        )
+    return cfg
 
 
-@click.group()
+class _StewardCLI(click.Group):
+    """The single top-level transaction-error handler (REQ-049).
+
+    Every mutating command runs inside the universal boundary; a :class:`PreconditionError`
+    (the command refused to start) or :class:`RecoverableError` (a mutation failed and was
+    rolled back) is caught *here*, once, and printed as a one-line failure plus its operator
+    ``recovery`` — never a raw traceback. A bare ``CalledProcessError` reaching this layer is
+    itself a bug — a mutation that escaped the boundary — so it is surfaced loudly.
+    """
+
+    def invoke(self, ctx):
+        try:
+            return super().invoke(ctx)
+        except StewardError as exc:
+            click.echo(click.style(f"✗ {exc}", fg="red"), err=True)
+            click.echo(click.style(f"  recovery: {exc.recovery}", fg="yellow"), err=True)
+            raise SystemExit(1) from exc
+        except subprocess.CalledProcessError as exc:
+            click.echo(
+                click.style(
+                    f"✗ a git command failed and escaped the transaction boundary (a bug — "
+                    f"please report): {exc}",
+                    fg="red",
+                ),
+                err=True,
+            )
+            raise SystemExit(1) from exc
+
+
+@click.group(cls=_StewardCLI)
 @click.version_option(__version__, prog_name="steward")
 def main() -> None:
     """DevSteward — drive a Claude Code project from its requirements ledger."""
@@ -44,8 +96,16 @@ def main() -> None:
 @click.option("--profile", default="req", show_default=True, help="Ledger profile.")
 @click.option("--force", is_flag=True, help="Stamp into a non-empty directory.")
 def new(target: Path, profile: str, force: bool) -> None:
-    """Stamp the bundled scaffolding into a new (private) consumer project at TARGET."""
+    """Stamp the bundled scaffolding into a new (private) consumer project at TARGET.
+
+    With `--profile joint` it instead declares TARGET a joint-only participant (REQ-102): it
+    writes `.devsteward/config.yaml` and nothing else, into an existing repository as well, so
+    a repository the REQ workflow does not govern can take part in joint tasks.
+    """
     target = target.resolve()
+    if profile == JOINT_PROFILE:
+        _join(target)
+        return
     if target.exists() and any(target.iterdir()) and not force:
         raise click.ClickException(f"{target} is not empty (use --force to stamp anyway)")
     src = _package_templates()
@@ -54,8 +114,35 @@ def new(target: Path, profile: str, force: bool) -> None:
 
     stamped = _stamp(src, target)
     Ledger.init(target, profile=profile)
+    # REQ-036 Decision 5: seed the provenance manifest so drift is measured from the
+    # honest baseline — the template hash each bundled skill was actually stamped from.
+    skillsync.seed_lock(target, src)
     click.echo(f"Stamped {stamped} files into {target}")
     click.echo("Next: cd in, run `/bootstrap` (interview) or edit REQ-001 and `steward lint`.")
+
+
+_JOINT_CONFIG = (
+    "# A joint-only participant (DevSteward REQ-102): this repository takes part in joint\n"
+    "# tasks with the DevSteward projects beside it. It runs no REQ workflow; nothing else of\n"
+    "# the engine's belongs here but this file and its own joint.jsonl.\n"
+    f"profile: {JOINT_PROFILE}\n"
+)
+
+
+def _join(target: Path) -> None:
+    """`steward new --profile joint`: write only the joint-only declaration (REQ-102 Decision 3).
+
+    No `--force` is needed in a non-empty folder — joining is done to an existing repository,
+    and nothing here overwrites a file. An existing `.devsteward/` is refused: the folder is
+    already a participant, governed or not.
+    """
+    ledger_dir = target / LEDGER_DIRNAME
+    if ledger_dir.exists():
+        raise click.ClickException(f"{ledger_dir} already exists — {target.name} already takes part")
+    ledger_dir.mkdir(parents=True)
+    (ledger_dir / "config.yaml").write_text(_JOINT_CONFIG, encoding="utf-8")
+    click.echo(f"Joined {target} as a joint-only participant (profile: {JOINT_PROFILE}).")
+    click.echo("It takes part in joint tasks (`steward joint-list`); the REQ workflow does not run there.")
 
 
 # Placeholders `steward new` resolves itself (not interview-dependent). Everything else
@@ -70,6 +157,11 @@ def _stamp(src: Path, dst: Path) -> int:
     for path in sorted(src.rglob("*")):
         rel = path.relative_to(src)
         out = dst / rel
+        # REQ-084: an operator-only skill (`onboard`) shares the template tree because that
+        # tree is also DevSteward's own `.claude/skills`, but it is not consumer scaffolding
+        # — a stamped project is already onboarded. Skip the directory and its contents.
+        if skillsync.is_operator_only(rel):
+            continue
         if path.is_dir():
             out.mkdir(parents=True, exist_ok=True)
             continue
@@ -77,6 +169,17 @@ def _stamp(src: Path, dst: Path) -> int:
             out = out.with_name(out.name[: -len(".tmpl")])
         out.parent.mkdir(parents=True, exist_ok=True)
         data = path.read_bytes()
+        # REQ-036/066: engine-owned stamped artifacts (the bundled skills and the root
+        # STEWARD.md manual) are pure engine *behavior* and must byte-match the template they
+        # were stamped from (the drift model's whole premise) — copy them verbatim, never
+        # substituting. A skill like bootstrap carries `{{TODAY}}` as literal instruction
+        # text, so substituting there would both corrupt the instruction and break every
+        # drift comparison.
+        is_skill = rel.parts[: len(skillsync.SKILLS_RELDIR.parts)] == skillsync.SKILLS_RELDIR.parts
+        if is_skill or rel == Path(skillsync.MANUAL_FILENAME):
+            out.write_bytes(data)
+            count += 1
+            continue
         try:
             text = data.decode("utf-8")
         except UnicodeDecodeError:
@@ -95,7 +198,10 @@ def _stamp(src: Path, dst: Path) -> int:
 @main.command()
 def lint() -> None:
     """Schema-validate REQs; deps resolve; index↔REQ in sync; every AC has a test id."""
-    cfg = _load_or_die()
+    cfg = _load_or_die(joint=True)
+    if cfg.joint_only:  # REQ-102: no REQ corpus to lint
+        click.echo(click.style("lint: OK (joint-only participant — no REQ corpus to lint)", fg="green"))
+        return
     problems = run_lint(cfg)
     if not problems:
         click.echo(click.style("lint: OK", fg="green"))
@@ -105,20 +211,233 @@ def lint() -> None:
     raise click.ClickException(f"{len(problems)} problem(s)")
 
 
+# -- cache (session prompt-cache warmth) --------------------------------------
+
+
+@main.command()
+@click.option(
+    "--ttl",
+    "ttl_minutes",
+    type=int,
+    metavar="MINUTES",
+    default=cache_mod.DEFAULT_TTL_MINUTES,
+    show_default=True,
+    help="Assumed prompt-cache TTL in minutes (pass 5 when a usage-limit overage applies).",
+)
+@click.pass_context
+def cache(ctx: click.Context, ttl_minutes: int) -> None:
+    """Is this project's Claude session still cache-warm? (0 = warm, 1 = cold, 2 = none.)
+
+    Reports how long ago the newest Claude Code session transcript for this project was
+    written, and whether the prompt cache is warm under the assumed TTL (REQ-082). The
+    verdict is computed purely from the filesystem — the newest transcript's mtime under
+    `$CLAUDE_PROJECTS_DIR/<slug>/` (default `~/.claude/projects/`) — so running it from a
+    second shell never touches the session or its cache, which asking inside the session
+    would. Read-only and ledger-free: it works in any directory and writes nothing.
+    """
+    report = cache_mod.probe(ttl_minutes=ttl_minutes)
+    if not report.found:
+        click.echo(
+            click.style(
+                f"no Claude session transcript for this project — looked in "
+                f"{report.session_dir}",
+                fg="yellow",
+            ),
+            err=True,
+        )
+        ctx.exit(report.exit_code)
+    verdict = (
+        click.style("WARM", fg="green") if report.warm else click.style("cold", fg="red")
+    )
+    click.echo(
+        f"{report.session_id}  last write {report.age_minutes:.0f}m ago  "
+        f"{verdict} (ttl {report.ttl_minutes}m)"
+    )
+    click.echo(click.style(cache_mod.INVALIDATION_CAVEAT, fg="yellow"))
+    ctx.exit(report.exit_code)
+
+
+# -- lifecycle (activate / repeat / rework) --------------------------------------------
+
+
+@main.command()
+@click.argument("req_id")
+def activate(req_id: str) -> None:
+    """Flip REQ_ID from draft (or dropped) to open, syncing its index row; uncommitted.
+
+    One verb for one logical action — it edits the REQ frontmatter and the
+    ``REQUIREMENTS_INDEX.md`` row in lockstep so ``steward lint`` stays green, leaving both
+    files for you to commit deliberately. Refuses done/superseded REQs (supersede instead).
+    """
+    cfg = _load_or_die()
+    # REQ-097 Decision 5: one body per verb, shared with the dashboard (devsteward.verbs).
+    try:
+        res = verbs.activate(cfg, req_id)
+    except LifecycleError as exc:
+        raise click.ClickException(str(exc)) from exc
+    color = "green" if res.changed else "yellow"
+    click.echo(click.style(res.message, fg=color))
+
+
+@main.command()
+@click.argument("req_id")
+def repeat(req_id: str) -> None:
+    """Run REQ_ID's stopped step again — the engine reads the ledger for what stopped it.
+
+    One of the operator's two recovery moves (REQ-098): *again*. It re-arms whatever stopped
+    the REQ, so you never have to recognise a ledger state and pick a verb for it —
+
+    \b
+      a FAILED step            -> RECOVER, its partial tree left intact for the next attempt
+      a validate step on a RED -> PENDING, re-running only the red ACs (the greens carry
+                                  forward with provenance; develop stays done)
+      a validate step on a HOLD-> PENDING, hold cleared, a full re-run at `steward validate`
+      a validate step FAILED by a land-gate refusal after a GREEN validation
+                               -> the recorded green is replayed and the REQ lands, with no
+                                  session and no re-prompting
+
+    Touches no git except on that last branch, which commits the land it replays. Fails
+    (non-zero) when nothing stopped. To go *back* a step instead, use `steward rework REQ_ID`.
+    """
+    cfg = _load_or_die()
+    ctrl = StopController()
+    ctrl.install()
+    try:
+        res = verbs.repeat(cfg, req_id, announce=_stderr_announcer, stop=ctrl)
+    except LifecycleError as exc:
+        raise click.ClickException(str(exc)) from exc
+    if res.land is not None:
+        _print_report(res.ex, res.land)
+        return
+    if "recover" in res.kinds:
+        click.echo(
+            click.style(
+                f"repeating {req_id}: {', '.join(res.recovered)} -> recover. Re-run "
+                f"`steward run` to re-attempt.",
+                fg="green",
+            )
+        )
+    if "revalidate" in res.kinds:
+        where = f" (evidence: {res.evidence})" if res.evidence else ""
+        click.echo(
+            click.style(
+                f"repeating {req_id}: {req_id}:validate -> pending (develop stays done)"
+                f"{where}. Re-run `steward validate {req_id}` to re-validate.",
+                fg="green",
+            )
+        )
+        # REQ-089 Decision 7: the carry is unconditional, so make it *visible* — the operator
+        # sees what the resumed validation will not re-walk before it starts.
+        if res.carried:
+            click.echo(
+                "carried forward (not re-walked): "
+                + ", ".join(f"{c['ac']} [{c['check']}]" for c in res.carried)
+            )
+            click.echo(f"re-opening only: {', '.join(res.scope) or '(nothing — all green)'}")
+    if "unhold" in res.kinds:
+        click.echo(
+            click.style(
+                f"repeating {req_id}: {req_id}:validate -> pending (hold cleared). Re-run "
+                f"`steward validate {req_id}` for a full re-run.",
+                fg="green",
+            )
+        )
+
+
+@main.command()
+@click.argument("req_id")
+@click.option(
+    "--reason", default=None,
+    help="Why it goes back — the resuming session's repair context when no red validation "
+         "left an evidence dir. Optional: the verb never blocks on prose.",
+)
+def rework(req_id: str, reason: str | None) -> None:
+    """Send REQ_ID's validation back to develop — the other of the two moves: *back*.
+
+    The human-authorized return edge of the V-model (REQ-033), widened by REQ-098 to **any
+    unfinished validate state**: never started, held on a `manual` AC awaiting its oracle,
+    parked on a red, or failed. It flips REQ_ID:develop to RECOVER and REQ_ID:validate back
+    to PENDING (clearing any hold), answers any parked decision, and records a `rework`
+    event. Touches no git and no REQ file.
+
+    Its `brief` is --reason when you give one, else the red validation's failure brief, else
+    a fixed line — so the resuming `/advance` session always has some repair context. A red
+    additionally carries its evidence dir. Refuses on a done REQ (supersede instead), a REQ
+    with no validate step, a develop step that is not closed, and a validation in flight.
+
+    REQ-089: every AC a red validation recorded green is **carried forward** with its
+    provenance, so the re-validation re-opens only what was red — a long manual walkthrough
+    is not re-walked because of a code fix elsewhere. The carried ACs are printed here.
+    """
+    cfg = _load_or_die()
+    try:
+        res = verbs.rework(cfg, req_id, reason=reason)
+    except LifecycleError as exc:
+        raise click.ClickException(str(exc)) from exc
+    where = f" (evidence: {res.evidence})" if res.evidence else ""
+    click.echo(
+        click.style(
+            f"reworking {req_id}: {res.develop_step} -> recover, {res.validate_step} -> "
+            f"pending (was {res.from_status}){where}. Re-run `steward run` to fix and "
+            f"re-validate.",
+            fg="green",
+        )
+    )
+    click.echo(f"repair context: {res.brief.splitlines()[0]}")
+    # REQ-089 Decision 7: the carry is unconditional, so make it *visible* — the operator
+    # sees what the resumed validation will not re-walk before it starts.
+    if res.carried:
+        click.echo(
+            "carried forward (not re-walked): "
+            + ", ".join(f"{c['ac']} [{c['check']}]" for c in res.carried)
+        )
+        click.echo(f"re-opening only: {', '.join(res.scope) or '(nothing — all green)'}")
+
+
 # -- status -------------------------------------------------------------------
 
 
 @main.command()
 def status() -> None:
     """Show the ledger cursor, eligible/blocked steps, and parked decisions."""
-    cfg = _load_or_die()
+    cfg = _load_or_die(joint=True)
+    if cfg.joint_only:
+        # REQ-102 Decision 2: no ledger, no steps, and above all no drift lines — a `steward
+        # sync` offered here would stamp the REQ workflow into a repository that must not have it.
+        click.echo(f"profile: {cfg.profile}")
+        click.echo(
+            f"{cfg.root.name} is a joint-only participant: it takes part in joint tasks "
+            "(`steward joint-list`) and runs no REQ workflow."
+        )
+        return
     ex = build_executor(cfg)
-    led = ex.ledger
-    click.echo(f"profile: {led.profile}    cursor: {led.cursor_step or '—'}")
-
+    # REQ-040 Decision 1: bind the read path too — from another checked-out branch (e.g.
+    # `main`) an unbound read returns a stale snapshot, not the live integration-branch cursor.
+    led = ex.live_ledger()
     steps = ex.steps()
+    # REQ-060: the cursor orients toward pending work, so surface it only while it still
+    # names a step the engine derives (an active REQ). A cursor pinned to a *done* step the
+    # engine refuses to derive is strictly misleading — suppress it in favour of the honest
+    # terminal line below rather than echo the last finished step.
+    cursor = led.cursor_step
+    if cursor and cursor in {s.id for s in steps}:
+        click.echo(f"profile: {led.profile}    cursor: {cursor}")
+    else:
+        click.echo(f"profile: {led.profile}")
+
     if not steps:
-        click.echo("no active steps (all requirements done, draft, or none defined).")
+        # REQ-060: a caught-up project names its forward path (the [[REQ-056]] principle
+        # applied to the *done* terminal) — activation when drafts are waiting, else
+        # `/intake` for the next REQ — instead of the bare "no active steps" dead-end.
+        from .profiles.req.reqfile import load_reqs
+
+        if any(r.status == "draft" for r in load_reqs(cfg.req_dir)):
+            click.echo(
+                "all active requirements done — activate a waiting draft with "
+                "`steward activate REQ-NNN`."
+            )
+        else:
+            click.echo("all requirements done — nothing to do; add the next with `/intake`.")
     else:
         eligible = {s.id for s in ex.eligible_steps()}
         click.echo("\nsteps:")
@@ -128,31 +447,666 @@ def status() -> None:
                 StepStatus.DONE: click.style("✓", fg="green"),
                 StepStatus.BLOCKED: click.style("⏸", fg="yellow"),
                 StepStatus.FAILED: click.style("✗", fg="red"),
+                StepStatus.RECOVER: click.style("↻", fg="magenta"),
                 StepStatus.RUNNING: click.style("…", fg="cyan"),
             }.get(st, "•")
             tag = click.style(" (eligible)", fg="cyan") if s.id in eligible else ""
-            click.echo(f"  {mark} {s.id:<22} {st.value}{tag}")
+            # REQ-030 Decision 7: a validate step held by an undone lab REQ says so.
+            # REQ-074: a live ledger hold (a non-fork wait naming its own verb) takes
+            # precedence over the static profile note.
+            note = ""
+            hold = led.hold_note(s.id) if st is StepStatus.BLOCKED else ""
+            if hold:
+                note = click.style(f"  ⏳ {hold.splitlines()[0]}", fg="yellow")
+                # REQ-098: a held or red validate step is stopped, so it names the two
+                # moves — beside (never instead of) the hold's own forward path, which for
+                # a `manual`-AC await is still `steward validate` (Decision 6).
+                if s.phase == "validate":
+                    who = s.req or s.id.split(":", 1)[0]
+                    note += click.style(
+                        f"  → steward repeat {who}  |  steward rework {who}", fg="magenta"
+                    )
+            elif s.blocked_note and s.id not in eligible and st is not StepStatus.DONE:
+                note = click.style(f"  ⏳ {s.blocked_note}", fg="yellow")
+            elif st is StepStatus.FAILED:
+                # REQ-056 Decision 4: a FAILED step names its own forward verb. D, H, and the
+                # pre-existing FAILED states (A/B/G) now carry the next-action hint the parked
+                # -decision line used to give — `steward repeat REQ` re-runs against the tree.
+                note = click.style(f"  → steward repeat {s.req or s.id}", fg="red")
+            click.echo(f"  {mark} {s.id:<22} {st.value}{tag}{note}")
 
     decisions = led.open_decisions()
     if decisions:
-        click.echo(click.style("\nparked decisions:", fg="yellow"))
+        click.echo(click.style("\nparked forks:", fg="yellow"))
         for d in decisions:
             click.echo(f"  {d.id} [{d.step}] {d.question}")
+        click.echo(
+            "  resolve in a guided session: `steward decide DEC-NNN` (plain shell)"
+        )
+
+    # REQ-036 Decision 3 / REQ-066 Decision 3: a stamped engine-owned artifact (a bundled
+    # skill or the STEWARD.md manual) drifting from the installed engine is an informational
+    # warning — visible (the fix for "silent"), never a blocking gate; the hint names the
+    # generalized `steward sync` verb.
+    drifted = skillsync.drift(cfg.root, _package_templates(), cfg.requirements_dir)
+    if drifted:
+        click.echo(click.style("\nstamped artifacts:", fg="yellow"))
+        for d in drifted:
+            click.echo(
+                click.style(f"  ⚠ {d.name:<14} {d.bucket.value}", fg="yellow")
+                + "  — run `steward sync`"
+            )
 
 
-# -- advance (attended) -------------------------------------------------------
+# -- dashboard (REQ-097) ------------------------------------------------------
 
 
 @main.command()
-@click.option("--use", type=int, default=None, help="Pin a claude-swap account index.")
-def advance(use: int | None) -> None:
-    """Attended: do exactly one checkpoint, then print the fixed report."""
+@click.option(
+    "--root", type=click.Path(file_okay=False, path_type=Path), default=None,
+    help="The directory whose children are the projects. Default: the parent of the "
+         "enclosing project, else the current directory.",
+)
+@click.option("--port", default=8765, show_default=True, help="Loopback port to serve on.")
+def dashboard(root: Path | None, port: int) -> None:
+    """Serve the status dashboard over every stamped project under --root (REQ-097).
+
+    One local page per box: each project's steward status and git facts, what waits on
+    you across all of them, each project's backlog with its derived states, and its REQs
+    (read-only). State changes on the page — repeat, rework, activate,
+    a decision answer, the backlog verdicts and edits — call the same functions the CLI
+    verbs call, with the same refusals. The page never spawns a Claude session: a session
+    command is shown for you to run in a shell.
+
+    Binds to 127.0.0.1 only. Needs the `dashboard` extra (flask, markdown); without it this
+    verb exits non-zero naming the install command.
+    """
+    import importlib.util
+
+    from .dashboard import INSTALL_HINT
+    from .projects import resolve_root
+
+    if importlib.util.find_spec("flask") is None:
+        raise click.ClickException(INSTALL_HINT)
+    from .dashboard.app import create_app
+
+    where = resolve_root(root)
+    template = (_package_templates() / "docs" / "BACKLOG.md").read_text(encoding="utf-8")
+    app = create_app(where, templates_root=_package_templates(), backlog_template=template)
+    click.echo(f"dashboard over {where}")
+    click.echo(click.style(f"  http://127.0.0.1:{port}/", fg="green") + "   (Ctrl-C to stop)")
+    app.run(host="127.0.0.1", port=port, debug=False, threaded=True)
+
+
+# -- sync (engine-owned stamped-artifact drift) -------------------------------
+
+
+@main.command("sync")
+@click.option(
+    "--force", is_flag=True,
+    help="Refresh a *customized* artifact too, backing the local copy up (.orig) first.",
+)
+def sync(force: bool) -> None:
+    """Refresh stale/missing engine-owned stamped artifacts from the template (REQ-036/066).
+
+    Covers the bundled skills, the root ``STEWARD.md`` manual, and the REQ template at
+    ``<requirements_dir>/_templates/req.md`` the stamped ``/intake`` writes from
+    (REQ-086). A *stale* artifact
+    (untouched since stamp, template advanced) or a *missing* one (e.g. a consumer that never
+    had ``STEWARD.md``) is refreshed to byte-match the installed engine and the provenance
+    lock updated. A *customized* artifact (edited locally) is left untouched and reported
+    unless ``--force`` is given, in which case its current bytes are backed up to
+    ``<name>.orig`` before the refresh. ``sync-skills`` is a back-compat alias.
+    """
+    cfg = _load_or_die(joint=True)
+    if cfg.joint_only:  # REQ-102: nothing of the engine's is stamped here, nor ever will be
+        click.echo("joint-only participant — no engine-owned artifacts are stamped here.")
+        return
+    res = skillsync.sync(
+        cfg.root, _package_templates(), cfg.requirements_dir, force=force
+    )
+    for name in res.synced:
+        click.echo(click.style(f"  ✓ {name}: refreshed (was stale)", fg="green"))
+    for name in res.forced:
+        click.echo(click.style(
+            f"  ✓ {name}: refreshed (--force; backup {res.backups[name]})", fg="green"
+        ))
+    for name in res.refused:
+        click.echo(click.style(
+            f"  ⚠ {name}: customized — left untouched (use --force to overwrite)", fg="yellow"
+        ))
+    if not res.changed and not res.refused:
+        click.echo(click.style("all engine-owned artifacts in-sync.", fg="green"))
+
+
+# REQ-066 Decision 3: keep the pre-rename verb working for muscle memory and any scripted or
+# documented `sync-skills` invocations (older stamped copies, handbook prose) — a true alias
+# to the same command, not a re-implementation.
+main.add_command(sync, name="sync-skills")
+
+
+# -- live progress ------------------------------------------------------------
+
+
+def _tool_summary(name: str, tool_input: dict) -> str:
+    """A short one-liner for a tool_use block, so progress lines stay scannable."""
+    for key in ("command", "file_path", "path", "pattern", "query", "url"):
+        val = tool_input.get(key)
+        if isinstance(val, str) and val:
+            val = " ".join(val.split())
+            return f" {val[:80]}{'…' if len(val) > 80 else ''}"
+    return ""
+
+
+def _stderr_announcer(msg: str) -> None:
+    """The account provider's visibility sink (REQ-025 D5): utilization, switches, and quota
+    waits go to stderr — the same channel as live progress — so account activity is visible."""
+    click.echo(click.style(f"⊟ {msg}", fg="magenta"), err=True)
+
+
+def _stream_printer():
+    """An ``on_event`` callback that renders live ``claude`` stream-json to stderr.
+
+    stdout is reserved for the final report, so progress goes to stderr — the user sees
+    Claude working in real time instead of a silent terminal.
+    """
+
+    def emit(ev: dict) -> None:
+        etype = ev.get("type")
+        if etype == "system" and ev.get("subtype") == "init":
+            model = ev.get("model", "")
+            click.echo(click.style(f"⟳ claude session started  {model}", fg="cyan"), err=True)
+        elif etype == "assistant":
+            for block in ev.get("message", {}).get("content", []):
+                btype = block.get("type")
+                if btype == "text":
+                    text = (block.get("text") or "").strip()
+                    if text:
+                        click.echo(text, err=True)
+                elif btype == "tool_use":
+                    name = block.get("name", "tool")
+                    summary = _tool_summary(name, block.get("input") or {})
+                    click.echo(click.style(f"  ⚙ {name}", fg="blue") + summary, err=True)
+        elif etype == "raw":
+            click.echo(click.style(ev.get("text", ""), dim=True), err=True)
+        elif etype == "result":
+            cost = ev.get("total_cost_usd")
+            dur = ev.get("duration_ms")
+            bits = []
+            if isinstance(dur, (int, float)):
+                bits.append(f"{dur / 1000:.0f}s")
+            if isinstance(cost, (int, float)):
+                bits.append(f"${cost:.4f}")
+            tail = f"  ({', '.join(bits)})" if bits else ""
+            click.echo(click.style(f"✓ claude session ended{tail}", fg="cyan"), err=True)
+
+    return emit
+
+
+# -- advance (single step) ----------------------------------------------------
+
+
+def _resolve_target(req_id: str | None, only: str | None) -> str | None:
+    """The effective ``--only`` target from the positional REQ_ID and the ``--only`` flag.
+
+    REQ-042 D2/AC3: the two spellings are mutually exclusive — supplying both is ambiguous,
+    so fail loudly rather than silently prefer one. Otherwise the positional reuses the
+    ``--only`` resolution verbatim (D1), so just fold it onto ``only``.
+    """
+    if req_id is not None and only is not None:
+        raise click.ClickException(
+            "name the target REQ either positionally (`advance REQ-NNN`) or with `--only`, "
+            "not both."
+        )
+    return req_id or only
+
+
+def _print_steer_hint(ex, command: str) -> None:
+    """Surface the otherwise-silent lowest-id pick and teach the steer gesture (REQ-042
+    D4/AC4): when no REQ was named and more than one is eligible, list the eligible ids,
+    name the one being advanced, and show the ``steward <command> REQ-NNN`` steer syntax.
+    A no-op at ≤1 eligible REQ — the unattended auto-drive stays unchanged."""
+    req_ids = sorted({s.req for s in ex.eligible_steps()})
+    if len(req_ids) <= 1:
+        return
+    chosen = ex.next_eligible()
+    click.echo(
+        f"{len(req_ids)} REQs eligible: {', '.join(req_ids)}. "
+        f"Advancing {chosen.req} (lowest id) — "
+        f"steer another with `steward {command} REQ-NNN`."
+    )
+
+
+@main.command()
+@click.argument("req_id", required=False, default=None)
+@click.option("--pin", type=int, default=None, help="Pin one clauder account (drain its 7d budget); forwards `clauder gate --pin N`.")
+@click.option("--threshold", type=float, default=None, help="Quota gate (fraction or percent; default 70).")
+@click.option("--model", default=None, help="Claude model (default: `claude.model` in .devsteward/config.yaml).")
+@click.option("--effort", default=None, help="Reasoning effort (default: `claude.effort` in .devsteward/config.yaml).")
+@click.option("--only", default=None, help="Restrict to one REQ's steps (fails if none eligible).")
+@click.option("--quiet", is_flag=True, help="Suppress live claude output; show only the report.")
+def advance(
+    req_id: str | None,
+    pin: int | None, threshold: float | None, model: str | None, effort: str | None,
+    only: str | None, quiet: bool,
+) -> None:
+    """Do exactly one checkpoint headless, then print the fixed report.
+
+    Name a REQ positionally (``steward advance REQ-NNN``) to steer which eligible step runs;
+    it maps onto ``--only`` and the two may not both be given (REQ-042).
+
+    Like ``run`` this drives ``claude -p`` (no interactive client), so forks
+    park-and-surface — there is no human channel for ``AskUserQuestion`` here.
+    Resolve any parked fork with ``steward decision-answer`` and re-run.
+    """
+    target = _resolve_target(req_id, only)
     cfg = _load_or_die()
-    ex = build_executor(cfg, use=use)
-    res = ex.advance_once(unattended=False)
+    ctrl = StopController()
+    ctrl.install()
+    ex = build_executor(
+        cfg, pin=pin, threshold=threshold, model=model, effort=effort,
+        announce=_stderr_announcer, stop=ctrl,
+    )
+    if target is None:
+        _print_steer_hint(ex, "advance")
+    on_event = None if quiet else _stream_printer()
+    res = ex.advance_once(only=target, unattended=True, on_event=on_event)
     if res is None:
+        if target is not None:
+            raise click.ClickException(ex.only_ineligibility_reason(target))
         click.echo("Nothing eligible — every step is done, blocked, or waiting on a dep.")
         return
+    _print_report(ex, res)
+
+
+# -- checkpoint (interactive land tail) ---------------------------------------
+
+
+def _resolve_step_target(cfg, ex, req_id: str | None, phase: str | None, *, verb: str):
+    """Resolve the ``[REQ_ID] [PHASE]`` target the operator named, or the cursor step.
+
+    Shared by ``checkpoint`` (which then mutates) and ``gate`` (which never does), so a
+    preview and the close it previews can never disagree about *which* step they mean.
+    Raises the same ``ClickException`` taxonomy for both; ``verb`` only shapes the message.
+    """
+    if req_id is None:
+        # REQ-041: resolve the cursor from the live integration-branch ledger, not an
+        # unbound snapshot of another branch (REQ-040 Decision 1, completed across read sites).
+        step_id = ex.live_ledger().cursor_step
+        # REQ-060: an unset cursor — or one pinned to a done/non-derivable step (the
+        # all-caught-up terminal) — means nothing is in flight. Say so plainly rather than
+        # push a stale cursor into the "not a derivable step" error below.
+        if not step_id or ex.step_by_id(step_id) is None:
+            raise click.ClickException(
+                f"nothing in flight to {verb} — pass a target explicitly: "
+                f"`steward {verb} REQ-NNN [PHASE]`"
+            )
+    else:
+        step_id = f"{req_id}:{phase or 'develop'}"
+    step = ex.step_by_id(step_id)
+    if step is None:
+        # REQ-060: name *why* an explicit target is not derivable — tell, don't interrogate.
+        # The common case is a finished REQ, which has a clear forward action (supersede).
+        from .profiles.req.reqfile import load_reqs
+
+        req = step_id.partition(":")[0]
+        target = next((r for r in load_reqs(cfg.req_dir) if r.id == req), None)
+        if target is not None and target.status == "done":
+            raise click.ClickException(
+                f"{req} is done — nothing to {verb}; supersede it to change direction"
+            )
+        raise click.ClickException(
+            f"{step_id} is not a derivable step — is {req} active "
+            f"(not draft/done) and is the phase 'develop'?"
+        )
+    return step
+
+
+@main.command()
+@click.argument("req_id", required=False, default=None)
+@click.argument("phase", required=False, default=None)
+def checkpoint(req_id: str | None, phase: str | None) -> None:
+    """Verify, land, merge — close an interactively driven step as one transaction.
+
+    The interactive ``/advance`` skill does the thinking and leaves the tree dirty; this
+    runs the engine's land-grade gate and, on green, the same mechanical bookkeeping as a
+    batch land (flip done, index sync, the one commit, ledger advance) plus the topology
+    close-out (trailing ledger follow-up, ``--no-ff`` merge) — no ``claude`` call — so the
+    frontmatter ``done``, the index row, the commit, and the ledger checkpoint can no
+    longer drift apart. With no REQ_ID the target is the current cursor step; PHASE
+    defaults to ``develop``. On red nothing lands; fix and re-run.
+    """
+    cfg = _load_or_die()
+    ex = build_executor(cfg)
+    step = _resolve_step_target(cfg, ex, req_id, phase, verb="checkpoint")
+    if step.phase == "validate":
+        # The System-Test phase has its own gate (engine-run artifact ACs, evidence,
+        # sign-offs) — checkpointing it here would land on marker-trust (REQ-030).
+        raise click.ClickException(
+            f"{step_id} is a System-Test step — run `steward validate {step.req}` instead"
+        )
+    res = ex.checkpoint(step)
+    if res.outcome is RunOutcome.REFUSED:
+        raise click.ClickException(res.detail)
+    if res.outcome is RunOutcome.VERIFY_FAILED:
+        raise click.ClickException(f"verify failed — not checkpointed:\n{res.detail}")
+    _print_report(ex, res)
+
+
+# -- gate (read-only verdict preview) ------------------------------------------
+
+#: REQ-089 Decision 5: what a green ``gate`` does and does not promise. Printed on every run
+#: — green *and* red — because the whole failure mode this guards against is a session
+#: reading a green preview as a land guarantee.
+_GATE_DISCLAIMER = (
+    "This is the *verify* gate only — the step's named acceptance tests, run exactly as the "
+    "develop gate runs them. It is not REQ-063's capture check (does the recorded commit "
+    "reproduce this green?) and not the artifact/manual gates of the System-Test phase, so a "
+    "green `gate` is not a promise that `steward checkpoint` will land. Nothing was "
+    "committed, staged, recorded or advanced."
+)
+
+
+@main.command()
+@click.argument("req_id", required=False, default=None)
+@click.argument("phase", required=False, default=None)
+def gate(req_id: str | None, phase: str | None) -> None:
+    """Preview a step's acceptance-test verdict without committing or landing anything.
+
+    Mid-development the land-grade gate was reachable only by *attempting* a land, so a
+    session could not see where it stood without trying to close (REQ-089 Decision 4). This
+    runs the same verifier the develop gate runs — the same resolved interpreter, the same
+    `check:`-routed selection of named tests, the same environment — and prints the verdict
+    plus each failing test. With no REQ_ID the target is the current cursor step; PHASE
+    defaults to `develop`. Exits non-zero on red.
+
+    **Read-only, by construction.** No commit, no staging, no evidence dir, no event, no
+    ledger write, no status flip — HEAD, the working tree, the git index and `.devsteward/`
+    are untouched. It deliberately does *not* run REQ-063's capture check: that requires
+    staging the tree, which is a mutation (and the staging path REQ-077/079/088 all found
+    defects in). Separating "am I green?" from "commit" is the point — use `steward
+    checkpoint` to close.
+    """
+    cfg = _load_or_die()
+    # Read-only: no `check_invariants` (a precondition guard is for mutations, and refusing
+    # on a non-`dev` HEAD would disable the preview exactly where it helps) and no
+    # `transaction` (nothing to roll back).
+    ex = build_executor(cfg)
+    step = _resolve_step_target(cfg, ex, req_id, phase, verb="gate")
+    if step.phase == "validate":
+        raise click.ClickException(
+            f"{step.id} is a System-Test step — its gate is the artifact/manual oracle, "
+            f"which needs the lab and an evidence dir. Run `steward validate {step.req}`."
+        )
+    if not step.verify:
+        click.echo(click.style(
+            f"{step.id}: no named acceptance tests on this step — nothing for the verify "
+            f"gate to run.", fg="yellow",
+        ))
+        click.echo(_GATE_DISCLAIMER)
+        return
+    click.echo(f"gate {step.id} — running {len(step.verify)} named acceptance test(s)…")
+    ok, detail = ex.verifier.verify(step)
+    if detail:
+        click.echo(detail)
+    click.echo(click.style(
+        f"gate {step.id}: {'GREEN' if ok else 'RED'}", fg="green" if ok else "red", bold=True,
+    ))
+    click.echo(_GATE_DISCLAIMER)
+    if not ok:
+        raise SystemExit(1)
+
+
+# -- validate (System-Test phase) ----------------------------------------------
+
+
+def _git_user_name(root: Path) -> str:
+    try:
+        out = subprocess.run(
+            ["git", "-C", str(root), "config", "user.name"],
+            capture_output=True, text=True, check=False,
+        ).stdout.strip()
+    except OSError:
+        out = ""
+    return out
+
+
+def _interactive_signoff(root: Path):
+    """The attended sign-off source (REQ-030 D4 / REQ-034 D7): present the manual AC, take
+    the human's verdict — one of three terminal outcomes — and an optional one-line scope.
+    The engine composes everything else.
+
+    Taken *after* the guided session exits (the editor pattern), so the verdict is the
+    human's and engine-recorded; the session cannot self-certify (Decision 2)."""
+    from .profiles.req.validate import Signoff
+
+    def provider(ac) -> Signoff:
+        click.echo(click.style(f"\nmanual {ac.id}:", bold=True) + f" {ac.text}")
+        if ac.test:
+            click.echo(f"  oracle: {ac.test}")
+        verdict = click.prompt(
+            "Verdict — [a]pprove / [d]ecline / [p]ending (defer as async QA)",
+            type=click.Choice(["a", "d", "p"]), default="p", show_choices=True,
+        )
+        if verdict == "p":
+            return Signoff(approved=False, reviewer="", deferred=True)
+        reviewer = _git_user_name(root) or click.prompt("Reviewer")
+        scope = ""
+        if verdict == "a":
+            scope = click.prompt(
+                "Scope (one line, e.g. what was reviewed; empty to skip)",
+                default="", show_default=False,
+            ).strip()
+        return Signoff(approved=(verdict == "a"), reviewer=reviewer, scope=scope)
+
+    return provider
+
+
+@main.command()
+@click.argument("req_id")
+@click.option("--quiet", is_flag=True, help="Suppress live claude output; show only the report.")
+def validate(req_id: str, quiet: bool) -> None:
+    """Run REQ_ID's System-Test phase — the single entry point (REQ-030).
+
+    ``steward validate REQ-NNN`` (shape A, from a plain shell): the fresh System Tester
+    session preps the lab and captures artifacts, the engine runs each ``artifact`` AC's
+    named test itself, ``manual`` ACs take your sign-off here, and on green the REQ lands
+    mechanically (flip, index, commit). On a **done** REQ it appends a fresh dated evidence
+    event and leaves the REQ file untouched — status *and* ``verified_by`` stay the frozen
+    landing provenance (re-run policy, REQ-030 Decision 5 as clarified by REQ-035). A red
+    validation parks with the failure brief — no repair loop.
+
+    The warm cycle (REQ-081) splits the same flow into its two REQ-034 halves so the
+    System-Tester session survives a red — see ``steward validate-start`` and
+    ``steward validate-record``, which are ordinary top-level commands (REQ-089 flattened
+    the old two-word spellings away).
+    """
+    cfg = _load_or_die()
+    ctrl = StopController()
+    ctrl.install()
+    ex = build_executor(cfg, announce=_stderr_announcer, stop=ctrl)
+    routine = ex.validate_runner
+    if routine is None:
+        raise click.ClickException("the generic profile has no validation phase")
+    from .profiles.req.reqfile import load_reqs
+
+    req = next((r for r in load_reqs(cfg.req_dir) if r.id == req_id), None)
+    if req is None:
+        raise click.ClickException(f"{req_id}: no such requirement")
+    on_event = None if quiet else _stream_printer()
+    signoff = _interactive_signoff(cfg.root)
+
+    if req.status == "done":
+        # REQ-073 D2 recovery: a done REQ still surfacing an open :validate decision is a
+        # diverged ledger (a stale save rewound the cursor behind the committed land). Close
+        # it here — the verb the REQ-057 `decision-answer` guard already redirects to — before
+        # the (non-mutating) re-validation, so the two remedies terminate instead of looping.
+        # HEAD-agnostic like `decision-answer` (single-ledger invariant only): recovery must
+        # not depend on which branch is checked out.
+        check_invariants(ex, allow_any_head=True)
+        with transaction(ex.git, label=f"reconcile stale validation {req_id}"):
+            recovered = routine.reconcile_stale_validation_decision(ex.ledger, req_id)
+        if recovered:
+            ids = ", ".join(d.id for d in recovered)
+            click.echo(click.style(
+                f"reconciled stale validation decision(s) {ids} on {req_id} from the event "
+                f"log — status and verified_by stay the frozen landing provenance. No "
+                f"hand-edit of state.yaml.", fg="green"
+            ))
+            return
+        res = routine.revalidate(ex, req_id, on_event=on_event, signoff=signoff)
+        if res.outcome is RunOutcome.REFUSED:
+            raise click.ClickException(res.detail)
+        if res.outcome is not RunOutcome.DONE:
+            raise click.ClickException(f"re-validation red:\n{res.detail}")
+        click.echo(click.style(
+            f"fresh evidence recorded for {req_id} — the REQ file is unchanged "
+            f"(status and verified_by both frozen).", fg="green"
+        ))
+        return
+
+    step = ex.step_by_id(f"{req_id}:validate")
+    if step is None:
+        raise click.ClickException(
+            f"{req_id} has no validate step — it declares no artifact/manual acceptance "
+            f"criterion, or it is not active"
+        )
+    # REQ-041: the develop-done pre-flight must read the live integration-branch ledger —
+    # an unbound read from another branch sees a stale snapshot and falsely reports a
+    # checkpointed develop step as "not closed" (REQ-040 Decision 1, finished here).
+    if ex.live_ledger().status_of(f"{req_id}:develop") is not StepStatus.DONE:
+        raise click.ClickException(
+            f"{req_id}:develop is not closed yet — validation follows the develop "
+            f"checkpoint (run `steward checkpoint {req_id} develop` first)"
+        )
+    # REQ-034 Decision 6: the bring-up path never spawns Claude from within Claude — refuse
+    # early when already inside a Claude session, pointing at a plain terminal or the
+    # warm-cycle halves (REQ-081).
+    if claude_mod.in_claude_session():
+        raise click.ClickException(
+            f"refusing to bring up a guided validation session from inside a Claude "
+            f"session (CLAUDECODE set) — Claude is never spawned from within Claude. Open a "
+            f"plain terminal tab and run `steward validate {req_id}` there, or drive it "
+            f"warm (REQ-081): `steward validate-start {req_id}` in this session, capture "
+            f"the evidence here, then record the verdict from a plain shell with "
+            f"`steward validate-record {req_id}`."
+        )
+    check_invariants(ex)  # REQ-049: refuse on production / mid-merge (raises; handled top-level)
+    # REQ-034 Decision 6 (shape A): start → interactive guided bring-up (editor pattern) →
+    # record. The routine readies/reconciles the branch (Decision 5) inside its start half.
+    res = routine.guided_validate(
+        ex, step, signoff=signoff, on_event=on_event, driver="interactive",
+    )
+    if res.outcome is RunOutcome.REFUSED:
+        raise click.ClickException(res.detail)
+    if res.outcome is RunOutcome.PARKED:
+        click.echo(click.style(f"validation parked: {res.detail}", fg="yellow"))
+        raise SystemExit(1)
+    _print_report(ex, res)
+
+
+@main.command("validate-start")
+@click.argument("req_id")
+def validate_start(req_id: str) -> None:
+    """Warm cycle (REQ-081): open REQ_ID's validate step and ready its evidence dir.
+
+    The standalone **start** half — it spawns nothing, so unlike ``steward validate`` it is
+    callable from inside a Claude session (the warm System-Tester session *is* the session).
+    Everything else mirrors shape A's pre-flight: develop must be checkpointed, the declared
+    lab done, and the REQ-065 formality gate clear (all inside ``routine.start``)."""
+    cfg = _load_or_die()
+    ex = build_executor(cfg, announce=_stderr_announcer)
+    routine = ex.validate_runner
+    if routine is None:
+        raise click.ClickException("the generic profile has no validation phase")
+    from .profiles.req.reqfile import load_reqs
+
+    req = next((r for r in load_reqs(cfg.req_dir) if r.id == req_id), None)
+    if req is None:
+        raise click.ClickException(f"{req_id}: no such requirement")
+    if req.status == "done":
+        raise click.ClickException(
+            f"{req_id} is done — a fresh re-validation is `steward validate {req_id}` "
+            f"from a plain shell (REQ-035: provenance stays frozen)"
+        )
+    step = ex.step_by_id(f"{req_id}:validate")
+    if step is None:
+        raise click.ClickException(
+            f"{req_id} has no validate step — it declares no artifact/manual acceptance "
+            f"criterion, or it is not active"
+        )
+    # REQ-041: the develop-done pre-flight reads the live ledger (as in shape A).
+    if ex.live_ledger().status_of(f"{req_id}:develop") is not StepStatus.DONE:
+        raise click.ClickException(
+            f"{req_id}:develop is not closed yet — validation follows the develop "
+            f"checkpoint (run `steward checkpoint {req_id} develop` first)"
+        )
+    status = ex.ledger.status_of(step.id)
+    # PENDING opens fresh; RUNNING is the clean re-entry (a fresh dated dir, mirroring
+    # shape A's re-entry after a killed session). Anything else routes elsewhere.
+    if status not in (StepStatus.PENDING, StepStatus.RUNNING):
+        raise click.ClickException(
+            f"{step.id} is {status.value} — nothing to start. Re-arm it with "
+            f"`steward repeat {req_id}`, or send it back to develop with "
+            f"`steward rework {req_id}`."
+        )
+    check_invariants(ex)  # REQ-049: refuse on production / mid-merge
+    ctx = routine.start(ex, step)
+    if isinstance(ctx, StepResult):
+        raise click.ClickException(ctx.detail)
+    click.echo(click.style(f"validation started: {step.id}", fg="green"))
+    click.echo(f"evidence dir: {ctx.evidence_rel}")
+    if ctx.reval is not None and ctx.reval.get("scope"):
+        click.echo(f"scoped re-run (REQ-075): {', '.join(ctx.reval['scope'])}")
+    click.echo(
+        "capture the validation artifacts there, then record the verdict from a plain "
+        f"shell: steward validate-record {req_id}"
+    )
+
+
+@main.command("validate-record")
+@click.argument("req_id")
+def validate_record(req_id: str) -> None:
+    """Warm cycle (REQ-081): grade REQ_ID's captured validation and take the human verdict.
+
+    The standalone **record** half — run it from a plain shell while the System-Tester
+    session stays warm.
+
+    The verdict channel is the engine's interactive prompt and nothing else (REQ-034
+    Decision 2: the session never collects, relays, or asserts it) — so when a fresh
+    ``manual`` AC needs a verdict and we are inside a Claude session (no terminal to
+    prompt on, and the session must never relay the verdict), record refuses instead of
+    aborting mid-transaction."""
+    cfg = _load_or_die()
+    ex = build_executor(cfg, announce=_stderr_announcer)
+    routine = ex.validate_runner
+    if routine is None:
+        raise click.ClickException("the generic profile has no validation phase")
+    ctx = routine.resume_context(ex, req_id)
+    if isinstance(ctx, StepResult):
+        raise click.ClickException(ctx.detail)
+    carried_ids = {c["ac"] for c in (ctx.reval.get("carried") if ctx.reval else []) or []}
+    fresh_manual = [
+        c for c in ctx.req.acceptance if c.check == "manual" and c.id not in carried_ids
+    ]
+    if fresh_manual and claude_mod.in_claude_session():
+        raise click.ClickException(
+            f"{req_id} has manual AC(s) awaiting a human verdict — the verdict is taken "
+            f"only by the engine's interactive prompt, which a Claude session cannot host "
+            f"(and the session must never relay it). Run `steward validate-record "
+            f"{req_id}` from a plain shell; this warm session stays as it is."
+        )
+    check_invariants(ex)  # REQ-049: refuse on production / mid-merge
+    # REQ-049: the record/land/park is atomic, exactly as shape A's record half.
+    with transaction(ex.git, label=f"validate {req_id}"):
+        res = routine.record(
+            ex, ctx, signoff=_interactive_signoff(cfg.root), driver="interactive"
+        )
+    if res.outcome is RunOutcome.REFUSED:
+        raise click.ClickException(res.detail)
+    if res.outcome is RunOutcome.PARKED:
+        click.echo(click.style(f"validation parked: {res.detail}", fg="yellow"))
+        raise SystemExit(1)
     _print_report(ex, res)
 
 
@@ -160,28 +1114,77 @@ def advance(use: int | None) -> None:
 
 
 @main.command()
-@click.option("--use", type=int, default=None, help="Pin a claude-swap account index.")
+@click.argument("req_id", required=False, default=None)
+@click.option("--pin", type=int, default=None, help="Pin one clauder account (drain its 7d budget); forwards `clauder gate --pin N`.")
+@click.option("--threshold", type=float, default=None, help="Quota gate (fraction or percent; default 70).")
+@click.option("--model", default=None, help="Claude model (default: `claude.model` in .devsteward/config.yaml).")
+@click.option("--effort", default=None, help="Reasoning effort (default: `claude.effort` in .devsteward/config.yaml).")
+@click.option("--only", default=None, help="Restrict to one REQ's steps (fails if none eligible).")
 @click.option("--max-steps", type=int, default=None, help="Stop after N steps.")
-def run(use: int | None, max_steps: int | None) -> None:
-    """Unattended: march eligible steps headless; park on forks."""
+@click.option("--quiet", is_flag=True, help="Suppress live claude output; show only results.")
+def run(
+    req_id: str | None,
+    pin: int | None, threshold: float | None, model: str | None, effort: str | None,
+    only: str | None, max_steps: int | None, quiet: bool,
+) -> None:
+    """Unattended: march eligible steps headless; park on forks.
+
+    Name a REQ positionally (``steward run REQ-NNN``) to restrict the run to that REQ's
+    steps; it maps onto ``--only`` and the two may not both be given (REQ-042).
+
+    A single Ctrl-C finishes the running step and then exits; a Ctrl-C during a quota wait
+    ends it at once; a second Ctrl-C kills the running ``claude`` child (REQ-025).
+    """
+    target = _resolve_target(req_id, only)
     cfg = _load_or_die()
-    ex = build_executor(cfg, use=use)
-    results = ex.run(max_steps=max_steps)
+    ctrl = StopController()
+    ctrl.install()
+    ex = build_executor(
+        cfg, pin=pin, threshold=threshold, model=model, effort=effort,
+        announce=_stderr_announcer, stop=ctrl,
+    )
+    if target is None:
+        _print_steer_hint(ex, "run")
+    on_event = None if quiet else _stream_printer()
+    results = ex.run(only=target, max_steps=max_steps, on_event=on_event)
     if not results:
+        if target is not None:
+            raise click.ClickException(ex.only_ineligibility_reason(target))
         click.echo("Nothing eligible to run.")
         return
     for res in results:
         _echo_result(res)
     parked = [r for r in results if r.outcome is RunOutcome.PARKED]
     if parked:
-        click.echo(
-            click.style(
-                f"\n{len(parked)} fork(s) parked — see `steward decision list`.", fg="yellow"
+        # REQ-074: a parked result is either a genuine fork (an open decision — the
+        # guided `steward decide` session resolves it) or a hold naming its own verb.
+        parked_steps = {r.step.id for r in parked if r.step}
+        forks = [
+            d for d in ex.live_ledger().open_decisions() if d.step in parked_steps
+        ]
+        held = len(parked) - len(forks)
+        if forks:
+            ids = ", ".join(d.id for d in forks)
+            click.echo(
+                click.style(
+                    f"\n{len(forks)} fork(s) parked — resolve with `steward decide "
+                    f"{ids if len(forks) == 1 else 'DEC-NNN'}` (see `steward decision-list`).",
+                    fg="yellow",
+                )
             )
-        )
+        if held:
+            click.echo(
+                click.style(
+                    f"\n{held} step(s) held — see `steward status` for each hold's verb.",
+                    fg="yellow",
+                )
+            )
 
 
 def _echo_result(res: StepResult) -> None:
+    if res.outcome is RunOutcome.REFUSED:
+        click.echo(click.style(f"  REFUSED: {res.detail}", fg="red"))
+        return
     color = {
         RunOutcome.DONE: "green",
         RunOutcome.PARKED: "yellow",
@@ -190,19 +1193,25 @@ def _echo_result(res: StepResult) -> None:
         RunOutcome.LIMIT: "yellow",
     }.get(res.outcome, "white")
     sha = f" @ {res.commit[:8]}" if res.commit else ""
-    click.echo(click.style(f"  {res.step.id}: {res.outcome.value}{sha}", fg=color))
+    step_id = res.step.id if res.step else "—"
+    click.echo(click.style(f"  {step_id}: {res.outcome.value}{sha}", fg=color))
 
 
 def _print_report(ex, res: StepResult) -> None:
     """The fixed report: Did / Cursor / Review / Decisions / Next."""
+    if res.outcome is RunOutcome.REFUSED:
+        click.echo(click.style(f"\n✗ {res.detail}", fg="red"))
+        return
     click.echo(click.style("\n── checkpoint report ──", bold=True))
     click.echo(f"Did:       {res.step.id} — {res.outcome.value}")
     if res.commit:
         click.echo(f"           committed {res.commit[:8]}")
-    click.echo(f"Cursor:    {ex.ledger.cursor_step or '—'}")
+    # REQ-041: report the live integration-branch cursor/decisions (REQ-040 Decision 1).
+    led = ex.live_ledger()
+    click.echo(f"Cursor:    {led.cursor_step or '—'}")
     if res.detail:
         click.echo(f"Review:    {res.detail.splitlines()[0]}")
-    decisions = ex.ledger.open_decisions()
+    decisions = led.open_decisions()
     if decisions:
         click.echo("Decisions: " + ", ".join(f"{d.id} ({d.question})" for d in decisions))
     else:
@@ -214,13 +1223,9 @@ def _print_report(ex, res: StepResult) -> None:
 # -- decision -----------------------------------------------------------------
 
 
-@main.group()
-def decision() -> None:
-    """Inspect and resolve forks parked while running unattended."""
-
-
-@decision.command("list")
+@main.command("decision-list")
 def decision_list() -> None:
+    """Show the forks parked while running unattended, with their briefs."""
     cfg = _load_or_die()
     led = Ledger(cfg.root)
     open_d = led.open_decisions()
@@ -230,20 +1235,128 @@ def decision_list() -> None:
     for d in open_d:
         click.echo(f"{d.id}  [{d.step}]")
         click.echo(f"    {d.question}")
-        if d.options:
-            click.echo("    options: " + ", ".join(d.options))
+        # REQ-074: render the fork brief so the operator is briefed, not just questioned.
+        if d.context:
+            for ln in d.context.splitlines():
+                click.echo(f"    {ln}")
+        for i, opt in enumerate(d.options, 1):
+            click.echo(f"    option {i}: {opt}")
+        if d.recommendation:
+            click.echo(f"    recommendation: {d.recommendation}")
+        click.echo(f"    → resolve with `steward decide {d.id}` (plain shell)")
 
 
-@decision.command("answer")
+@main.command("decision-answer")
 @click.argument("decision_id")
 @click.argument("answer")
 def decision_answer(decision_id: str, answer: str) -> None:
+    """Record ANSWER against the parked fork DECISION_ID, unblocking its step."""
     cfg = _load_or_die()
-    led = Ledger(cfg.root)
-    d = led.answer_decision(decision_id, answer)
-    if d is None:
-        raise click.ClickException(f"no open decision {decision_id}")
+    try:
+        d = verbs.answer_decision(cfg, decision_id, answer)
+    except LifecycleError as exc:
+        raise click.ClickException(str(exc)) from exc
     click.echo(f"Answered {decision_id}; {d.step} unblocked. Run `steward run` to resume.")
+
+
+def _fork_briefing_prompt(d) -> str:
+    """The initial prompt for the guided `steward decide` session (REQ-074): brief the
+    operator on the parked fork and support the live interrogation. The session advises;
+    the **engine** records the choice after it exits (editor pattern — no self-certify)."""
+    lines = [
+        f"A steward run parked a genuine fork on step {d.step} ({d.id}) — the autopilot "
+        f"raised the captain. Brief the operator and help them decide. Do NOT edit the "
+        f"ledger or answer the decision yourself: the engine records the operator's "
+        f"choice after this session ends.",
+        "",
+        f"Question: {d.question}",
+    ]
+    if d.context:
+        lines += ["", "Context from the parked session:", d.context]
+    if d.options:
+        lines += ["", "Options as the parked session saw them:"]
+        lines += [f"  {i}. {opt}" for i, opt in enumerate(d.options, 1)]
+    if d.recommendation:
+        lines += ["", f"The parked session's recommendation: {d.recommendation}"]
+    lines += [
+        "",
+        f"Start by reading the REQ ({d.req or 'see the step id'}) and the relevant code, "
+        f"present the fork in the operator's terms, answer their questions, and give a "
+        f"clear recommendation with rationale. When the operator is ready to decide, they "
+        f"exit this session; the engine then takes their choice.",
+    ]
+    return "\n".join(lines)
+
+
+@main.command()
+@click.argument("decision_id")
+def decide(decision_id: str) -> None:
+    """Resolve a parked fork in a guided attended session (REQ-074).
+
+    The resolution half of park-and-surface: brings up an interactive session that briefs
+    you on the fork (question, context, options, the parked session's recommendation),
+    supports live interrogation, and — after the session exits — records *your* choice and
+    rationale (editor pattern; the session cannot self-certify). The answered fork is
+    delivered into the resuming step's prompt; run `steward run` to continue.
+    """
+    cfg = _load_or_die()
+    ex = build_executor(cfg)
+    check_invariants(ex, allow_any_head=True)  # single-ledger only, like `decision-answer`
+    if os.environ.get("DEVSTEWARD_UNATTENDED"):
+        raise click.ClickException(
+            "steward decide is the attended resolution of a parked fork — it cannot run "
+            "unattended (DEVSTEWARD_UNATTENDED is set). Run it from a plain shell."
+        )
+    if claude_mod.in_claude_session():
+        raise click.ClickException(
+            f"refusing to bring up a guided decision session from inside a Claude session "
+            f"(CLAUDECODE set) — Claude is never spawned from within Claude. Open a plain "
+            f"terminal tab and run `steward decide {decision_id}` there."
+        )
+    d = ex.ledger.find_decision(decision_id)
+    if d is None or d.status is not DecisionStatus.OPEN:
+        raise click.ClickException(f"no open decision {decision_id}")
+    if d.step.endswith(":validate"):
+        req = d.req or d.step.split(":", 1)[0]
+        raise click.ClickException(
+            f"{decision_id} is a legacy validation hold on {d.step}, not a fork to decide. "
+            f"Record the human sign-off with `steward validate {req}` "
+            f"(or send it back to develop with `steward rework {req}`, or re-arm the "
+            f"validation with `steward repeat {req}`)."
+        )
+    code = claude_mod.run_claude_interactive(
+        _fork_briefing_prompt(d),
+        argv_prefix=ex.accounts.claude_argv(),
+        cwd=str(ex.root),
+    )
+    if code != 0:
+        click.echo(click.style(
+            f"guided session exited non-zero ({code}) — taking your verdict anyway; "
+            f"abort with Ctrl-C to leave {decision_id} parked.", fg="yellow"
+        ))
+    # The engine records the choice (editor pattern). Numbered options, or free text.
+    click.echo(click.style(f"\n{decision_id}:", bold=True) + f" {d.question}")
+    for i, opt in enumerate(d.options, 1):
+        click.echo(f"  {i}. {opt}")
+    raw = click.prompt(
+        "Your choice — option number or free text (empty to leave parked)",
+        default="", show_default=False,
+    ).strip()
+    if not raw:
+        click.echo(f"{decision_id} stays parked.")
+        return
+    answer = raw
+    if d.options and raw.isdigit() and 1 <= int(raw) <= len(d.options):
+        answer = d.options[int(raw) - 1]
+    rationale = click.prompt(
+        "Rationale (one line; empty to skip)", default="", show_default=False
+    ).strip()
+    with transaction(ex.git, label=f"decide {decision_id}"):
+        d = ex.ledger.answer_decision(decision_id, answer, rationale=rationale or None)
+    click.echo(click.style(
+        f"Decided {decision_id}: {answer}\n{d.step} unblocked — the choice travels into "
+        f"the resuming session. Run `steward run` to continue.", fg="green"
+    ))
 
 
 # -- init (ledger only) -------------------------------------------------------
@@ -258,6 +1371,393 @@ def init(profile: str) -> None:
         raise click.ClickException("ledger already initialized here")
     Ledger.init(root, profile=profile)
     click.echo(f"Initialized .devsteward/ ({profile} profile) in {root}")
+
+
+# -- seed-ledger (onboard an already-built corpus) ----------------------------
+
+
+@main.command(name="seed-ledger")
+def seed_ledger_cmd() -> None:
+    """Mark every terminal REQ's phase-step(s) done — seed a ledger for built history.
+
+    For onboarding an already-finished project (REQ-022): run after the per-project
+    converter has produced schema-valid REQs. Reads only frontmatter (id, status), so it is
+    dialect-independent and idempotent. Requires an already-initialized ledger.
+    """
+    from .profiles.req.seed import seed_ledger
+
+    cfg = _load_or_die()
+    seeded = seed_ledger(Ledger(cfg.root), cfg.req_dir)
+    if seeded:
+        click.echo(f"Seeded {len(seeded)} terminal REQ(s): {', '.join(seeded)}")
+    else:
+        click.echo("Nothing to seed (no un-seeded terminal REQs).")
+
+
+# -- backlog (the stakeholder-requirement layer, REQ-093) ---------------------
+
+
+def _record_verdict(handle: str, verdict: str, reason: str | None, note: str | None) -> None:
+    from .profiles.req import backlog as bl
+
+    cfg = _load_or_die()
+    try:
+        item, event, criteria = bl.record_verdict(cfg, handle, verdict, reason=reason, note=note)
+    except bl.BacklogError as exc:
+        raise click.ClickException(str(exc)) from exc
+    # Show the owner what they judged against. The criteria are the item's own, in the
+    # user's language — not the REQ's verification criteria, which the engine already ran.
+    for line in criteria:
+        click.echo(f"  · {line}")
+    colour = {"accepted": "green", "denied": "yellow",
+              "retired": "blue", "held": "magenta"}[verdict]
+    click.echo(click.style(f"  {handle}: {verdict}", fg=colour) + f" — {item.need[:70]}")
+    if event.req:
+        click.echo(f"  attempted by {event.req}")
+    if reason:
+        click.echo(f"  reason: {reason}")
+    if verdict == "denied":
+        click.echo(
+            "  the item stays open — the REQ that attempted it is unaffected, and another "
+            "REQ may take it up."
+        )
+    if verdict == "held":
+        click.echo("  the need stands and is not being worked; taking it up lifts the hold.")
+
+
+@main.command("backlog-add")
+@click.argument("need")
+@click.option("--handle", default=None, help="Use this handle instead of minting one.")
+@click.option(
+    "--origin",
+    type=click.Choice(["operator", "proposed"]),
+    default="operator",
+    show_default=True,
+    help="operator = the owner's own words; proposed = a session proposed it and the owner chose it.",
+)
+def backlog_add(need: str, handle: str | None, origin: str) -> None:
+    """Record a user need, in the user's words (REQ-093).
+
+    The cheap way in: no interview, no schema, no id. A need is not a solution — an item that
+    names a mechanism has already made a decision nobody asked it to make. The file is created
+    from the bundled template when the project has none, so wanting to record a need is the
+    moment a project acquires a backlog.
+    """
+    from .profiles.req import backlog as bl
+
+    cfg = _load_or_die()
+    template = (_package_templates() / "docs" / "BACKLOG.md").read_text(encoding="utf-8")
+    try:
+        handle, created = bl.add(cfg, need, handle=handle, origin=origin, template=template)
+    except bl.BacklogError as exc:
+        raise click.ClickException(str(exc)) from exc
+    if created:
+        click.echo(f"Created {cfg.backlog_file}")
+    click.echo(click.style(f"  + {handle}", fg="green") + f" — {bl.one_line(need)}")
+
+
+@main.command("backlog-edit")
+@click.argument("handle")
+@click.option("--need", default=None, help="The reworded need, in the owner's words.")
+@click.option(
+    "--origin", type=click.Choice(["operator", "proposed"]), default=None,
+    help="Re-state the provenance: operator = the owner's words; proposed = session-proposed, owner-chosen.",
+)
+@click.option(
+    "--criterion", "criteria", multiple=True,
+    help="An acceptance criterion in the owner's words; repeat for several. "
+         "Given at all, the list REPLACES the item's criteria; `--criterion ''` alone clears them.",
+)
+def backlog_edit(handle: str, need: str | None, origin: str | None, criteria: tuple[str, ...]) -> None:
+    """Reword one item's need, origin and/or acceptance criteria in place (REQ-097).
+
+    The handle never changes — it is what `backlog_refs` and the verdict log key on. Only
+    the parts you name are rewritten; every other byte of the file is preserved. REQ-093
+    shipped add plus the four verdicts and no edit, so "modify" used to mean hand-editing
+    a markdown table; the dashboard's edit form calls exactly this function.
+    """
+    from .profiles.req import backlog as bl
+
+    if need is None and origin is None and not criteria:
+        raise click.ClickException("nothing to change — give --need, --origin and/or --criterion")
+    cfg = _load_or_die()
+    new_criteria = [c for c in criteria if c.strip()] if criteria else None
+    try:
+        item = bl.edit(cfg, handle, need=need, origin=origin, criteria=new_criteria)
+    except bl.BacklogError as exc:
+        raise click.ClickException(str(exc)) from exc
+    click.echo(click.style(f"  ~ {handle}", fg="green") + f" — {item.need} [{item.origin}]")
+    if criteria:
+        for line in new_criteria or []:
+            click.echo(f"      · {line}")
+        if not new_criteria:
+            click.echo("      (criteria cleared)")
+
+
+@main.command("backlog-list")
+def backlog_list() -> None:
+    """Show every backlog item with its **derived** state and attempt record (REQ-093).
+
+    Nothing here is stored: take-up comes from each REQ's ``backlog_refs``, the verdict from
+    the append-only log. There is no status column to fall out of step with either.
+    """
+    cfg = _load_or_die()
+    if not cfg.backlog_path.exists():
+        click.echo(f"no backlog at {cfg.backlog_file} (this project keeps none).")
+        return
+    from .profiles.req import backlog as bl
+
+    try:
+        rows = bl.bits(cfg).standings()
+    except bl.BacklogError as exc:
+        raise click.ClickException(str(exc)) from exc
+    if not rows:
+        click.echo(f"{cfg.backlog_file} has no items yet.")
+        return
+    colours = {"open": "yellow", "in-progress": "cyan", "attempted": "magenta",
+               "accepted": "green", "retired": "blue", "held": "magenta"}
+    for st in rows:
+        label = bl.describe(st)
+        click.echo(
+            click.style(f"  {st.item.handle:<28}", bold=True)
+            + click.style(f"{label:<18}", fg=colours.get(st.state, "white"))
+            + st.item.need[:60]
+        )
+        for line in st.criteria:
+            click.echo(f"      · {line}")
+        if st.taken_up_by:
+            click.echo(f"      taken up by {', '.join(st.taken_up_by)}")
+        for v in st.verdicts:
+            detail = f" — {v.reason}" if v.reason else ""
+            by = f" ({v.req})" if v.req else ""
+            click.echo(f"      {v.ts[:10]} {v.event}{by}{detail}")
+
+
+@main.command("backlog-accept")
+@click.argument("handle")
+@click.option("--note", default=None, help="Optional note recorded with the acceptance.")
+def backlog_accept(handle: str, note: str | None) -> None:
+    """Record that a delivered result satisfies this need (REQ-093).
+
+    The owner's verdict, not the tester's, and available at any time after the REQ lands —
+    the honest answer to something like "is it easy to use" often arrives only after living
+    with the result.
+    """
+    _record_verdict(handle, "accepted", None, note)
+
+
+@main.command("backlog-deny")
+@click.argument("handle")
+@click.option("--reason", required=True, help="Why the delivered result does not satisfy the need.")
+def backlog_deny(handle: str, reason: str) -> None:
+    """Record that a delivered result does **not** satisfy this need (REQ-093).
+
+    Advisory to the REQ and blocking to the item: the REQ that attempted it stays closed on
+    its verification result, and the item stays open for another REQ to take up. The reason is
+    mandatory — without it a denied item is just an item that failed twice, and the next REQ
+    repeats the attempt.
+    """
+    _record_verdict(handle, "denied", reason, None)
+
+
+@main.command("backlog-hold")
+@click.argument("handle")
+@click.option("--reason", required=True, help="Why this need is not being worked right now.")
+def backlog_hold(handle: str, reason: str) -> None:
+    """Record that this need stands but is deliberately **not being worked** (REQ-093).
+
+    Neither open nor retired: the need is not withdrawn, and it is not waiting on a session —
+    it is waiting on something the owner has named. Taking the item up in a REQ lifts the hold.
+    """
+    _record_verdict(handle, "held", reason, None)
+
+
+@main.command("backlog-retire")
+@click.argument("handle")
+@click.option("--reason", required=True, help="Why this need is no longer wanted.")
+def backlog_retire(handle: str, reason: str) -> None:
+    """Record that this need is no longer wanted (REQ-093).
+
+    The owner's discretion, and the only way an item leaves the backlog without being
+    satisfied. Nothing is deleted: the item and its reason stay readable, so the next person
+    to have the same idea can read why it was dropped.
+    """
+    _record_verdict(handle, "retired", reason, None)
+
+
+# -- joint tasks between projects (REQ-101) ------------------------------------------
+
+
+def _body(body: str | None, body_file) -> str:
+    if body is not None and body_file is not None:
+        raise click.ClickException("give --body or --body-file, not both")
+    return body_file.read() if body_file is not None else (body or "")
+
+
+def _first_line(text: str, width: int = 70) -> str:
+    line = next((s.strip() for s in text.splitlines() if s.strip()), "")
+    return line if len(line) <= width else line[: width - 1] + "…"
+
+
+@main.command("joint-send")
+@click.argument("handle", required=False)
+@click.option(
+    "--kind", type=click.Choice(["action", "ask", "tell", "done"]), default="action",
+    show_default=True,
+    help="action opens a thread; ask = a request for feedback, information or a decision; "
+         "tell = information pushed to the other side; done = your half of the finished-job handshake.",
+)
+@click.option("--to", "to", default=None, help="action only: the project to ask, by its folder name.")
+@click.option("--need", default=None, help="action only: the need, one line; the receiver files it verbatim.")
+@click.option("--reply-to", default=None, help="The message this answers, as <project>#<seq>.")
+@click.option("--body", default=None, help="The message text (Markdown).")
+@click.option("--body-file", type=click.File("r", encoding="utf-8"), default=None,
+              help="Read the message text from a file; '-' reads stdin.")
+def joint_send(handle, kind, to, need, reply_to, body, body_file) -> None:
+    """Open a joint task with another project, or say something into one (REQ-101).
+
+    `--to P --need "…"` opens a thread with a request for action; HANDLE is then an optional
+    handle of your choosing, else one is minted as `<this project>-<slug>`. With `--kind ask |
+    tell | done`, HANDLE names the thread. The line goes into this project's own
+    `.devsteward/joint.jsonl` — never into the other project — and is not committed: the
+    session's next commit carries it.
+    """
+    from .profiles.req import joint
+
+    cfg = _load_or_die(joint=True)
+    text = _body(body, body_file)
+    try:
+        if kind == "action":
+            if not to or not need:
+                raise click.ClickException("a request needs --to PROJECT and --need \"…\"")
+            if reply_to:
+                raise click.ClickException("a request opens a thread; it replies to nothing")
+            entry = joint.open_thread(cfg, to, need, handle=handle, body=text)
+            click.echo(click.style(f"  + {entry.thread}", fg="green")
+                       + f" — {entry.ref_id} asks {entry.to}: {entry.need}")
+            return
+        if to or need:
+            raise click.ClickException("--to and --need open a thread; they go with --kind action only")
+        if not handle:
+            raise click.ClickException(f"an {kind} needs the thread's HANDLE")
+        entry = joint.send(cfg, handle, kind, body=text, reply_to=reply_to)
+    except joint.JointError as exc:
+        raise click.ClickException(str(exc)) from exc
+    answer = f" (replying to {entry.reply_to})" if entry.reply_to else ""
+    click.echo(click.style(f"  + {entry.thread}", fg="green") + f" — {entry.ref_id} {kind}{answer}")
+
+
+@main.command("joint-ack")
+@click.argument("handle")
+@click.argument("ref")
+@click.option(
+    "--filed-as", default=None,
+    help="On the acknowledgement of a request: what this project filed it as, when it keeps no "
+         "backlog (a joint-only participant, REQ-102) — e.g. an open item's id.",
+)
+def joint_ack(handle: str, ref: str, filed_as: str | None) -> None:
+    """Mark a message to this project handled, once read and acted on (REQ-101).
+
+    REF is the message's reference, `<project>#<seq>`, as `joint-list` shows it. Answering a
+    message with `joint-send --reply-to` handles it too; acknowledging twice writes nothing.
+    A project with no backlog takes a request up by acknowledging it `--filed-as` the
+    reference it filed it under; the asking project's `joint-show` then shows that (REQ-102).
+    """
+    from .profiles.req import joint
+
+    cfg = _load_or_die(joint=True)
+    try:
+        entry = joint.ack(cfg, handle, ref, filed_as=filed_as)
+    except joint.JointError as exc:
+        raise click.ClickException(str(exc)) from exc
+    if entry is None:
+        click.echo(f"  {ref} in {handle} was already handled — nothing written.")
+        return
+    filed = f", filed as {entry.filed_as}" if entry.filed_as else ""
+    click.echo(click.style(f"  ✓ {handle}", fg="green") + f" — {entry.ref_id} acknowledges {ref}{filed}")
+
+
+@main.command("joint-list")
+def joint_list() -> None:
+    """What waits for this project in its joint tasks, and the requests it can take up (REQ-101).
+
+    Reads every stamped sibling's log for threads this project is a party of — nobody has to
+    say where the other project lives. Nothing here is stored: handled, closed and taken-up
+    are derived on every read. A sibling's unreadable line is reported and skipped.
+    """
+    from .profiles.req import joint
+
+    cfg = _load_or_die(joint=True)
+    v = joint.view(cfg)
+    open_threads = v.open_threads
+    waiting = [(t, m) for t in open_threads for m in t.waiting_for(v.me)]
+    cands = joint.candidates(cfg, v)
+    if waiting:
+        click.echo(click.style(f"Waiting for {v.me}:", bold=True))
+        for t, m in waiting:
+            text = m.need if m.kind == joint.ACTION else _first_line(m.body)
+            click.echo(f"  {t.handle:<34} {m.ref_id:<16} {m.kind:<7} {text}")
+    if cands:
+        how = (  # REQ-102: a joint-only participant keeps no backlog; it files by acknowledging
+            "not yet filed — take one up with `steward joint-ack <thread> <ref> --filed-as <reference>`"
+            if cfg.joint_only else "not yet in this project's backlog"
+        )
+        click.echo(click.style(f"Requests to take up ({how}):", bold=True))
+        for t in cands:
+            click.echo(f"  {t.handle:<34} from {t.opener:<16} {t.action.need}")
+    if open_threads:
+        click.echo(click.style("Open joint threads:", bold=True))
+        for t in open_threads:
+            done = f"done: {', '.join(t.done_by)}" if t.done_by else "done: nobody yet"
+            click.echo(f"  {t.handle:<34} with {t.other(v.me):<16} opened by {t.opener} · "
+                       f"{len(t.messages)} messages · {done}")
+    else:
+        click.echo(f"no open joint threads for {v.me}.")
+    for p in v.problems:
+        click.echo(click.style(f"  ! {p}", fg="yellow"))
+
+
+@main.command("joint-show")
+@click.argument("handle")
+def joint_show(handle: str) -> None:
+    """One joint task with both projects' halves merged in time order (REQ-101).
+
+    Shows who opened it and who was asked, whether it is open or closed and who said done, the
+    addressee's take-up as its own `backlog-list` derives it, then every message and
+    acknowledgement. A reference to a message that no longer exists is marked dangling.
+    """
+    from .profiles.req import joint
+
+    cfg = _load_or_die(joint=True)
+    v = joint.view(cfg)
+    try:
+        t = v.thread(handle)
+    except joint.JointError as exc:
+        raise click.ClickException(str(exc)) from exc
+    state = "closed" if t.closed else "open"
+    done = ", ".join(t.done_by) or "nobody yet"
+    click.echo(click.style(f"{t.handle}", bold=True) + f" — {t.opener} → {t.addressee} · {state} · done: {done}")
+    click.echo(f"  need:    {t.action.need}")
+    click.echo(f"  take-up: {joint.take_up(cfg, t)}")
+    dangling = {(e.ref_id, ref) for e, ref in t.dangling()}
+    for e in t.entries:
+        when = e.at[:19].replace("T", " ")
+        if e.kind == joint.ACK:
+            mark = "  (dangling: no such message)" if (e.ref_id, e.ref) in dangling else ""
+            filed = f", filed as {e.filed_as}" if e.filed_as else ""
+            click.echo(f"  {when}  {e.ref_id:<16} {e.author} acknowledged {e.ref}{filed}{mark}")
+            continue
+        status = "" if t.closed else ("  handled" if t.handled(e) else "  waiting")
+        answer = f" ↳ {e.reply_to}" if e.reply_to else ""
+        if e.reply_to and (e.ref_id, e.reply_to) in dangling:
+            answer += " (dangling: no such message)"
+        click.echo(click.style(f"  {when}  {e.ref_id:<16} {e.kind}{answer}{status}", bold=True))
+        if e.kind == joint.ACTION:
+            click.echo(f"      to {e.to}: {e.need}")
+        for line in e.body.splitlines():
+            click.echo(f"      {line}")
+    for p in v.problems:
+        click.echo(click.style(f"  ! {p}", fg="yellow"))
 
 
 if __name__ == "__main__":

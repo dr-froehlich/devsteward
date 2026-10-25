@@ -1,0 +1,259 @@
+# The hybrid machine-readable REQ format {#sec-format}
+
+A REQ file is Markdown with three layers, each tuned for a different reader.
+
+## Layer 1 — YAML frontmatter (the machine contract)
+
+```yaml
+id: REQ-007
+title: Group scope — shared access for co-deployed courses
+status: open            # draft | open | in-progress | blocked | done | dropped | superseded
+kind: feature           # feature | fix | chore | refactor | spec | design | docs
+added: 2026-05-26
+completed: null
+verified_by: null
+depends_on: [REQ-005, REQ-006]
+backlog_refs: [group-scope]   # backlog items this REQ takes up (REQ-093)
+concept_refs: []
+scenario_refs: [SCN-002]
+supersedes: null
+tags: [access]
+process:                # optional (REQ-027) — omit when every value is the default
+  concept: false        # concept phase (risk buy-down / spike) before develop?
+  lab: [REQ-031]        # REQs owning lab assets the System-Test phase requires
+```
+
+Validated against `req.schema.json` by `steward lint`. The `id` must match the filename
+(`REQ-007.md`). This is the layer the engine reads to build the dependency graph.
+
+The optional **`process:` block** records the intake-time declarations a present human
+made: whether a **concept phase** (architecture / risk buy-down / spike — whose deliverable
+is a `<concepts_dir>/REQ-NNN.md` doc or a `<concepts_dir>/REQ-NNN/` bundle directory,
+optionally a committed prototype, REQ-039/REQ-067) precedes develop, and which REQs own the
+**lab assets** the System-Test phase will require. An absent block means exactly the
+defaults (`concept: false`, `lab: []`); `lab:` references are lint-resolved like
+`depends_on`.
+
+A retired `develop:` key (REQ-095) is still *accepted* by the schema so REQs written before
+its retirement stay valid, but it declares nothing and the engine never reads it — the one
+process declaration that makes a step attended is `concept:`.
+
+## Layer 2 — the acceptance block (the verification contract)
+
+A single fenced block the verifier can run and track. A fully-tagged example showing all
+three `check:` values:
+
+````
+```yaml acceptance
+- id: AC1
+  text: The group-token parser grants every child course path in the fixture set.
+  test: "pytest tests/test_scope.py::test_group_token_authorizes_children"
+  check: regression
+  status: pending        # pending | pass | fail  (engine-owned)
+- id: AC2
+  text: A login against the lab IMAP server fetches the captured mail and the parsed
+    fields match the golden copy.
+  test: "pytest tests/system/test_imap_fetch.py::test_captured_mail_golden"
+  check: artifact
+  status: pending
+- id: AC3
+  text: A reviewer confirms the rendered report is legible and correctly localized.
+  test: "manual: reviewer signs off the rendered report"
+  check: manual
+  status: pending
+```
+````
+
+Every criterion has an `id`, a human `text`, a runnable `test`, and a **`check:`
+classification** — the REQ-027 routing key, validated by `steward lint` on active REQs
+(presence + enum only; lint never judges test *quality*):
+
+- **`regression`** — module/unit scope; the oracle is coupled to the code (mock
+  assertions); runs headless in the **Build** phase.
+- **`live`** (REQ-068) — system scope and a **decoupled** oracle (like `artifact`), but a
+  **standing** gate member: the cheapest end-to-end integration proof, run *as* regression
+  in **every** develop gate forever, not once-on-demand. This is the matrix cell
+  (system-scope × standing) that used to force authors to mislabel an e2e as `regression` or
+  hide it behind a pytest marker. A `live` test that **skips** in the develop gate (its
+  declared resource absent) is a **hard red**, never a tolerated skip — the engine knows it
+  must run.
+- **`artifact`** — system scope; a **decoupled, durable** oracle: a captured / golden /
+  hashable observable produced by the lab, of which the engine consumes only the
+  pass/fail signal. Runs **once** in the **System-Test** phase (a one-time validation).
+- **`manual`** — system scope; a **human** oracle; a decision stop inside the
+  System-Test phase (a one-time validation).
+
+**One flavor (REQ-068).** Every pytest acceptance command runs as `python -m pytest` under
+the one engine-resolved interpreter: a leading bare `pytest …` is normalized to
+`<interpreter> -m pytest …` (so the repo root is importable and a `from tests.<helper>`
+import resolves). A test never runs in a different *flavor* depending on how a human typed
+the string, any more than it runs in a different *lane* depending on a hand-edited marker.
+
+**Degrade — `live → artifact` (REQ-068).** When a newer live proof subsumes an older one,
+flip the older AC's `check:` from `live` to `artifact`: it leaves the standing develop gate
+and stays re-runnable via `steward repeat`; record the superseding test/REQ in the AC
+text or Notes. Degrade is *reclassification*, not a verb.
+
+**Oracle** (glossary): the part of a test that decides correct vs incorrect — distinct
+from the *fixture* (inputs/environment) and the *system under test*. A coupled oracle
+(authored alongside the code it checks) cannot disconfirm; what separates the three
+`check:` values is the oracle's coupling, not the test's name.
+
+**The environment-bound `regression` smell (REQ-064).** A `regression` whose oracle needs a
+service, secret, or network that is absent from a clean repo checkout (a database, a `.env`,
+a live service) can only **skip-or-pass** depending on hidden environment — so its green is
+*environment-bound*, not self-contained. That is the shape behind the FlowSteward REQ-043
+postmortem: an all-`pg_required` AC, filed `regression`, whose green rode a gitignored `.env`,
+which then tripped the commit-integrity gate. `/intake` screens every `regression` criterion
+for it and routes by oracle coupling: a **decoupled** oracle (a live service / golden output)
+is really an `artifact` — reclassify it and name the owning lab REQ in `process.lab`; an oracle
+**coupled** to the code that merely needs a **runtime** stays `regression`, with the
+required environment recorded in the REQ prose (so the batch lane wires it up). The engine tolerates
+such a skip at land (REQ-063), so this is a clarity guardrail, not a ban.
+
+The `status` field is **engine-owned**: the verifier writes `pass`/`fail` back after
+running the test. Do not hand-edit it. `steward lint` fails if any active REQ has a
+criterion without a test id or without a valid `check:`.
+
+## Layer 3 — prose (the reasoning, untouched)
+
+`## Context`, a `## Decisions` table, the `## Requirement` body, and `## Notes`. This is
+where the density that makes a REQ valuable a year later lives. The machine never parses
+it; humans always do. Keep it honest about trade-offs and explicit about what is *not* in
+scope.
+
+## Why hybrid
+
+Strict schema + parseable blocks give tools exactly what they need; rich prose stays
+rich. The schema and linter make the format a **contract, not a convention** — you can't
+half-follow it and stay green.
+
+## The backlog — the level above the REQ {#sec-backlog}
+
+A REQ is a **system** requirement: solution-shaped, with criteria naming runnable tests. A
+project may also keep the level above it — the need in the *user's* words, which a REQ may be
+translated from at intake. A REQ does not require a backlog item: an item may drive one or more
+REQs, and a REQ the owner intakes directly, such as a defect repair or a change no recorded need
+asked for, is complete without one. In ISO/IEC/IEEE 29148 terms the backlog is the stakeholder
+requirements and a REQ is the system requirements; `/intake` performs the transformation.
+
+The artifact lives at `backlog_file` (default `docs/BACKLOG.md`) and is **honor-when-present**
+— a project with no user-need queue keeps none, lints green, and is never nagged about it.
+It holds a table and, optionally, the owner's acceptance criteria per item:
+
+```markdown
+| Handle | Need | Origin |
+|---|---|---|
+| rapid-verdict | In a few minutes I can see whether this drive is worth repairing. | operator |
+
+## Acceptance criteria
+
+### rapid-verdict
+- In under five minutes I can see whether this drive is worth repairing.
+```
+
+A **handle**, not a REQ id: an id in a table reads as a commitment to build that thing, in
+that order, and this list commits to nothing. **Origin** is `operator` (their own words) or
+`proposed` (a session proposed it, the owner chose it) — the guard against the system writing
+its own requirements and then satisfying them.
+
+| Command | What it does |
+|---|---|
+| `steward backlog-add "<need>"` | Record a need. No interview, no schema, no id — the cheap way in. Creates the file if the project has none. Line breaks fold to one space (REQ-100). |
+| `steward backlog-list` | Every item with its **derived** state and attempt record. |
+| `steward backlog-edit <handle> [--need …] [--origin …] [--criterion …]` | Reword a need, its origin or its criteria in place; the handle never changes (REQ-097). Line breaks fold to one space (REQ-100). |
+| `steward backlog-accept <handle>` | The owner's verdict: this satisfies the need. |
+| `steward backlog-deny <handle> --reason "…"` | It does not. The reason is mandatory. |
+| `steward backlog-hold <handle> --reason "…"` | The need stands but is deliberately not being worked. Taking it up lifts the hold. |
+| `steward backlog-retire <handle> --reason "…"` | No longer wanted. Nothing is deleted. |
+
+The same operations — and the recovery verbs of @sec-engine — are also on the **status
+dashboard** (`steward dashboard`, REQ-097): one local page over every stamped project on the
+box, showing each project's steward status and git facts, what waits on the operator, the
+backlog with its derived states, and the REQs read-only. Its buttons call the same functions
+as the verbs, with the same refusals, and it never spawns a session.
+
+### Two verdicts, and why one of them cannot fail a REQ
+
+A REQ's acceptance criteria are **verification** criteria: did we build what was specified?
+They are absolute — a red one fails the REQ. An item's acceptance criteria are the owner's:
+was what we specified worth building? That verdict is **advisory to the REQ and blocking to
+the item.**
+
+So a REQ can close on green verification while its item is denied — *"exactly as specified"*
+and *"still not easy to use"* are both true at once. The REQ stays closed; the item stays
+**open**, carrying an attempt record naming the REQ that tried and the reason it did not
+land, and any later REQ may take it up. This is Scrum's rule that an unaccepted backlog item
+returns to the product backlog rather than reopening the sprint, and it is why acceptance is
+a standalone command rather than a step inside the System-Test session: the honest verdict on
+something like "easy to use" often arrives only after living with the result.
+
+### Nothing stores status
+
+There is no status column and no "taken up by" column, on purpose. Take-up is recorded once,
+in the taking-up REQ's `backlog_refs:`, written by intake in the same commit as the REQ and
+its index row. The verdict is recorded once, in the append-only `.devsteward/backlog.jsonl`,
+whose *sequence* is the attempt record. Everything an operator reads is derived from those
+two at display time — so there is no second copy to fall out of step, and no writer to
+forget. `steward lint` checks only that the claims resolve: it never demands that an item be
+taken up, ordered, prioritized or ever accepted.
+
+### Joint tasks: a need another project files (REQ-101)
+
+Sometimes one project needs another one to act. Without help the owner becomes the courier,
+carrying handover files and "filed as" references between sessions. A **joint task** removes
+that. The asking project opens a thread with `steward joint-send --to <project> --need "…"`.
+The project is named by its folder, and the stamped siblings in the same parent folder are found
+the way the dashboard finds them. The receiving project's `/intake` lists the request among its
+*requests to take up* and files it with `backlog-add --handle <thread>`. **The thread handle is
+the backlog handle**, so one string names the job in both repos. The asker reads the take-up
+from the receiver's backlog, and nothing is sent back to say where the request was filed.
+
+From then on the two projects exchange `ask`s (feedback, information, a decision) and `tell`s
+(information, answers). Each project's `/advance` finds what waits for it at orientation and
+works through it with the owner, in attended sessions only. The thread stays open until
+**both** projects have sent `done`.
+
+**A running session hears at once (REQ-103).** Sessions working in parallel on one machine
+would otherwise reach for the harness's direct messages, which leave no trace in either repo.
+So after every `joint-send` the sender rings the addressee's running attended session with a
+direct message holding only `steward joint-show <handle>`. The direct message gets the
+reaction, and the thread carries the content. A lost bell changes nothing, because the next
+`/advance` finds the entry. What a later session needs goes on the thread; coordination nobody
+will read later may go directly. The owner's approval never travels by direct message.
+
+The same two rules as the backlog hold:
+
+- **Each project writes only into its own `.devsteward/joint.jsonl`, by appending.** A message
+  is never written into the other project, where it would be swept into whatever session runs
+  there. So each repo's history holds what that project said.
+- **Nothing stores status.** Handled, closed and taken-up are derived from both logs and the
+  receiver's backlog on every read.
+
+| Command | What it does |
+|---|---|
+| `steward joint-send --to <project> --need "…"` | Open a thread with a request for action. |
+| `steward joint-send <handle> --kind ask\|tell\|done [--reply-to <ref>]` | Say something into a thread. |
+| `steward joint-ack <handle> <ref>` | This project handled a message addressed to it. |
+| `steward joint-list` | What waits for this project, and the requests it can take up. |
+| `steward joint-show <handle>` | One thread, both halves merged, with the addressee's take-up. |
+
+**A repository the REQ workflow does not govern can take part too (REQ-102).** The case is a
+repository with its own way of recording work, such as an operations record that keeps open
+items in its documents. `steward new <folder> --profile joint` joins it as a **joint-only
+participant**: it writes only `.devsteward/config.yaml` with `profile: joint`.
+
+- **Inside it,** the joint verbs, `status`, `lint` and `sync` run. Every other verb refuses, and
+  nothing of the REQ workflow is stamped there.
+- **Seen from the governed projects,** it is a sibling like any other, and nothing in how they use
+  the verbs changes.
+- **Take-up.** It keeps no backlog, so it takes a request up by acknowledging it
+  `--filed-as` its own reference (an open item's id, say). The asking project's `joint-show`
+  shows that.
+- **Its sessions** need their own stand-in for `/intake` and `/advance`, written by the
+  repository under its own rules.
+
+## What is *not* in the REQ
+
+Checkpoint and cursor state. **REQ = spec, ledger = cursor.** The ledger lives in
+`.devsteward/`. The only engine-written field inside a REQ is acceptance `status:`.

@@ -1,0 +1,23 @@
+# AC6 live closure — consumer: clauder (real consumer, onboarded before REQ-057)
+# Note: AC6 names FlowSteward, but FlowSteward already acquired STEWARD.md earlier today
+#       (15:55, byte-matches template, reports in-sync) so it can no longer show the
+#       missing->fix transition. clauder is another real consumer with the genuine
+#       'missing' precondition AC6 targets. Validation steered to clauder by the operator.
+# devsteward engine branch (shared pipx editable): dev
+# captured: 2026-06-23T18:15:12Z
+
+## repo-root STEWARD.md BEFORE
+ls: cannot access 'STEWARD.md': No such file or directory
+ABSENT (no STEWARD.md at clauder root)
+
+## lock files BEFORE
+ls: cannot access '.devsteward/stamped.lock': No such file or directory
+-rw-r--r-- 1 peter peter 413 Jun 23 12:03 .devsteward/skills.lock
+
+## steward status BEFORE
+profile: req
+all requirements done — nothing to do; add the next with `/intake`.
+
+stamped artifacts:
+  ⚠ onboard        stale  — run `steward sync`
+  ⚠ STEWARD.md     missing  — run `steward sync`

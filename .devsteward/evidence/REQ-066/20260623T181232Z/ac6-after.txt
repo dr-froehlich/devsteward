@@ -1,0 +1,28 @@
+## AFTER steward sync — clauder
+captured: 2026-06-23T18:15:42Z
+
+## repo-root STEWARD.md AFTER
+-rw-r--r-- 1 peter peter 7633 Jun 23 20:15 STEWARD.md
+
+## byte-compare clauder STEWARD.md vs installed template
+3e23f823b67522628e79036b63801f8a602dd93fa36f7ba2446708c7d2db5c0e  STEWARD.md
+3e23f823b67522628e79036b63801f8a602dd93fa36f7ba2446708c7d2db5c0e  /home/peter/projects/devsteward/devsteward/templates/STEWARD.md
+RESULT: byte-match ✓
+
+## lock files AFTER
+ls: cannot access '.devsteward/skills.lock': No such file or directory
+-rw-r--r-- 1 peter peter 497 Jun 23 20:15 .devsteward/stamped.lock
+
+## stamped.lock contents AFTER
+{
+  "STEWARD.md": "3e23f823b67522628e79036b63801f8a602dd93fa36f7ba2446708c7d2db5c0e",
+  "advance": "d7b1af7db1f01025f6cb0c33bd79e1aa41ea5bcf2b69096cf0decb8111164d1b",
+  "bootstrap": "7ab86089d6462469454ca7762dcb050e48c7e8cd3e5822ca88c4cae93ad9aee7",
+  "intake": "ec7b0e517d1e5c17ecd0c2d684a4198ff55c842f8f443fe5c8a948c74c87b92a",
+  "onboard": "57f7f668f07a36b8e88431d2e216cbd2b1fab3bc8e0a23d813db1e846e403907",
+  "system-test": "dfebaf60269400ef581ca552ba8de99fed3c238b631b2f9b8f1408c80311a30e"
+}
+
+## steward status AFTER
+profile: req
+all requirements done — nothing to do; add the next with `/intake`.

@@ -1,0 +1,9 @@
+# REQ-078 hardlink check (Notes requirement: SKILL.md hardlinked to template twin)
+
+advance:
+444801 /home/peter/projects/devsteward/.claude/skills/advance/SKILL.md
+444801 /home/peter/projects/devsteward/devsteward/templates/.claude/skills/advance/SKILL.md
+
+intake:
+444800 /home/peter/projects/devsteward/.claude/skills/intake/SKILL.md
+444800 /home/peter/projects/devsteward/devsteward/templates/.claude/skills/intake/SKILL.md

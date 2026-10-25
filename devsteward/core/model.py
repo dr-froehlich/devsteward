@@ -19,6 +19,7 @@ class StepStatus(str, Enum):
     DONE = "done"
     BLOCKED = "blocked-on-decision"
     FAILED = "failed"
+    RECOVER = "recover"  # an operator re-armed a FAILED step (REQ-026) — eligible again
 
 
 class DecisionStatus(str, Enum):
@@ -28,12 +29,19 @@ class DecisionStatus(str, Enum):
 
 @dataclass(frozen=True)
 class AcceptanceCheck:
-    """One acceptance criterion: a human ``text`` and a runnable ``test`` id."""
+    """One acceptance criterion: a human ``text`` and a runnable ``test`` id.
+
+    ``check`` is the REQ-027/REQ-068 routing key (``regression | live | artifact | manual``)
+    mapping the criterion onto the V-model and selecting its execution lane. The core only
+    carries the value — ``""`` means *undeclared*; the REQ profile's linter enforces
+    presence/enum on active REQs.
+    """
 
     id: str
     text: str
     test: str
     status: str = "pending"  # pending | pass | fail (engine-owned)
+    check: str = ""  # regression | live | artifact | manual ("" = undeclared)
 
 
 @dataclass(frozen=True)
@@ -53,11 +61,31 @@ class Step:
     title: str = ""
     req: str | None = None
     phase: str | None = None
+    #: This step needs a human present (the profile sets it; the core only honors it by
+    #: parking in batch). REQ-029/REQ-095: a REQ that declared a concept phase.
+    attended: bool = False
+    #: Opaque human-readable reason the step is attended (the profile fills it; the core
+    #: surfaces it verbatim in the batch park decision). Empty when ``attended`` is False.
+    attended_reason: str = ""
+    #: Whether a green gate on this step *lands* its deliverable (terminal flip, land
+    #: gate). The REQ profile sets ``False`` on a develop step that defers to a trailing
+    #: ``validate`` step (REQ-030 Decision 6): the work is committed on ``dev``, but the
+    #: land fires only after validation is green.
+    lands: bool = True
+    #: Opaque human-readable note on why the step is currently held (the profile fills
+    #: it; ``steward status`` surfaces it verbatim). E.g. REQ-030 Decision 7: a validate
+    #: step waiting on a not-yet-done ``process.lab`` requirement.
+    blocked_note: str = ""
 
 
 @dataclass
 class Decision:
-    """A parked fork: recorded, surfaced, and resumed once answered."""
+    """A parked fork: recorded, surfaced, and resumed once answered.
+
+    REQ-074: a decision is a **genuine fork only** — validation/attended holds are ledger
+    step holds, not decisions. The park carries a fork brief (``context``, ``options``,
+    ``recommendation``) so the operator is briefed, not just questioned; the answer carries
+    the operator's ``rationale``. All brief fields default empty so legacy records load."""
 
     id: str
     step: str
@@ -68,3 +96,6 @@ class Decision:
     req: str | None = None
     raised_at: str | None = None
     answered_at: str | None = None
+    context: str = ""
+    recommendation: str = ""
+    rationale: str | None = None

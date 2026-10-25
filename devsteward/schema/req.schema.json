@@ -9,8 +9,8 @@
   "properties": {
     "id": {
       "type": "string",
-      "pattern": "^REQ-[0-9]{3}$",
-      "description": "Zero-padded requirement id, e.g. REQ-001."
+      "pattern": "^REQ-[0-9]{3}[a-z]?$",
+      "description": "Zero-padded requirement id, e.g. REQ-001. An optional single lowercase letter splits an umbrella REQ into sub-parts (e.g. REQ-028p), purely lexically — no parent/child semantics."
     },
     "title": {
       "type": "string",
@@ -39,8 +39,14 @@
     },
     "depends_on": {
       "type": "array",
-      "items": { "type": "string", "pattern": "^REQ-[0-9]{3}$" },
+      "items": { "type": "string", "pattern": "^REQ-[0-9]{3}[a-z]?$" },
       "uniqueItems": true
+    },
+    "backlog_refs": {
+      "type": "array",
+      "items": { "type": "string", "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$" },
+      "uniqueItems": true,
+      "description": "Backlog item handles this REQ takes up (REQ-093). The only stored record of take-up; the backlog file carries no taken-up column."
     },
     "concept_refs": {
       "type": "array",
@@ -53,13 +59,49 @@
       "uniqueItems": true
     },
     "supersedes": {
-      "type": ["string", "null"],
-      "pattern": "^REQ-[0-9]{3}$"
+      "description": "A single REQ id, a list of REQ ids, or null (REQ-048: a design that retires a stack names them all).",
+      "oneOf": [
+        { "type": "null" },
+        { "type": "string", "pattern": "^REQ-[0-9]{3}[a-z]?$" },
+        {
+          "type": "array",
+          "items": { "type": "string", "pattern": "^REQ-[0-9]{3}[a-z]?$" },
+          "uniqueItems": true
+        }
+      ]
     },
     "tags": {
       "type": "array",
       "items": { "type": "string" },
       "uniqueItems": true
+    },
+    "process": {
+      "type": "object",
+      "description": "Optional intake-time process declarations (REQ-027). Absent keys default to concept: false, lab: [].",
+      "additionalProperties": false,
+      "properties": {
+        "develop": {
+          "type": "string",
+          "enum": ["fused", "split"],
+          "description": "RETIRED (REQ-095) — a legacy key the engine does not read. Still accepted so REQs written before its retirement stay schema-valid; it declares nothing and has no effect. Attendance is declared by `concept:` alone."
+        },
+        "concept": {
+          "type": "boolean",
+          "description": "Whether a concept phase (risk buy-down / spike where final test specs and lab needs are frozen) precedes develop."
+        },
+        "lab": {
+          "type": "array",
+          "items": { "type": "string", "pattern": "^REQ-[0-9]{3}[a-z]?$" },
+          "uniqueItems": true,
+          "description": "REQs owning the lab assets the System-Test phase requires; references are lint-resolved like depends_on."
+        },
+        "fixtures": {
+          "type": "array",
+          "items": { "type": "string" },
+          "uniqueItems": true,
+          "description": "Repo-relative paths to lab fixtures that must be committed upstream before validation (REQ-051). A missing one is a hard red; an untracked one under such a path means the System Tester improvised and is refused."
+        }
+      }
     }
   }
 }

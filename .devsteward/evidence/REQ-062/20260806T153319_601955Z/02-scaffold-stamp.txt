@@ -1,0 +1,17 @@
+=== .devsteward/stamped.lock ===
+{
+  "STEWARD.md": "a9e0825e1933c00acb78d63e1120144bac65780511a8157202393186dbf53ce3",
+  "advance": "257941f8207ecc793516dd5bcfb104e348e158a3599e0ecdab1208ba6c06bd3b",
+  "bootstrap": "e2b3f3ecf5c8431e06bc4600b48d5fb7cfe5442b28450971939a3f86ca2e4017",
+  "intake": "2dc9fc3d2c3db4d90c99c6031a44db75b4e7ff1d274f2c723000d019e5cae900",
+  "system-test": "f5287fe2ab71ee0466a060b1d4fd9ea4ce15c48cfe8f2c88fc94d8e18e666bb5"
+}
+
+=== .claude/skills (onboard must be ABSENT) ===
+advance
+bootstrap
+intake
+system-test
+
+=== .claude/settings.local.json present ===
+-rw-r--r-- 1 peter peter 13630 Jul 26 06:56 .claude/settings.local.json

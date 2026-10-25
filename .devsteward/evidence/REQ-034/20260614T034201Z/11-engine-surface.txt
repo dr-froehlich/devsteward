@@ -1,0 +1,24 @@
+=== Engine surface (black-box) consumed for REQ-034 AC6 ===
+steward path : /home/peter/.local/bin/steward
+interpreter  : #!/home/peter/.local/share/pipx/venvs/devsteward/bin/python
+devsteward   : /home/peter/projects/devsteward/devsteward
+               (editable pipx install -> runs the checked-out branch of the repo)
+devsteward HEAD branch: req-034-human-validation-as-a-guided
+
+--- steward validate --help ---
+Usage: steward validate [OPTIONS] REQ_ID
+
+  Run REQ_ID's System-Test phase — the single entry point (REQ-030).
+
+  On an in-flight REQ this executes the pending ``validate`` step: the fresh
+  System Tester session preps the lab and captures artifacts, the engine runs
+  each ``artifact`` AC's named test itself, ``manual`` ACs take your sign-off
+  here, and on green the REQ lands mechanically (flip, index, commit, merge).
+  On a **done** REQ it appends a fresh dated evidence event and leaves the REQ
+  file untouched — status *and* ``verified_by`` stay the frozen landing
+  provenance (re-run policy, REQ-030 Decision 5 as clarified by REQ-035). A
+  red validation parks with the failure brief — no repair loop.
+
+Options:
+  --quiet  Suppress live claude output; show only the report.
+  --help   Show this message and exit.

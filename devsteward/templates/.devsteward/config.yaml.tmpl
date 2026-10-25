@@ -3,14 +3,94 @@
 
 profile: req
 
-# Where the requirements live, relative to the repo root.
+# Where the engine's documents live, relative to the repo root. All four are yours to
+# place: a project whose `docs/` is owned by a docs generator (mkdocs, Sphinx, Docusaurus
+# — everything under it gets built and deployed) keeps the engine's artifacts out of that
+# tree by pointing these elsewhere, e.g. `requirements/`, `requirements/plans/`.
+#   requirements_dir — the REQ corpus (`steward lint`/`status` read it)
+#   index_file       — REQUIREMENTS_INDEX.md; status source of truth with the frontmatter
+#   plans_dir        — plan artifacts; the land refuses a REQ no file here names (REQ-029)
+#   concepts_dir     — concept deliverables for a REQ with `process.concept` (REQ-039)
 requirements_dir: docs/requirements
 index_file: docs/requirements/REQUIREMENTS_INDEX.md
-roadmap_file: docs/requirements/ROADMAP.md
+plans_dir: docs/plans
+concepts_dir: docs/concepts
 
 # Account / quota provider for headless runs.
-#   cswap  — route claude through claude-swap (two-account, --use N pinning, adaptive
-#            gate); degrades to single-account when cswap is absent.
-#   single — plain `claude`, no quota machinery.
+#   clauder — delegate the per-step budget gate to the external `clauder` CLI (REQ-058):
+#             `clauder gate` decides proceed/switch/wait against the combined budget across
+#             accounts and tells cswap when to switch. The engine never touches cswap
+#             directly and never runs `clauder monitor` (operator-started, out-of-band).
+#             Degrades to "proceed, no quota check" when `clauder` is absent from PATH.
+#   single  — plain `claude`, no quota machinery.
 accounts:
-  provider: cswap
+  provider: clauder
+
+# How a headless `claude -p` run is allowed to act on the repo. Headless sessions have
+# no interactive approver, so without this every edit stalls and the run does nothing.
+#   dangerously-skip  — bypass all permission checks (autonomous edits; the default,
+#                       matches the proven batch runner). Use in a trusted repo.
+#   bypassPermissions / acceptEdits / plan / default — claude --permission-mode values.
+#   ask               — no flag (attended/interactive; a headless run can't edit).
+#
+# Which model drives each session (REQ-029/030, REQ-090). Every model identifier the engine
+# uses lives HERE and nowhere in its Python — a model id in engine source would tie
+# DevSteward's releases to Anthropic's, and it hid the global default while leaving the
+# per-step overrides configurable. Both levels are visible below; edit them freely, they are
+# yours. Delete `model:` entirely and the engine passes no --model at all, so the session
+# uses whatever your installed `claude` defaults to.
+#
+# Each REQ is one `develop` Claude session; a red gate spawns up to two `repair` sessions,
+# then parks; a REQ with artifact/manual acceptance criteria adds one `validate` System
+# Tester session. `claude.steps.<kind>` overrides the flat default for one kind — the
+# shipped overrides spend less where the full budget buys nothing: a `repair` is a cheap cold
+# restart (a cheaper model), and the System Tester follows a validation procedure rather than
+# solving novel problems (REQ-030 D2), so it keeps the top model at lower effort.
+claude:
+  permission_mode: dangerously-skip
+  model: claude-opus-5-5
+  effort: xhigh
+  steps:
+    repair:   {model: claude-sonnet-5, effort: high}
+    validate: {model: claude-opus-5-5, effort: medium}
+
+# Attribution on the commits the engine makes (REQ-091). A commit the engine stamps carries
+# a *disclosure* trailer — `Assisted-by: Claude:<model-id>`, naming the model it actually
+# spawned that session with, or `Claude:unknown` when the identity did not reach it. It takes
+# no email, and the human stays the sole `Author:`; a model holds no copyright, signs no CLA
+# and cannot certify a DCO, so a co-authorship trailer would be a false claim whatever name
+# it carried. An attended session exports `DEVSTEWARD_ASSISTED_BY` so a `steward checkpoint`
+# subprocess can name its driver. Set this to false if your project's contributor policy bans
+# AI trailers — the commits then carry no attribution trailer at all. The key and format are
+# fixed on purpose; only on/off is yours.
+attribution_trailer: true
+
+# Branching model — trunk-based. `main` is production (release tags are cut here); the
+# integration branch is the default working branch. All work — declaration *and*
+# implementation — lands on the integration branch; there are no feature branches, no
+# worktrees, and the engine never switches branches. The engine refuses to autocommit on
+# `production_branch` — switch to the integration branch to run. The only branch operation
+# is the human-gated integration → production release PR.
+git:
+  production_branch: main
+  integration_branch: dev
+
+# How the land gate verifies (REQ-028). A `land` step is DONE only when its named
+# acceptance behaviour *observably ran and passed*: a skipped or zero-collection named
+# test fails the gate (skip ≠ green), and the whole suite must be clean.
+#   full_suite — the command for the project's full test suite, run at land in addition
+#                to each named acceptance test (default `python -m pytest`; set to `null`
+#                to disable). Skips in the full suite stay legal; failures/errors fail land.
+#   python     — optional explicit interpreter the gate runs tests under (e.g.
+#                `.venv/bin/python`). A configured-but-unusable interpreter is a hard,
+#                surfaced error. Unset: discover the project venv, then the engine's own.
+#   env_file   — the declared env-file the land's commit-integrity self-check carries into
+#                its ephemeral tree extract (REQ-072), so the check runs in the same
+#                declared environment the gate used (default `.env`; set to `null` to
+#                disable). Honor-when-present: an absent file is a no-op. The file is
+#                copied only into the throwaway extract dir — its contents never reach a
+#                message, event, or artifact.
+# verify:
+#   full_suite: python -m pytest
+#   python: .venv/bin/python
+#   env_file: .env

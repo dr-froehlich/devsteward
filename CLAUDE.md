@@ -5,15 +5,92 @@ scaffolding `steward new` stamps into consumer projects. This file is for develo
 *DevSteward itself* — it is **not** the `CLAUDE.md.tmpl` that ships to consumers (that
 lives at `devsteward/templates/CLAUDE.md.tmpl` and uses placeholders only).
 
+## Design principles (read before proposing structure)
+
+These exist because the engine accreted team-scale git topology (feature branches +
+worktrees + switching) that the owner never asked for and could not audit — six
+firefighting REQs traced to that one un-chosen default (see REQ-047, `[[trunk-based-pivot-req047]]`).
+When you design or change anything here, hold to these:
+
+- **Trunk-based, linear history by default.** Work on one branch (`dev`); do not introduce
+  feature branches, worktrees, or engine-initiated branch switching. The reference projects
+  are ExamEngineer, Memzy, and scaleup — single linear trace, no switching back and forth.
+  If you think branching is warranted, *say so and ask first* — never assume it.
+- **Minimal topology / prefer subtraction.** Add machinery only when a concrete, present
+  need demands it. A string of fixes that each *add* structure is a smell that the premise
+  is wrong — stop and question the premise, don't patch it.
+- **Don't solve information-flow constraints with git topology.** "A session must not read
+  the diff" (the System-Test decoupling) is enforced by the session not reading it — not by
+  a separate branch. Keep isolation in the layer that actually owns it.
+- **Surface unnecessary complexity, especially in the owner's blind spots.** The owner's git
+  competence is limited and trusts the AI here; that is exactly where over-engineering hides.
+  Volunteer the simplest alternative in terms the owner can judge, and justify any complexity
+  before building it.
+- **Match the owner's stated references; fill silence with the *simplest* option, not the
+  most conventional one.** Unspecified ≠ "do it the impressive way."
+- **Avoid waste.** Everything DevSteward puts into a consumer project sits in one of four
+  quadrants (Lean):
+
+  | | needed | not needed |
+  |---|---|---|
+  | **adds value** | keep | user choice — optional |
+  | **adds no value** | keep — necessary for DevSteward's internal workings; keep the cost to the consumer minimal | remove |
+
 ## House conventions (first-class, enforced)
 
 - **English everywhere** in code and technical docs. German UI strings are allowed but
   must be isolated/translatable — never inline in logic.
 - **Same-commit discipline:** a REQ's frontmatter, its row in `REQUIREMENTS_INDEX.md`,
   and the code that satisfies it move in the *same* commit.
-- **Branch before main:** never commit directly to `main`; branch, then open a PR.
-- **Co-author trailer** on commits:
-  `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`
+- **Status has one source — the index ↔ frontmatter pair** (kept in lockstep by `steward
+  lint`; `steward status` reads it live).
+- **Branching model — trunk-based (REQ-047 → REQ-048, landed).** All work lands on **`dev`**:
+  intake (REQ frontmatter, index row), plans, the ledger, **and** implementation
+  (code + acceptance tests + the status-flip to `done` + index `DONE`-sync) are all committed
+  directly on `dev`. **No feature branches, no worktrees, no engine-initiated branch
+  switching** — the engine never creates, switches, or merges a branch; there is one
+  co-located ledger that cannot diverge from itself. `main` = production / released (release
+  tags like `v0.1.0` cut here; consumers pin them); `dev` = integration / beta, the default
+  working branch. Never commit to `main`; the **only** branch operation is the human-gated
+  `dev → main` release PR. Beta tags (`vX.Y.Z-beta.N`, PEP 440 pre-release) may be cut on
+  `dev`; stable tags on `main`. If `main` is ever hotfixed directly, merge it back into `dev`.
+- **Attribution trailer** on commits is a *disclosure*, not an authorship claim:
+  `Assisted-by: Claude:<model-id>` naming the model actually driving the session — never a
+  hardcoded model string, and **no email address**. A model holds no copyright, signs no CLA
+  and cannot certify a DCO, so an *authorship* trailer would be false whatever name it
+  carried; disclosure is the claim that is true. The human stays the sole `Author:`.
+  Engine-made commits (`steward checkpoint`) name the model
+  the engine resolved for that spawn, or `Claude:unknown` when the identity genuinely did not
+  reach it — an absent version is stated, never blanked into a bare agent name. An attended
+  session exports `DEVSTEWARD_ASSISTED_BY` so a `steward` subprocess can name its driver.
+  Neither the engine nor a session adds `Signed-off-by:` — the DCO is a certification only a
+  human can make.
+- **The shipped manual tracks the engine (REQ-094).** A REQ that changes anything a *consumer
+  agent* observes — a CLI verb, a flag, a behaviour, a frontmatter field — updates
+  `devsteward/templates/STEWARD.md` in the **same commit**. That file is the black-box manual
+  `CLAUDE.md.tmpl` calls "the authoritative `steward` reference", and it is the only interface a
+  consumer has: a feature the manual does not describe does not exist for them, however green its
+  tests are. `tests/test_steward_manual.py` derives verb coverage from the click registry and will
+  go red on a new verb by itself, but it cannot see a behaviour change that adds no verb — that
+  half is yours. This obligation is **DevSteward's own** and must never be pushed into a shipped
+  artifact: the bundled skills are inode-shared with their templates, so a rule added to
+  `/advance` ships to every consumer, and telling a consumer to edit `STEWARD.md` would mark their
+  copy `customized` and make `steward sync` refuse it forever. Dogfooding does not license using
+  the engine's reach for what only this project needs.
+- **One artifact, one file (REQ-096).** An artifact that has to exist in two locations —
+  an engine path and its stamped template path — is unified at the **filesystem**:
+  inode-shared (a hard link) or a symlink, never a second copy. A copy is a drift
+  generator, and the drift is silent because nothing fails when the twins disagree. The
+  existing instances are the pattern: `docs/requirements/_templates/req.md` is **one inode**
+  with `devsteward/templates/docs/requirements/_templates/req.md`, the root `STEWARD.md` is a
+  **symlink** to `devsteward/templates/STEWARD.md`, and every bundled skill is inode-shared
+  with its template — edit either path, both change, no synchronizer exists or is needed.
+  The one place this was not applied was the stamped `req.schema.json`, and it drifted two
+  REQ-cycles behind the packaged one (REQ-048's `supersedes` list, REQ-051's
+  `process.fixtures`) even though REQ-021's text named both paths. It was deleted rather
+  than guarded — nothing read it. So: when a new artifact needs a twin, **link it**; if it
+  cannot be linked, ask whether the second copy needs to exist at all before writing a
+  synchronizer for it.
 - **Sanitized public repo:** no real local paths (`/mnt/c/Users/...`), no emails, no
   account creds in committed files. Templates use placeholders.
 
@@ -24,20 +101,42 @@ lives at `devsteward/templates/CLAUDE.md.tmpl` and uses placeholders only).
   advances. Pluggable seams: step source, verifier, decision gate, account provider.
 - `devsteward/profiles/req/` — the REQ-workflow profile (Design → Build → Land) layered
   on the core. The only content-aware part.
-- `devsteward/cli.py` — `steward` (click): `new`, `advance`, `run`, `lint`, `status`,
-  `decision`.
+- `devsteward/cli.py` — `steward` (click): `new`, `advance`, `run`, `checkpoint`,
+  `lint`, `status`, `decision`.
+- `devsteward/verbs.py` — one callable per state-changing verb; the CLI and the dashboard
+  both call these (REQ-097). Never re-implement a verb's body in a second surface.
+- `devsteward/dashboard/` — the status dashboard (`steward dashboard`, the optional
+  `dashboard` extra): `model.py` pure reads, `app.py` Flask routes, `templates/`.
 - `devsteward/templates/` — the scaffolding `steward new` stamps (package-data).
 - `devsteward/handbook/` — the reference guide (00-method … 04-skills).
 - `docs/requirements/` — DevSteward's **own** REQs (dogfooded). `.devsteward/` holds its
   own ledger.
+- `docs/BACKLOG.md` — DevSteward's **own** backlog of user needs (REQ-093 dogfooded, since
+  2026-09-17). Take items up at `/intake`; never add a status column.
 
 ## Build / test
 
 ```sh
 python -m pytest            # run the package's own tests
 steward lint                # validate the dogfooded REQs (run from repo root)
-pipx install --editable .   # prove the install path
+pipx install --editable .   # prove the install path — pipx ONLY (see below)
 ```
+
+**Install path: pipx editable, and nothing else.** The `steward` command is the **pipx**
+editable install (`~/.local/bin/steward` → the pipx venv), which tracks the repo live and is
+what consumers (e.g. FlowSteward) also use. Do **not** `pip install -e .` (or
+`pip install -e`) into a project `.venv`: it is redundant (the pipx command already exists,
+and `python -m pytest` resolves `devsteward` via `sys.path` without any install), it creates a
+*second* console script that shadows pipx on PATH when the venv is active, and it is a known
+footgun. A `.venv` is fine **only** for isolated dev tooling (pytest/click); never install the
+package itself into it.
+
+**Never run `pip install -e .` from inside the engine's managed worktree**
+(`<repo>.parent/.devsteward.<integration>-wt`, the transient linked worktree REQ-037 spins up
+to write the ledger). pip binds the editable mapping to that ephemeral path; when the engine
+prunes the worktree, every `steward` from that install breaks with `ModuleNotFoundError`.
+Always install from the canonical repo root (`git rev-parse --show-toplevel`). To repair a
+poisoned editable: `pip uninstall -y devsteward` then reinstall from the repo root.
 
 ## The ledger contract
 

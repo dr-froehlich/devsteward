@@ -1,0 +1,8 @@
+# ~/.claude.json integrity around clauder gate/monitor (AC3: no torn switch / corruption)
+before: jq empty exit=0  (0=valid)
+before: active_slot=2
+after:  jq empty exit=0  (0=valid)
+after:  active_slot=2
+
+=> ~/.claude.json remained VALID JSON across concurrent clauder monitor + gate calls;
+   active_slot unchanged (2): no switch was advisable (active account is the best), no torn write.

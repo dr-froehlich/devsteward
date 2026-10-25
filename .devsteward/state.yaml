@@ -1,6 +1,432 @@
 version: 1
 profile: req
 cursor:
-  step:
-steps: {}
-decisions: []
+  step: REQ-103:validate
+steps:
+  REQ-011:design:
+    status: done
+    updated: '2026-06-08T04:32:06+00:00'
+  REQ-011:build:
+    status: done
+    updated: '2026-06-08T05:18:39+00:00'
+  REQ-011:land:
+    status: done
+    updated: '2026-06-08T05:19:32+00:00'
+  REQ-010:design:
+    status: done
+    updated: '2026-06-08T07:57:29+00:00'
+  REQ-010:build:
+    status: done
+    updated: '2026-06-08T08:23:30+00:00'
+  REQ-010:land:
+    status: done
+    updated: '2026-06-08T10:08:40+00:00'
+  REQ-020:design:
+    status: done
+    updated: '2026-06-08T19:57:01+00:00'
+  REQ-020:build:
+    status: done
+    updated: '2026-06-08T20:22:37+00:00'
+  REQ-020:land:
+    status: done
+    updated: '2026-06-09T06:09:50+00:00'
+  REQ-021:design:
+    status: done
+    updated: '2026-06-09T04:17:10+00:00'
+  REQ-021:build:
+    status: done
+    updated: '2026-06-09T04:22:32+00:00'
+  REQ-021:land:
+    status: done
+    updated: '2026-06-09T09:00:00+00:00'
+  REQ-025:design:
+    status: done
+    updated: '2026-06-09T07:40:14+00:00'
+  REQ-025:build:
+    status: done
+    updated: '2026-06-09T07:59:15+00:00'
+  REQ-025:land:
+    status: done
+    updated: '2026-06-09T11:59:54+00:00'
+  REQ-026:design:
+    status: done
+    updated: '2026-06-09T08:05:48+00:00'
+  REQ-026:build:
+    status: done
+    updated: '2026-06-09T08:13:20+00:00'
+  REQ-026:land:
+    status: done
+    updated: '2026-06-09T20:19:34+00:00'
+  REQ-028:design:
+    status: done
+    updated: '2026-06-09T20:26:20+00:00'
+  REQ-028:build:
+    status: done
+    updated: '2026-06-09T20:34:51+00:00'
+  REQ-028:land:
+    status: done
+    updated: '2026-06-09T20:36:18+00:00'
+  REQ-030:develop:
+    status: done
+    updated: '2026-06-10T20:23:17+00:00'
+  REQ-030:validate:
+    status: done
+    updated: '2026-06-10T20:33:20+00:00'
+  REQ-031:develop:
+    status: done
+    updated: '2026-06-11T14:06:39+00:00'
+  REQ-031:validate:
+    status: done
+    updated: '2026-06-11T14:46:38+00:00'
+  REQ-032:develop:
+    status: done
+    updated: '2026-06-11T15:38:31+00:00'
+  REQ-033:develop:
+    status: done
+    updated: '2026-06-12T13:04:50+00:00'
+  REQ-033:validate:
+    status: done
+    updated: '2026-06-12T13:46:34+00:00'
+  REQ-034:develop:
+    status: done
+    updated: '2026-06-16T05:56:15+00:00'
+  REQ-034:validate:
+    status: done
+    updated: '2026-06-16T07:34:21+00:00'
+  REQ-035:develop:
+    status: done
+    updated: '2026-06-14T01:20:46+00:00'
+  REQ-037:develop:
+    status: done
+    updated: '2026-06-15T06:30:16+00:00'
+  REQ-036:develop:
+    status: done
+    updated: '2026-06-16T04:51:46+00:00'
+  REQ-040:develop:
+    status: done
+    updated: '2026-06-15T20:44:21+00:00'
+  REQ-041:develop:
+    status: done
+    updated: '2026-06-15T21:26:15+00:00'
+  REQ-036:validate:
+    status: done
+    updated: '2026-06-16T05:09:00+00:00'
+  REQ-043:develop:
+    status: done
+    updated: '2026-06-16T05:41:43+00:00'
+  REQ-042:develop:
+    status: done
+    updated: '2026-06-16T05:52:00+00:00'
+  REQ-052:develop:
+    status: done
+    updated: '2026-06-19T13:19:35+00:00'
+  REQ-052:validate:
+    status: done
+    updated: '2026-06-19T14:29:28+00:00'
+  REQ-053:develop:
+    status: done
+    updated: '2026-06-19T14:37:51+00:00'
+  REQ-053:validate:
+    status: done
+    updated: '2026-06-19T14:49:14+00:00'
+  REQ-054:develop:
+    status: done
+    updated: '2026-06-19T18:01:37+00:00'
+  REQ-055:develop:
+    status: done
+    updated: '2026-06-19T19:44:12+00:00'
+  REQ-056:develop:
+    status: done
+    updated: '2026-06-20T12:07:58+00:00'
+  REQ-057:develop:
+    status: done
+    updated: '2026-06-20T18:43:39+00:00'
+  REQ-059:develop:
+    status: done
+    updated: '2026-06-20T18:30:37+00:00'
+  REQ-057:validate:
+    status: done
+    updated: '2026-06-20T21:01:16+00:00'
+  REQ-058:develop:
+    status: done
+    updated: '2026-06-20T21:10:10+00:00'
+  REQ-058:validate:
+    status: done
+    updated: '2026-06-20T21:50:00+00:00'
+  REQ-060:develop:
+    status: done
+    updated: '2026-06-20T21:16:33+00:00'
+  REQ-061:develop:
+    status: done
+    updated: '2026-06-21T03:56:51+00:00'
+  REQ-039:develop:
+    status: done
+    updated: '2026-06-21T04:41:33+00:00'
+  REQ-022:develop:
+    status: done
+    updated: '2026-06-21T08:43:21+00:00'
+  REQ-023:develop:
+    status: done
+    updated: '2026-06-21T08:51:40+00:00'
+  REQ-024:develop:
+    status: done
+    updated: '2026-06-21T08:55:51+00:00'
+  REQ-063:develop:
+    status: done
+    updated: '2026-06-23T07:43:12+00:00'
+  REQ-064:develop:
+    status: done
+    updated: '2026-06-23T08:22:08+00:00'
+  REQ-064:validate:
+    status: done
+    updated: '2026-06-23T10:02:22+00:00'
+  REQ-065:develop:
+    status: done
+    updated: '2026-06-23T15:57:38+00:00'
+  REQ-066:develop:
+    status: done
+    updated: '2026-06-23T18:12:01+00:00'
+  REQ-066:validate:
+    status: done
+    updated: '2026-06-23T18:16:34+00:00'
+  REQ-067:develop:
+    status: done
+    updated: '2026-06-26T15:56:14+00:00'
+  REQ-068:develop:
+    status: done
+    updated: '2026-06-29T03:43:03+00:00'
+  REQ-068:validate:
+    status: done
+    updated: '2026-06-29T05:36:03+00:00'
+  REQ-070:develop:
+    status: done
+    updated: '2026-06-29T07:33:18+00:00'
+  REQ-072:develop:
+    status: done
+    updated: '2026-07-02T04:14:27+00:00'
+  REQ-073:develop:
+    status: done
+    updated: '2026-07-03T12:46:10+00:00'
+  REQ-071:develop:
+    status: done
+    updated: '2026-07-05T12:54:12+00:00'
+  REQ-074:develop:
+    status: done
+    updated: '2026-07-05T14:47:27+00:00'
+  REQ-075:develop:
+    status: done
+    updated: '2026-07-05T18:00:06+00:00'
+  REQ-076:develop:
+    status: done
+    updated: '2026-07-06T20:54:55+00:00'
+  REQ-077:develop:
+    status: done
+    updated: '2026-07-09T10:52:08+00:00'
+  REQ-071:validate:
+    status: done
+    updated: '2026-07-09T10:56:14+00:00'
+  REQ-078:develop:
+    status: done
+    updated: '2026-07-10T12:19:56+00:00'
+  REQ-078:validate:
+    status: done
+    updated: '2026-07-10T12:26:12+00:00'
+  REQ-079:develop:
+    status: done
+    updated: '2026-07-11T05:36:32+00:00'
+  REQ-074:validate:
+    status: done
+    updated: '2026-07-11T06:52:18+00:00'
+  REQ-080:develop:
+    status: done
+    updated: '2026-07-17T01:20:40+00:00'
+  REQ-081:develop:
+    status: done
+    updated: '2026-07-17T05:04:14+00:00'
+  REQ-082:develop:
+    status: done
+    updated: '2026-07-17T06:28:24+00:00'
+  REQ-083:develop:
+    status: done
+    updated: '2026-07-17T09:18:39+00:00'
+  REQ-081:validate:
+    status: done
+    updated: '2026-07-17T12:27:53+00:00'
+  REQ-084:develop:
+    status: done
+    updated: '2026-07-30T09:53:24+00:00'
+  REQ-062:develop:
+    status: done
+    updated: '2026-08-01T08:03:13+00:00'
+  REQ-017:develop:
+    status: done
+    updated: '2026-08-01T21:10:48+00:00'
+  REQ-086:develop:
+    status: done
+    updated: '2026-08-02T01:43:28+00:00'
+  REQ-085:develop:
+    status: done
+    updated: '2026-08-02T01:58:35+00:00'
+  REQ-087:develop:
+    status: done
+    updated: '2026-08-06T00:30:36+00:00'
+  REQ-088:develop:
+    status: done
+    updated: '2026-08-06T06:04:18+00:00'
+  REQ-089:develop:
+    status: done
+    updated: '2026-08-06T11:18:12+00:00'
+  REQ-089:validate:
+    status: done
+    updated: '2026-08-06T11:40:55+00:00'
+  REQ-085:validate:
+    status: done
+    updated: '2026-08-06T15:32:38+00:00'
+  REQ-062:validate:
+    status: done
+    updated: '2026-08-06T15:40:30+00:00'
+  REQ-090:develop:
+    status: done
+    updated: '2026-08-10T05:51:58+00:00'
+  REQ-091:develop:
+    status: done
+    updated: '2026-08-15T17:03:50+00:00'
+  REQ-091:validate:
+    status: done
+    updated: '2026-08-15T17:23:29+00:00'
+  REQ-092:develop:
+    status: done
+    updated: '2026-08-22T11:17:05+00:00'
+  REQ-093:develop:
+    status: done
+    updated: '2026-08-27T17:32:36+00:00'
+  REQ-093:validate:
+    status: done
+    updated: '2026-08-27T18:04:50+00:00'
+  REQ-094:develop:
+    status: done
+    updated: '2026-09-01T07:24:16+00:00'
+  REQ-095:develop:
+    status: done
+    updated: '2026-09-03T19:10:12+00:00'
+  REQ-096:develop:
+    status: done
+    updated: '2026-09-03T19:23:32+00:00'
+  REQ-097:develop:
+    status: done
+    updated: '2026-09-17T09:08:29+00:00'
+  REQ-098:develop:
+    status: done
+    updated: '2026-09-19T13:33:37+00:00'
+  REQ-100:develop:
+    status: done
+    updated: '2026-10-10T08:17:31+00:00'
+  REQ-101:develop:
+    status: done
+    updated: '2026-10-10T10:22:57+00:00'
+  REQ-102:develop:
+    status: done
+    updated: '2026-10-10T13:18:57+00:00'
+  REQ-069:develop:
+    status: done
+    updated: '2026-10-10T16:46:14+00:00'
+  REQ-103:develop:
+    status: done
+    updated: '2026-10-12T09:24:30+00:00'
+  REQ-103:validate:
+    status: done
+    updated: '2026-10-12T11:10:59+00:00'
+decisions:
+- id: DEC-001
+  step: REQ-031:validate
+  question: "REQ-031 validation red — needs a human:\n[1] python -m pytest tests/test_imap_lab.py::test_evidence_artifact_matches_golden\n\
+    \    1 failed, 0 errors of 1\n    =========================== short test summary
+    info ============================\n    FAILED tests/test_imap_lab.py::test_evidence_artifact_matches_golden
+    - Assert...\n    ============================== 1 failed in 0.03s ==============================="
+  status: answered
+  options: []
+  answer: "Not a hollow develop and not a broken lab: the gate ran without DEVSTEWARD_LAB_IMAP_ENV
+    in the engine's environment (the System Tester sets it only inside its session).
+    Captured evidence verified green against the lab manifest with the seam set; procedure
+    note added in commit fac11fb. Re-run attended with the seam exported."
+  req: REQ-031
+  raised_at: '2026-06-11T14:38:54+00:00'
+  answered_at: '2026-06-11T14:43:08+00:00'
+- id: DEC-002
+  step: REQ-034:validate
+  question: 'REQ-034 validation: manual AC AC6 awaits its human oracle — run `steward
+    validate REQ-034` attended to record the sign-off.'
+  status: answered
+  options: []
+  answer: "Superseded by the recorded verdict: Peter attended `steward validate REQ-034`
+    and declined AC6 (red) on 2026-06-14. The placeholder's ask — attend and record
+    the sign-off — is fulfilled; the verdict is the red park DEC-003. (Reconciled
+    onto dev's ledger by hand after the two-phase validate handover crashed — see
+    evidence 70-/80-FINDING.)"
+  req: REQ-034
+  raised_at: '2026-06-14T01:15:02+00:00'
+  answered_at: '2026-06-14T04:58:09+00:00'
+- id: DEC-003
+  step: REQ-034:validate
+  question: "REQ-034 validation red — needs a human:\ndeclined by Peter Froehlich\n\
+    \nReturn it to develop for a fix with `steward rework REQ-034` (the V-model return
+    edge)."
+  status: answered
+  options: []
+  answer: 'reworked: human returned the red validation to develop for a fix'
+  req: REQ-034
+  raised_at: '2026-06-14T04:58:09+00:00'
+  answered_at: '2026-06-14T05:42:40+00:00'
+- id: DEC-004
+  step: REQ-034:validate
+  question: "REQ-034 validation red — needs a human:\ndeclined by Peter Froehlich\n\
+    \nReturn it to develop for a fix with `steward rework REQ-034` (the V-model return
+    edge)."
+  status: answered
+  options: []
+  answer: 'reworked: human returned the red validation to develop for a fix'
+  req: REQ-034
+  raised_at: '2026-06-14T13:14:24+00:00'
+  answered_at: '2026-06-14T13:14:48+00:00'
+- id: DEC-005
+  step: REQ-041:develop
+  question: refusing to land REQ-041 — no file in plans/ names REQ-041 
+    (plan-first discipline; write the plan before landing)
+  status: answered
+  options: []
+  answer: plan 0023 written (names REQ-041); re-driving the land
+  req: REQ-041
+  raised_at: '2026-06-15T21:15:56+00:00'
+  answered_at: '2026-06-15T21:25:18+00:00'
+- id: DEC-006
+  step: REQ-036:validate
+  question: "REQ-036 validation red — needs a human:\ndeclined by Peter Froehlich\n\
+    \nReturn it to develop for a fix with `steward rework REQ-036` (the V-model return
+    edge)."
+  status: answered
+  options: []
+  answer: 'reworked: human returned the red validation to develop for a fix'
+  req: REQ-036
+  raised_at: '2026-06-16T04:42:20+00:00'
+  answered_at: '2026-06-16T04:42:38+00:00'
+- id: DEC-007
+  step: REQ-057:validate
+  question: 'REQ-057 validation: manual AC AC4 awaits its human oracle — run `steward
+    validate REQ-057` attended to record the sign-off.'
+  status: answered
+  options: []
+  answer: resolved by green validation (sign-off recorded)
+  req: REQ-057
+  raised_at: '2026-06-20T18:43:40+00:00'
+  answered_at: '2026-06-20T21:01:15+00:00'
+- id: DEC-008
+  step: REQ-058:validate
+  question: 'REQ-058 validation: manual AC AC3 awaits its human oracle — run `steward
+    validate REQ-058` attended to record the sign-off.'
+  status: answered
+  options: []
+  answer: resolved by green validation (sign-off recorded)
+  req: REQ-058
+  raised_at: '2026-06-20T21:10:10+00:00'
+  answered_at: '2026-06-20T21:50:00+00:00'
+seq: 83

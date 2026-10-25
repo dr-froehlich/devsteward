@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}DevSteward{% endblock %}</title>
+<style>
+  :root { --bg:#fafaf7; --fg:#1d1d1b; --muted:#6b6b66; --line:#e2e2dc; --card:#ffffff;
+          --ok:#1f7a3a; --warn:#a86a00; --err:#b3261e; --info:#0b5fa5; --mag:#8a2c8a; --code:#f1f1ec; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  header.top { display:flex; gap:1rem; align-items:baseline; padding:.7rem 1.2rem; border-bottom:1px solid var(--line); background:var(--card); }
+  header.top a { color:var(--fg); text-decoration:none; font-weight:600; }
+  header.top .root { color:var(--muted); font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:12px; }
+  main { padding:1rem 1.2rem 3rem; max-width:1400px; }
+  h1 { font-size:20px; margin:.2rem 0 .8rem; } h2 { font-size:16px; margin:1.4rem 0 .5rem; } h3 { font-size:14px; margin:1rem 0 .3rem; }
+  table { border-collapse:collapse; width:100%; background:var(--card); }
+  th, td { text-align:left; padding:.35rem .55rem; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--muted); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:.03em; }
+  tr.dim td { color:var(--muted); }
+  code, .mono { font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:12.5px; }
+  code { background:var(--code); padding:.05rem .3rem; border-radius:3px; }
+  .badge { display:inline-block; padding:.05rem .45rem; border-radius:9px; font-size:12px; font-weight:600; background:var(--code); color:var(--muted); white-space:nowrap; }
+  .s-done { color:var(--ok); } .s-failed { color:var(--err); } .s-blocked-on-decision { color:var(--warn); }
+  .s-recover { color:var(--mag); } .s-running { color:var(--info); } .s-pending { color:var(--muted); }
+  .b-open { background:#fff4d6; color:#7a4e00; } .b-in-progress { background:#e2f0ff; color:#0b4a80; }
+  .b-attempted { background:#f3e3f3; color:#6d216d; } .b-accepted { background:#dff3e4; color:#155f2b; }
+  .b-held { background:#f3e3f3; color:#6d216d; } .b-retired { background:#e8e8e4; color:#555; }
+  .k-decision { color:var(--warn); } .k-failed { color:var(--err); } .k-validation { color:var(--info); } .k-attended { color:var(--mag); }
+  .flash { padding:.5rem .8rem; border-radius:6px; margin:.4rem 0 .8rem; border:1px solid; white-space:pre-wrap; }
+  .flash.ok { background:#eaf7ee; border-color:#bfe3cb; color:#155f2b; } .flash.error { background:#fdecea; border-color:#f3b9b3; color:#7a1d17; }
+  form.inline { display:inline; } button { font:inherit; font-size:12.5px; padding:.15rem .55rem; border:1px solid #c8c8c0; border-radius:4px; background:#fff; cursor:pointer; }
+  button.primary { background:#1d1d1b; color:#fff; border-color:#1d1d1b; } button:hover { border-color:#8a8a82; }
+  input[type=text], textarea, select { font:inherit; font-size:13px; padding:.25rem .4rem; border:1px solid #c8c8c0; border-radius:4px; width:100%; background:#fff; }
+  textarea { min-height:4.5em; } label { display:block; font-size:12px; color:var(--muted); margin:.4rem 0 .15rem; }
+  details > summary { cursor:pointer; color:var(--info); font-size:12.5px; } details { margin:.3rem 0; }
+  .grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap:1rem; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:6px; padding:.7rem .9rem; }
+  .muted { color:var(--muted); } .small { font-size:12px; } .nowrap { white-space:nowrap; } .right { text-align:right; }
+  ul.plain { list-style:none; padding:0; margin:.2rem 0; } ul.plain li { padding:.15rem 0; }
+  .facts span { margin-right:1rem; } .warn { color:var(--warn); } .err { color:var(--err); } .ok { color:var(--ok); }
+  .prose { background:var(--card); border:1px solid var(--line); border-radius:6px; padding:1rem 1.3rem; max-width:980px; }
+  .prose table { width:auto; } .prose pre { background:var(--code); padding:.6rem .8rem; overflow-x:auto; border-radius:4px; }
+  .prose h2 { border-bottom:1px solid var(--line); padding-bottom:.2rem; }
+</style>
+</head>
+<body>
+<header class="top">
+  <a href="{{ url_for('overview') }}">DevSteward</a>
+  {% block crumbs %}{% endblock %}
+</header>
+<main>
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for cat, msg in messages %}<div class="flash {{ cat }}">{{ msg }}</div>{% endfor %}
+{% endwith %}
+{% block body %}{% endblock %}
+</main>
+</body>
+</html>

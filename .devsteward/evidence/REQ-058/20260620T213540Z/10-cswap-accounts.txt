@@ -1,0 +1,13 @@
+Accounts:
+  1: peter.froehlich@th-deg.de [peter.froehlich@th-deg.de's Organization]
+     ├ 5h:  88%   resets Jun 21 01:20  in 1h 37m
+     └ 7d:   1%   resets Jun 27 21:00  in 6d 21h
+
+  2: claude@pfroehlich.de [claude@pfroehlich.de's Organization] (active)
+     ├ 5h:  76%   resets Jun 21 02:39  in 2h 57m
+     └ 7d:  36%   resets Jun 21 06:59  in 7h 17m
+
+Running instances:
+  ● CLI   ~/projects/devsteward  (1 session)
+  ● VS Code   ~/projects/masterarbeit-theresa  (IDE)
+  ● VS Code   ~/projects/devsteward  (IDE)

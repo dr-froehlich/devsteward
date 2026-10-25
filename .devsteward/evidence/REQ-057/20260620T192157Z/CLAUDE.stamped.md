@@ -1,0 +1,67 @@
+# CLAUDE.md — {{PROJECT_NAME}}
+
+> Stamped from DevSteward. Run `/bootstrap` to fill the placeholders below, or edit them
+> by hand. Keep this file the single source of truth for how work is done here.
+
+## What this project is
+
+{{PROJECT_DESCRIPTION}}
+
+The frozen north star is **REQ-001** (`docs/requirements/REQ-001.md`) — do not weaken it;
+supersede it with a new REQ if direction changes.
+
+## Stack & commands
+
+- **Stack:** {{STACK}}
+- **Build:** `{{BUILD_COMMAND}}`
+- **Test:** `{{TEST_COMMAND}}`
+
+Acceptance criteria in REQ files name runnable tests in this project's test command. The
+engine runs them and only marks a step done when they pass.
+
+## House conventions (first-class)
+
+- **English everywhere** in code and technical docs. User-facing strings in other
+  languages are allowed but isolated/translatable — never inline in logic.
+- **Same-commit discipline:** a REQ's frontmatter, its row in `REQUIREMENTS_INDEX.md`,
+  and the code that satisfies it move in the **same** commit.
+- **Branching model — trunk-based.** `main` is production (release tags are cut here;
+  consumers pin them); `dev` is the integration branch and the default working branch. **All
+  work lands on `dev`:** intake (REQ frontmatter, index row, roadmap), plans, the ledger,
+  **and** implementation (code + tests + the status-flip to `done`) are all committed
+  directly on `dev` — no feature branches, no worktrees, no engine-initiated branch
+  switching. This is engine-enforced and config-driven: the engine refuses to autocommit on
+  the production branch (`git.production_branch` in `.devsteward/config.yaml`, default
+  `main`) — never commit directly to `main`. The only branch operation is the human-gated
+  `dev → main` release PR.
+- **Co-author trailer** on commits:
+  `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`
+
+## Working the requirements
+
+```sh
+steward status            # where are we? what's eligible next?
+steward lint              # validate REQs before committing
+steward checkpoint        # interactive close: verify and land on `dev` — one transaction
+steward advance           # batch: one fused develop checkpoint headless
+steward run               # batch: march eligible steps headless; park on forks
+steward decision list     # forks parked while running headless
+```
+
+REQ = spec, ledger = cursor. Checkpoint state lives in `.devsteward/` (never in REQ
+files). The **engine is the verifying bookkeeper in both driving modes**. Interactive
+(the default): `/advance` in a live session asks at forks and closes via
+`steward checkpoint`, which re-runs the acceptance tests and lands on green. Batch (the
+overnight lane): skills **park-and-surface** at forks (record the question and stop,
+never guess) and the executor verifies, lands, and commits.
+
+**The authoritative `steward` reference is [`STEWARD.md`](STEWARD.md)** — the full command
+surface, the develop→validate→land workflow, and how to recover from every red/parked
+state. Treat DevSteward as a black box: drive it through the `steward` CLI and `STEWARD.md`,
+**never** by reading the DevSteward engine source.
+
+## Skills
+
+- `/intake "<idea>"` — interview a raw idea into a schema-valid draft REQ.
+- `/advance` — orient from the ledger, do exactly one checkpoint, stop at forks.
+- `/bootstrap` — bring a fresh project to life (used once, at creation).

@@ -1,0 +1,11 @@
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.0.3, pluggy-1.6.0 -- /home/peter/projects/flowsteward/.venv/bin/python
+cachedir: .pytest_cache
+rootdir: /home/peter/projects/flowsteward
+configfile: pyproject.toml
+collecting ... collected 2 items
+
+tests/test_req003a_e2e.py::test_live_imap_connect_and_retrieve PASSED    [ 50%]
+tests/test_req003a_e2e.py::test_live_imap_skips_without_credentials PASSED [100%]
+
+============================== 2 passed in 0.70s ===============================
